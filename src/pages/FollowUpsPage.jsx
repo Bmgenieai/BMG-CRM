@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtDate, StatusBadge } from '../components/Badges.jsx';
+import LeadPanel from '../components/LeadPanel.jsx';
 
 export default function FollowUpsPage() {
   const [rows, setRows] = useState([]);
@@ -10,6 +10,7 @@ export default function FollowUpsPage() {
   const [completeId, setCompleteId] = useState(null);
   const [outcome, setOutcome] = useState('');
   const [nextDue, setNextDue] = useState('');
+  const [selectedLeadId, setSelectedLeadId] = useState(null);
 
   const load = () => {
     const params = new URLSearchParams();
@@ -45,7 +46,9 @@ export default function FollowUpsPage() {
   return (
     <div>
       <h1 className="page-title">Follow-ups</h1>
-      <p className="page-sub">Structured reminders — overdue, due today, and next actions on each lead.</p>
+      <p className="page-sub">
+        Click a lead to open the side panel — complete from the table or inside the drawer.
+      </p>
 
       {error ? <div className="login-error">{error}</div> : null}
 
@@ -60,7 +63,7 @@ export default function FollowUpsPage() {
       </div>
 
       <div className="card table-wrap">
-        <table>
+        <table className="leads-table">
           <thead>
             <tr>
               <th>Due</th>
@@ -73,12 +76,14 @@ export default function FollowUpsPage() {
           </thead>
           <tbody>
             {rows.map((f) => (
-              <tr key={f.id}>
+              <tr
+                key={f.id}
+                className={`clickable-row${selectedLeadId === f.lead_id ? ' row-selected' : ''}`}
+                onClick={() => setSelectedLeadId(f.lead_id)}
+              >
                 <td>{fmtDate(f.due_at)}</td>
                 <td>
-                  <Link to={`/leads?id=${f.lead_id}`} style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
-                    {f.lead_name}
-                  </Link>
+                  <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{f.lead_name}</span>
                 </td>
                 <td>{f.assignee_name}</td>
                 <td>
@@ -87,7 +92,14 @@ export default function FollowUpsPage() {
                 <td>{f.note || '—'}</td>
                 <td>
                   {['pending', 'overdue'].includes(f.status) ? (
-                    <button type="button" className="btn btn-secondary" onClick={() => setCompleteId(f.id)}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCompleteId(f.id);
+                      }}
+                    >
                       Complete
                     </button>
                   ) : null}
@@ -104,6 +116,14 @@ export default function FollowUpsPage() {
           </tbody>
         </table>
       </div>
+
+      {selectedLeadId ? (
+        <LeadPanel
+          leadId={selectedLeadId}
+          onClose={() => setSelectedLeadId(null)}
+          onChanged={load}
+        />
+      ) : null}
 
       {completeId ? (
         <div className="modal-backdrop" onClick={() => setCompleteId(null)}>
