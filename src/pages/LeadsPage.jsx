@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { SourceBadge, StatusBadge } from '../components/Badges.jsx';
+import LeadPanel from '../components/LeadPanel.jsx';
 
 export default function LeadsPage() {
   const { can } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('id');
+
   const [leads, setLeads] = useState([]);
   const [meta, setMeta] = useState({ sources: [], statuses: [] });
   const [q, setQ] = useState('');
@@ -41,10 +45,18 @@ export default function LeadsPage() {
     load();
   }, []);
 
+  const openLead = (id) => {
+    setSearchParams({ id });
+  };
+
+  const closeLead = () => {
+    setSearchParams({});
+  };
+
   const createLead = async (e) => {
     e.preventDefault();
     try {
-      await api('/leads', { method: 'POST', body: form });
+      const created = await api('/leads', { method: 'POST', body: form });
       setShowCreate(false);
       setForm({
         name: '',
@@ -56,6 +68,7 @@ export default function LeadsPage() {
         estimated_value: 65,
       });
       load();
+      if (created?.id) openLead(created.id);
     } catch (err) {
       setError(err.message);
     }
@@ -97,7 +110,9 @@ export default function LeadsPage() {
   return (
     <div>
       <h1 className="page-title">Leads</h1>
-      <p className="page-sub">Pipeline tagged by source for analytics (signup, free credit, repurchase, CSV).</p>
+      <p className="page-sub">
+        Click a row to open the side panel — list stays visible (Ilaan-style).
+      </p>
 
       {error ? <div className="login-error">{error}</div> : null}
 
@@ -140,12 +155,8 @@ export default function LeadsPage() {
         ) : null}
       </div>
 
-      <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-        Click <strong>Open</strong> on a lead to log calls, update status, and schedule follow-ups.
-      </p>
-
       <div className="card table-wrap">
-        <table>
+        <table className="leads-table">
           <thead>
             <tr>
               <th>Lead</th>
@@ -154,16 +165,17 @@ export default function LeadsPage() {
               <th>Country</th>
               <th>Owner</th>
               <th>Next FU</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {leads.map((l) => (
-              <tr key={l.id}>
+              <tr
+                key={l.id}
+                className={`clickable-row${selectedId === l.id ? ' row-selected' : ''}`}
+                onClick={() => openLead(l.id)}
+              >
                 <td>
-                  <Link to={`/leads/${l.id}`} style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
-                    {l.name}
-                  </Link>
+                  <div style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{l.name}</div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{l.email}</div>
                 </td>
                 <td>
@@ -177,16 +189,11 @@ export default function LeadsPage() {
                 <td style={{ fontSize: '0.82rem' }}>
                   {l.next_follow_up_at ? new Date(l.next_follow_up_at).toLocaleString() : '—'}
                 </td>
-                <td>
-                  <Link to={`/leads/${l.id}`} className="btn btn-primary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}>
-                    Open
-                  </Link>
-                </td>
               </tr>
             ))}
             {!leads.length ? (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={6} className="empty">
                   No leads match filters
                 </td>
               </tr>
@@ -194,6 +201,10 @@ export default function LeadsPage() {
           </tbody>
         </table>
       </div>
+
+      {selectedId ? (
+        <LeadPanel leadId={selectedId} onClose={closeLead} onChanged={load} />
+      ) : null}
 
       {showCreate ? (
         <div className="modal-backdrop" onClick={() => setShowCreate(false)}>

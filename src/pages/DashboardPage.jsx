@@ -141,7 +141,7 @@ export default function DashboardPage() {
               {recentLeads.map((l) => (
                 <tr key={l.id}>
                   <td>
-                    <Link to={`/leads/${l.id}`} style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
+                    <Link to={`/leads?id=${l.id}`} style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
                       {l.name}
                     </Link>
                   </td>

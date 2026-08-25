@@ -76,7 +76,7 @@ export default function FollowUpsPage() {
               <tr key={f.id}>
                 <td>{fmtDate(f.due_at)}</td>
                 <td>
-                  <Link to={`/leads/${f.lead_id}`} style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
+                  <Link to={`/leads?id=${f.lead_id}`} style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
                     {f.lead_name}
                   </Link>
                 </td>
