@@ -1,5 +1,17 @@
 const TOKEN_KEY = 'bmgenie_crm_token';
 
+/** API origin for production (Vercel). Empty = same-origin `/api` (local Vite proxy / cPanel). */
+export function apiBase() {
+  const raw = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
+  return raw;
+}
+
+export function apiUrl(path) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const base = apiBase();
+  return base ? `${base}/api${p}` : `/api${p}`;
+}
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -20,7 +32,7 @@ export async function api(path, options = {}) {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...options,
     headers,
     body:

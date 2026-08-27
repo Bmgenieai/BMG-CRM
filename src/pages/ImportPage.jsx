@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { getToken } from '../api.js';
+import { apiUrl, getToken } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
 export default function ImportPage() {
@@ -22,7 +22,7 @@ export default function ImportPage() {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('source_label', 'csv_import');
-      const res = await fetch('/api/leads/import/csv', {
+      const res = await fetch(apiUrl('/leads/import/csv'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
         body: fd,
