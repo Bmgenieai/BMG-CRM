@@ -132,41 +132,6 @@ export default function DistributionPage() {
     }
   };
 
-  const addSampleUnassigned = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      await api('/leads/generate-segments', {
-        method: 'POST',
-        body: {
-          leads: [
-            {
-              name: `Unassigned Prospect ${Date.now() % 10000}`,
-              email: `unassigned-${Date.now()}@example.com`,
-              source: 'signup_no_listing',
-              country: 'US',
-              estimated_value: 65,
-            },
-            {
-              name: `Meta Warm Lead ${Date.now() % 10000}`,
-              email: `meta-${Date.now()}@example.com`,
-              source: 'csv_import',
-              country: 'UK',
-              estimated_value: 450,
-            },
-          ],
-        },
-      });
-      // Segment generator creates leads without assignee — perfect for queue
-      setMessage('Added 2 sample unassigned leads to the queue');
-      await load();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div>
       <h1 className="page-title">Lead distribution</h1>
@@ -219,9 +184,6 @@ export default function DistributionPage() {
                 : 'Assign unassigned queue'
               : 'Distribute unassigned queue'}
           </button>
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={addSampleUnassigned}>
-            Add sample unassigned
-          </button>
         </div>
       </div>
 
@@ -230,7 +192,7 @@ export default function DistributionPage() {
           <p className="stat-label">Unassigned open leads</p>
           <p className="stat-value">{stats?.unassigned ?? '—'}</p>
           {(stats?.unassigned || 0) === 0 ? (
-            <p className="stat-hint">Queue empty — reassign below or add samples / CSV import</p>
+            <p className="stat-hint">Queue empty — import CSV or wait for bmgenie.ai signups</p>
           ) : (
             <p className="stat-hint">Check rows, pick agent, Assign</p>
           )}

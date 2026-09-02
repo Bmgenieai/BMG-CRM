@@ -5,8 +5,8 @@ import { useAuth } from '../auth.jsx';
 export default function LoginPage() {
   const { user, login, loading } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('ceo@bmgenie.ai');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -79,10 +79,6 @@ export default function LoginPage() {
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-
-        <p style={{ marginTop: '1.25rem', fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center' }}>
-          Demo: ceo / manager / sales1 @bmgenie.ai · password123
-        </p>
       </div>
     </div>
   );
