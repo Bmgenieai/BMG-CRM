@@ -37,7 +37,7 @@ export default function DistributionPage() {
         (allLeads || []).filter(
           (l) =>
             l.assigned_to &&
-            ['new', 'contacted', 'follow_up_scheduled'].includes(l.status),
+            ['new', 'contacted', 'interested', 'neutral', 'follow_up_scheduled'].includes(l.status),
         ),
       );
       setReps(r);

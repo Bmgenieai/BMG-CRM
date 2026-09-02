@@ -6,9 +6,11 @@ import { fmtDate, money, SourceBadge, StatusBadge } from './Badges.jsx';
 const STATUSES = [
   { key: 'new', label: 'New' },
   { key: 'contacted', label: 'Contacted' },
-  { key: 'follow_up_scheduled', label: 'Follow-up' },
-  { key: 'converted', label: 'Won' },
-  { key: 'lost', label: 'Lost' },
+  { key: 'interested', label: 'Interested' },
+  { key: 'neutral', label: 'Neutral' },
+  { key: 'follow_up_scheduled', label: 'Follow Up' },
+  { key: 'not_interested', label: 'Not Interested' },
+  { key: 'converted', label: 'Converted' },
 ];
 
 /**
@@ -22,6 +24,14 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [callType, setCallType] = useState('call');
   const [fuDue, setFuDue] = useState('');
   const [fuNote, setFuNote] = useState('');
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [brevoOk, setBrevoOk] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [emailTemplateId, setEmailTemplateId] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailHtml, setEmailHtml] = useState('');
+  const [emailText, setEmailText] = useState('');
+  const [emailMsg, setEmailMsg] = useState('');
 
   const load = async () => {
     if (!leadId) return;
@@ -40,8 +50,17 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setCallOutcome('');
     setFuDue('');
     setFuNote('');
+    setEmailOpen(false);
+    setEmailMsg('');
     load();
   }, [leadId]);
+
+  useEffect(() => {
+    api('/email/status')
+      .then((s) => setBrevoOk(s.enabled))
+      .catch(() => setBrevoOk(false));
+    api('/email/templates').then((d) => setTemplates(d.templates || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -138,6 +157,64 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     }
   };
 
+  const applyEmailTemplate = (id) => {
+    setEmailTemplateId(id);
+    const tpl = templates.find((t) => t.id === id);
+    if (!tpl) return;
+    setEmailSubject(tpl.subject);
+    setEmailHtml(tpl.htmlContent);
+    setEmailText(tpl.textContent);
+  };
+
+  const sendColdEmail = async (e) => {
+    e.preventDefault();
+    if (!lead?.email) return;
+    setBusy(true);
+    setError('');
+    setEmailMsg('');
+    try {
+      await api(`/email/leads/${leadId}/send`, {
+        method: 'POST',
+        body: {
+          templateId: emailTemplateId || undefined,
+          subject: emailSubject,
+          htmlContent: emailHtml,
+          textContent: emailText,
+          syncToBrevo: true,
+        },
+      });
+      setEmailMsg('Email sent via Brevo');
+      setEmailOpen(false);
+      await load();
+      notifyChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const syncToBrevo = async () => {
+    if (!lead?.email) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/email/leads/${leadId}/sync`, { method: 'POST', body: {} });
+      setEmailMsg('Contact synced to Brevo');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const suggestedTemplates = lead
+    ? templates.filter(
+        (t) => t.sources.includes('*') || t.sources.includes(lead.source),
+      )
+    : templates;
+
   return (
     <div className="lead-drawer-root" role="dialog" aria-modal="true" aria-label="Lead details">
       <button type="button" className="lead-drawer-backdrop" aria-label="Close" onClick={onClose} />
@@ -218,6 +295,93 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 <div style={{ marginTop: 8 }}>
                   <StatusBadge status={lead.status} />
                 </div>
+              </section>
+
+              <section className="lead-drawer-section">
+                <h3 className="lead-drawer-h3">
+                  <Mail size={16} /> Cold email (Brevo)
+                </h3>
+                {!lead.email ? (
+                  <p className="empty">No email on this lead</p>
+                ) : brevoOk === false ? (
+                  <p className="stat-hint">Brevo not configured on API — set BREVO_ENABLED + API key</p>
+                ) : (
+                  <>
+                    {emailMsg ? (
+                      <p style={{ color: 'var(--success)', fontSize: '0.85rem', marginTop: 0 }}>{emailMsg}</p>
+                    ) : null}
+                    {!emailOpen ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={busy}
+                          onClick={() => {
+                            setEmailOpen(true);
+                            const match = suggestedTemplates.find(
+                              (t) => !t.sources.includes('*') && t.sources.includes(lead.source),
+                            );
+                            if (match && !emailTemplateId) applyEmailTemplate(match.id);
+                          }}
+                        >
+                          Compose email
+                        </button>
+                        <button type="button" className="btn btn-secondary" disabled={busy} onClick={syncToBrevo}>
+                          Sync to Brevo
+                        </button>
+                      </div>
+                    ) : (
+                      <form onSubmit={sendColdEmail}>
+                        <div className="field">
+                          <label className="label">Template</label>
+                          <select
+                            className="select"
+                            value={emailTemplateId}
+                            onChange={(e) => applyEmailTemplate(e.target.value)}
+                          >
+                            <option value="">Custom</option>
+                            {suggestedTemplates.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label className="label">Subject</label>
+                          <input
+                            className="input"
+                            value={emailSubject}
+                            onChange={(e) => setEmailSubject(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="field">
+                          <label className="label">Message (HTML)</label>
+                          <textarea
+                            className="textarea"
+                            rows={5}
+                            value={emailHtml}
+                            onChange={(e) => setEmailHtml(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn btn-primary" type="submit" disabled={busy}>
+                            Send via Brevo
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setEmailOpen(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </>
+                )}
               </section>
 
               <section className="lead-drawer-section">

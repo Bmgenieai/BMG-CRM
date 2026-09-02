@@ -2,7 +2,10 @@ export function StatusBadge({ status }) {
   const map = {
     new: 'badge-blue',
     contacted: 'badge-amber',
+    interested: 'badge-green',
+    neutral: 'badge-amber',
     follow_up_scheduled: 'badge-amber',
+    not_interested: 'badge-grey',
     converted: 'badge-green',
     lost: 'badge-grey',
     pending: 'badge-amber',
@@ -10,7 +13,18 @@ export function StatusBadge({ status }) {
     completed: 'badge-green',
     cancelled: 'badge-grey',
   };
-  return <span className={`badge ${map[status] || 'badge-grey'}`}>{String(status || '').replace(/_/g, ' ')}</span>;
+  const labels = {
+    new: 'New',
+    contacted: 'Contacted',
+    interested: 'Interested',
+    neutral: 'Neutral',
+    follow_up_scheduled: 'Follow Up',
+    not_interested: 'Not Interested',
+    converted: 'Converted',
+    lost: 'Not Interested',
+  };
+  const label = labels[status] || String(status || '').replace(/_/g, ' ');
+  return <span className={`badge ${map[status] || 'badge-grey'}`}>{label}</span>;
 }
 
 export function SourceBadge({ source }) {

@@ -36,9 +36,21 @@ export default function DashboardPage() {
           <p className="stat-hint">{totals.open_leads} open · {totals.unassigned} unassigned</p>
         </div>
         <div className="card">
+          <p className="stat-label">New (uncontacted)</p>
+          <p className="stat-value">{totals.new_leads ?? '—'}</p>
+          <Link to="/leads/new" className="stat-hint" style={{ color: 'var(--brand-primary)' }}>
+            View new leads →
+          </Link>
+        </div>
+        <div className="card">
           <p className="stat-label">Converted</p>
           <p className="stat-value">{totals.converted}</p>
-          <p className="stat-hint">{totals.lost} lost</p>
+          <p className="stat-hint">
+            {totals.total_leads
+              ? Math.round((totals.converted / totals.total_leads) * 1000) / 10
+              : 0}
+            % conversion
+          </p>
         </div>
         {can('revenue:view') ? (
           <div className="card">
@@ -59,6 +71,27 @@ export default function DashboardPage() {
           <p className="stat-hint">
             overdue · {followUpHealth?.pending || 0} pending · {followUpHealth?.completed || 0} done
           </p>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3 style={{ marginTop: 0 }}>Quick actions</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link to="/leads/new" className="btn btn-secondary">
+            New leads ({totals.new_leads ?? 0})
+          </Link>
+          <Link to="/leads/interested" className="btn btn-secondary">
+            Interested ({totals.interested ?? 0})
+          </Link>
+          <Link to="/leads/follow-up" className="btn btn-secondary">
+            Follow-up ({totals.follow_up ?? 0})
+          </Link>
+          <Link to="/leads/converted" className="btn btn-primary">
+            Converted ({totals.converted ?? 0})
+          </Link>
+          <Link to="/email" className="btn btn-secondary">
+            Cold email (Brevo)
+          </Link>
         </div>
       </div>
 

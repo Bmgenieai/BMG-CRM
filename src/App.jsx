@@ -11,6 +11,7 @@ import FollowUpsPage from './pages/FollowUpsPage.jsx';
 import WorkingTreePage from './pages/WorkingTreePage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import ImportPage from './pages/ImportPage.jsx';
+import EmailPage from './pages/EmailPage.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -32,9 +33,11 @@ function ProtectedLayout() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/leads" element={<LeadsPage />} />
+          <Route path="/leads/:filter" element={<LeadsPage />} />
           <Route path="/leads/:id" element={<LeadDetailPage />} />
           <Route path="/distribution" element={<DistributionPage />} />
           <Route path="/follow-ups" element={<FollowUpsPage />} />
+          <Route path="/email" element={<EmailPage />} />
           <Route path="/working-tree" element={<WorkingTreePage />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/admin" element={<AdminPage />} />

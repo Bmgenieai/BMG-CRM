@@ -1,20 +1,49 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { SourceBadge, StatusBadge } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 
-export default function LeadsPage() {
+const FILTER_TITLES = {
+  new: 'New Leads',
+  contacted: 'Contacted',
+  interested: 'Interested',
+  neutral: 'Neutral',
+  'follow-up': 'Follow Up',
+  'not-interested': 'Not Interested',
+  converted: 'Converted',
+  signup: 'Signup · no purchase',
+  'free-credit': 'Free credit · no purchase',
+  winback: 'Win-back · no repurchase',
+};
+
+const FILTER_QUERY = {
+  new: { status: 'new' },
+  contacted: { status: 'contacted' },
+  interested: { status: 'interested' },
+  neutral: { status: 'neutral' },
+  'follow-up': { status: 'follow_up_scheduled' },
+  'not-interested': { status: 'not_interested,lost' },
+  converted: { status: 'converted' },
+  signup: { source: 'signup_no_listing' },
+  'free-credit': { source: 'free_credit_no_purchase' },
+  winback: { source: 'purchased_no_repurchase' },
+};
+
+export default function LeadsPage({ refreshSidebarCounts }) {
+  const { filter } = useParams();
   const { can } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('id');
 
+  const preset = FILTER_QUERY[filter] || {};
+
   const [leads, setLeads] = useState([]);
   const [meta, setMeta] = useState({ sources: [], statuses: [] });
   const [q, setQ] = useState('');
-  const [source, setSource] = useState('');
-  const [status, setStatus] = useState('');
+  const [source, setSource] = useState(preset.source || '');
+  const [status, setStatus] = useState(preset.status || '');
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -27,6 +56,16 @@ export default function LeadsPage() {
   });
   const [error, setError] = useState('');
 
+  const pageTitle = useMemo(() => {
+    if (filter && FILTER_TITLES[filter]) return FILTER_TITLES[filter];
+    return 'All leads';
+  }, [filter]);
+
+  useEffect(() => {
+    setSource(preset.source || '');
+    setStatus(preset.status || '');
+  }, [filter]);
+
   const load = () => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
@@ -35,6 +74,7 @@ export default function LeadsPage() {
     api(`/leads?${params}`)
       .then(setLeads)
       .catch((e) => setError(e.message));
+    refreshSidebarCounts?.();
   };
 
   useEffect(() => {
@@ -43,7 +83,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [filter, source, status]);
 
   const openLead = (id) => {
     setSearchParams({ id });
@@ -74,44 +114,15 @@ export default function LeadsPage() {
     }
   };
 
-  const generateDemoSegments = async () => {
-    try {
-      await api('/leads/generate-segments', {
-        method: 'POST',
-        body: {
-          leads: [
-            {
-              name: 'Demo Signup Idle',
-              email: `idle-${Date.now()}@example.com`,
-              source: 'signup_no_listing',
-              country: 'US',
-            },
-            {
-              name: 'Demo Free Credit',
-              email: `free-${Date.now()}@example.com`,
-              source: 'free_credit_no_purchase',
-              country: 'UK',
-            },
-            {
-              name: 'Demo Win-back',
-              email: `winback-${Date.now()}@example.com`,
-              source: 'purchased_no_repurchase',
-              country: 'DE',
-            },
-          ],
-        },
-      });
-      load();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
   return (
     <div>
-      <h1 className="page-title">Leads</h1>
+      <h1 className="page-title">{pageTitle}</h1>
       <p className="page-sub">
-        Click a row to open the side panel — list stays visible (Ilaan-style).
+        {filter === 'signup' && 'Auto-created when users sign up on bmgenie.ai without buying a package.'}
+        {filter === 'free-credit' && 'Used free listing credit but has not purchased yet.'}
+        {filter === 'winback' && 'Bought a package, used all credits, has not repurchased.'}
+        {!filter && 'Click a row to open the side panel — list stays visible.'}
+        {filter && !['signup', 'free-credit', 'winback'].includes(filter) && 'Filter by marketing pipeline stage.'}
       </p>
 
       {error ? <div className="login-error">{error}</div> : null}
@@ -124,33 +135,32 @@ export default function LeadsPage() {
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && load()}
         />
-        <select className="select" value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="">All sources</option>
-          {meta.sources.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          {meta.statuses.map((s) => (
-            <option key={s} value={s}>
-              {s.replace(/_/g, ' ')}
-            </option>
-          ))}
-        </select>
+        {!filter && (
+          <>
+            <select className="select" value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value="">All sources</option>
+              {meta.sources.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              {meta.statuses.map((s) => (
+                <option key={s} value={s}>
+                  {s.replace(/_/g, ' ')}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <button type="button" className="btn btn-secondary" onClick={load}>
-          Filter
+          Refresh
         </button>
         {can('leads:create') ? (
           <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
             New lead
-          </button>
-        ) : null}
-        {can('leads:generate_segments') ? (
-          <button type="button" className="btn btn-secondary" onClick={generateDemoSegments}>
-            Generate segment samples
           </button>
         ) : null}
       </div>
@@ -194,7 +204,7 @@ export default function LeadsPage() {
             {!leads.length ? (
               <tr>
                 <td colSpan={6} className="empty">
-                  No leads match filters
+                  No leads match this view
                 </td>
               </tr>
             ) : null}
