@@ -72,13 +72,12 @@ export default function AppLayout({ children }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">bm</div>
-          <div>
-            <div className="brand-text">
-              <span>bmgenie</span>.ai
-              <span className="brand-badge">CRM</span>
-            </div>
-          </div>
+          <img
+            className="brand-logo"
+            src="/bmgenie-logo.png"
+            alt="bmgenie"
+          />
+          <span className="brand-crm">CRM</span>
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto' }}>

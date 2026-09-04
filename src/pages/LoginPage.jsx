@@ -30,15 +30,14 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div
-            className="brand-mark"
-            style={{ width: 52, height: 52, margin: '0 auto 0.85rem', fontSize: '1rem' }}
-          >
-            bm
-          </div>
-          <h1 style={{ margin: 0, fontSize: '1.55rem', letterSpacing: '-0.03em' }}>
-            <span style={{ color: 'var(--brand-primary)' }}>bmgenie</span>.ai CRM
-          </h1>
+          <img
+            className="brand-logo brand-logo-login"
+            src="/bmgenie-logo.png"
+            alt="bmgenie"
+          />
+          <p className="brand-crm" style={{ margin: '0.75rem 0 0', justifyContent: 'center' }}>
+            CRM
+          </p>
           <p style={{ margin: '0.4rem 0 0', color: 'var(--muted)', fontSize: '0.92rem' }}>
             Sales ops for US & Europe photographer accounts
           </p>
