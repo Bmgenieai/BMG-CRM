@@ -75,8 +75,9 @@ export default function AppLayout({ children }) {
           <img
             className="brand-logo"
             src="/bmgenie-logo.png"
-            alt="bmgenie"
+            alt="bmgenie.ai"
           />
+          <span className="brand-ai">.ai</span>
           <span className="brand-crm">CRM</span>
         </div>
 
