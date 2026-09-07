@@ -32,6 +32,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [emailHtml, setEmailHtml] = useState('');
   const [emailText, setEmailText] = useState('');
   const [emailMsg, setEmailMsg] = useState('');
+  const [empForm, setEmpForm] = useState({ name: '', phone: '', email: '', job_title: '', notes: '' });
+  const [editingEmpId, setEditingEmpId] = useState(null);
 
   const load = async () => {
     if (!leadId) return;
@@ -52,6 +54,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setFuNote('');
     setEmailOpen(false);
     setEmailMsg('');
+    setEmpForm({ name: '', phone: '', email: '', job_title: '', notes: '' });
+    setEditingEmpId(null);
     load();
   }, [leadId]);
 
@@ -209,6 +213,61 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     }
   };
 
+  const saveEmployee = async (e) => {
+    e.preventDefault();
+    if (!empForm.name.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (editingEmpId) {
+        await api(`/leads/${leadId}/employees/${editingEmpId}`, {
+          method: 'PATCH',
+          body: empForm,
+        });
+      } else {
+        await api(`/leads/${leadId}/employees`, { method: 'POST', body: empForm });
+      }
+      setEmpForm({ name: '', phone: '', email: '', job_title: '', notes: '' });
+      setEditingEmpId(null);
+      await load();
+      notifyChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const editEmployee = (emp) => {
+    setEditingEmpId(emp.id);
+    setEmpForm({
+      name: emp.name || '',
+      phone: emp.phone || '',
+      email: emp.email || '',
+      job_title: emp.job_title || '',
+      notes: emp.notes || '',
+    });
+  };
+
+  const deleteEmployee = async (empId) => {
+    if (!window.confirm('Delete this employee?')) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/leads/${leadId}/employees/${empId}`, { method: 'DELETE' });
+      if (editingEmpId === empId) {
+        setEditingEmpId(null);
+        setEmpForm({ name: '', phone: '', email: '', job_title: '', notes: '' });
+      }
+      await load();
+      notifyChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const suggestedTemplates = lead
     ? templates.filter(
         (t) => t.sources.includes('*') || t.sources.includes(lead.source),
@@ -237,7 +296,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   ) : null}
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: '0.82rem', marginTop: 4 }}>
-                  {[lead.company, lead.country].filter(Boolean).join(' · ') || '—'}
+                  {[lead.company, lead.job_title, lead.state || lead.country].filter(Boolean).join(' · ') || '—'}
                 </div>
               </>
             ) : (
@@ -260,10 +319,10 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 <div className="lead-drawer-meta-grid">
                   <div>
                     <div className="stat-label">Source</div>
-                    <SourceBadge source={lead.source} />
+                    <SourceBadge source={lead.source} createdByName={lead.created_by_name} />
                   </div>
                   <div>
-                    <div className="stat-label">Est. value</div>
+                    <div className="stat-label">Est. revenue</div>
                     <strong>{money(lead.estimated_value)}</strong>
                   </div>
                   <div>
@@ -275,6 +334,126 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     <span style={{ fontSize: '0.85rem' }}>{lead.assigned_name || 'Unassigned'}</span>
                   </div>
                 </div>
+                {lead.notes ? (
+                  <p style={{ marginTop: 12, marginBottom: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+                    <strong>Follow-up notes:</strong> {lead.notes}
+                  </p>
+                ) : null}
+              </section>
+
+              <section className="lead-drawer-section">
+                <h3 className="lead-drawer-h3">Employees</h3>
+                <p className="stat-hint" style={{ marginTop: 0 }}>
+                  People at this company/store — add, edit, or delete.
+                </p>
+                {(lead.employees || []).length ? (
+                  <div className="table-wrap" style={{ marginBottom: 12 }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Contact</th>
+                          <th>Title</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lead.employees.map((emp) => (
+                          <tr key={emp.id}>
+                            <td>
+                              <div style={{ fontWeight: 600 }}>{emp.name}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{emp.email || '—'}</div>
+                            </td>
+                            <td style={{ fontSize: '0.85rem' }}>{emp.phone || '—'}</td>
+                            <td style={{ fontSize: '0.85rem' }}>{emp.job_title || '—'}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
+                                disabled={busy}
+                                onClick={() => editEmployee(emp)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
+                                disabled={busy}
+                                onClick={() => deleteEmployee(emp.id)}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="empty">No employees yet</p>
+                )}
+                <form onSubmit={saveEmployee}>
+                  <div className="field">
+                    <label className="label">{editingEmpId ? 'Edit employee' : 'Add employee'}</label>
+                    <input
+                      className="input"
+                      placeholder="Name"
+                      required
+                      value={empForm.name}
+                      onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <input
+                      className="input"
+                      placeholder="Contact"
+                      value={empForm.phone}
+                      onChange={(e) => setEmpForm({ ...empForm, phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <input
+                      className="input"
+                      placeholder="Email"
+                      value={empForm.email}
+                      onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <input
+                      className="input"
+                      placeholder="Job title"
+                      value={empForm.job_title}
+                      onChange={(e) => setEmpForm({ ...empForm, job_title: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <textarea
+                      className="textarea"
+                      rows={2}
+                      placeholder="Notes"
+                      value={empForm.notes}
+                      onChange={(e) => setEmpForm({ ...empForm, notes: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-primary" type="submit" disabled={busy}>
+                      {editingEmpId ? 'Save employee' : 'Add employee'}
+                    </button>
+                    {editingEmpId ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setEditingEmpId(null);
+                          setEmpForm({ name: '', phone: '', email: '', job_title: '', notes: '' });
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
               </section>
 
               <section className="lead-drawer-section">

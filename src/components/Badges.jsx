@@ -27,8 +27,19 @@ export function StatusBadge({ status }) {
   return <span className={`badge ${map[status] || 'badge-grey'}`}>{label}</span>;
 }
 
-export function SourceBadge({ source }) {
-  return <span className="badge badge-blue">{String(source || '').replace(/_/g, ' ')}</span>;
+const SOURCE_LABELS = {
+  signup_no_listing: 'Signed up · no purchase',
+  free_credit_no_purchase: 'Free credit · no purchase',
+  purchased_no_repurchase: 'Credits used · no repurchase',
+  csv_import: 'CSV / Google Sheet',
+  telesales: 'Telesales',
+  manual: 'Manual',
+};
+
+export function SourceBadge({ source, createdByName }) {
+  const label = SOURCE_LABELS[source] || String(source || '').replace(/_/g, ' ');
+  const text = createdByName ? `${label} · ${createdByName}` : label;
+  return <span className="badge badge-blue">{text}</span>;
 }
 
 export function money(n) {

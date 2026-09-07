@@ -40,10 +40,10 @@ export default function ImportPage() {
 
   return (
     <div>
-      <h1 className="page-title">CSV / Meta import</h1>
+      <h1 className="page-title">CSV / Google Sheet import</h1>
       <p className="page-sub">
-        Upload a CSV with a header row. Imported leads appear under <strong>All leads</strong> with
-        source <strong>CSV / Meta ads</strong> and status <strong>New</strong>.
+        Export your Google Sheet as CSV (File → Download → CSV), then upload here. Same columns as
+        manual lead generation. Source shows as <strong>CSV / Google Sheet · your name</strong>.
       </p>
 
       {error ? <div className="login-error">{error}</div> : null}
@@ -53,7 +53,7 @@ export default function ImportPage() {
           <h3 style={{ marginTop: 0 }}>Upload</h3>
           <form onSubmit={onSubmit}>
             <div className="field">
-              <label className="label">CSV file</label>
+              <label className="label">CSV file (from Google Sheet)</label>
               <input
                 className="input"
                 type="file"
@@ -75,9 +75,9 @@ export default function ImportPage() {
         </div>
 
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>CSV structure</h3>
+          <h3 style={{ marginTop: 0 }}>Sheet / CSV columns</h3>
           <p style={{ fontSize: '0.9rem', color: 'var(--muted)', marginTop: 0 }}>
-            First row must be column headers. UTF-8 encoding. One lead per row.
+            First row must be headers. UTF-8. One lead per row. Add employees later in the lead panel.
           </p>
           <div className="table-wrap">
             <table>
@@ -92,17 +92,12 @@ export default function ImportPage() {
                 <tr>
                   <td><code>name</code></td>
                   <td>Yes*</td>
-                  <td>Contact or company name. Also accepts <code>Name</code>, <code>full_name</code>, <code>Full Name</code></td>
+                  <td>Also <code>Name</code>, <code>full_name</code></td>
                 </tr>
                 <tr>
-                  <td><code>email</code></td>
-                  <td>Recommended</td>
-                  <td>Also <code>Email</code>. If name is empty, email is used as name</td>
-                </tr>
-                <tr>
-                  <td><code>phone</code></td>
+                  <td><code>contact</code></td>
                   <td>No</td>
-                  <td>Also <code>Phone</code>, <code>mobile</code></td>
+                  <td>Also <code>phone</code>, <code>Phone</code>, <code>mobile</code></td>
                 </tr>
                 <tr>
                   <td><code>company</code></td>
@@ -110,31 +105,41 @@ export default function ImportPage() {
                   <td>Also <code>Company</code></td>
                 </tr>
                 <tr>
-                  <td><code>country</code></td>
+                  <td><code>state</code></td>
                   <td>No</td>
-                  <td>Also <code>Country</code> — e.g. US, UK, DE</td>
+                  <td>Also <code>State</code></td>
                 </tr>
                 <tr>
-                  <td><code>estimated_value</code></td>
+                  <td><code>job_title</code></td>
                   <td>No</td>
-                  <td>Also <code>value</code> — number in USD (e.g. 65, 450)</td>
+                  <td>Also <code>Job Title</code>, <code>title</code></td>
                 </tr>
                 <tr>
-                  <td><code>notes</code></td>
+                  <td><code>follow_up_notes</code></td>
                   <td>No</td>
-                  <td>Also <code>Notes</code> — campaign or context</td>
+                  <td>Also <code>notes</code>, <code>Notes</code></td>
+                </tr>
+                <tr>
+                  <td><code>email</code></td>
+                  <td>Recommended</td>
+                  <td>Also <code>Email</code></td>
+                </tr>
+                <tr>
+                  <td><code>estimated_revenue</code></td>
+                  <td>No</td>
+                  <td>Also <code>estimated_value</code>, <code>value</code></td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: 0 }}>
-            *Each row needs at least <code>name</code> or <code>email</code>. Rows without both are skipped.
+            *Each row needs at least <code>name</code> or <code>email</code>.
           </p>
         </div>
       </div>
 
       <div className="card" style={{ marginTop: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>Example CSV</h3>
+        <h3 style={{ marginTop: 0 }}>Example (Google Sheet header row)</h3>
         <pre
           style={{
             margin: 0,
@@ -144,12 +149,10 @@ export default function ImportPage() {
             fontSize: '0.82rem',
             overflow: 'auto',
           }}
-        >{`name,email,phone,company,country,estimated_value,notes
-Sunset Realty Photos,info@sunsetrealtyphotos.com,+1-602-555-0144,Sunset Realty Photos,US,65,Meta campaign spring
-Casa Visual Madrid,hola@casavisual.es,,Casa Visual,ES,450,Meta EU lookalike
-Edinburgh Nest Media,hi@edinest.uk,+44-131-555-0190,Edinburgh Nest,UK,65,Lead form`}</pre>
+        >{`name,contact,company,state,job_title,follow_up_notes,email,estimated_revenue
+Abdullah Khan,+1-602-555-0144,Sunset Realty Photos,Arizona,Owner,Called Mon — interested,info@sunset.com,450`}</pre>
         <p style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: 0 }}>
-          Template file in repo: <code>backend/sample-leads.csv</code>
+          Template: <code>backend/sample-leads.csv</code>
         </p>
       </div>
     </div>

@@ -18,7 +18,7 @@ const TOOL_LINKS = [
   { to: '/follow-ups', label: 'Follow-ups', icon: CalendarClock, perm: null },
   { to: '/email', label: 'Cold email', icon: Mail, perm: null },
   { to: '/working-tree', label: 'Working tree', icon: GitBranch, perm: null },
-  { to: '/import', label: 'CSV import', icon: Upload, perm: 'leads:import' },
+  { to: '/import', label: 'CSV / Sheet import', icon: Upload, perm: 'leads:import' },
   { to: '/admin', label: 'Admin', icon: Shield, perm: 'admin:employees' },
 ];
 

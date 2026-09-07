@@ -31,9 +31,22 @@ const FILTER_QUERY = {
   winback: { source: 'purchased_no_repurchase' },
 };
 
+const EMPTY_FORM = {
+  name: '',
+  email: '',
+  phone: '',
+  company: '',
+  state: '',
+  job_title: '',
+  notes: '',
+  estimated_value: '',
+  country: '',
+  source: 'telesales',
+};
+
 export default function LeadsPage({ refreshSidebarCounts }) {
   const { filter } = useParams();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('id');
 
@@ -45,21 +58,24 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [source, setSource] = useState(preset.source || '');
   const [status, setStatus] = useState(preset.status || '');
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    company: '',
-    country: 'US',
-    source: 'manual',
-    estimated_value: 65,
-  });
+  const [form, setForm] = useState(() => ({
+    ...EMPTY_FORM,
+    source: user?.role === 'telesales' ? 'telesales' : 'manual',
+  }));
   const [error, setError] = useState('');
 
   const pageTitle = useMemo(() => {
     if (filter && FILTER_TITLES[filter]) return FILTER_TITLES[filter];
     return 'All leads';
   }, [filter]);
+
+  const createSources = useMemo(() => {
+    const all = meta.sources || [];
+    if (user?.role === 'telesales') {
+      return all.filter((s) => s.key === 'telesales');
+    }
+    return all.filter((s) => ['telesales', 'manual', 'csv_import'].includes(s.key) || s.key === form.source);
+  }, [meta.sources, user?.role, form.source]);
 
   useEffect(() => {
     setSource(preset.source || '');
@@ -96,16 +112,23 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const createLead = async (e) => {
     e.preventDefault();
     try {
-      const created = await api('/leads', { method: 'POST', body: form });
+      const body = {
+        name: form.name,
+        email: form.email || undefined,
+        phone: form.phone || undefined,
+        company: form.company || undefined,
+        state: form.state || undefined,
+        job_title: form.job_title || undefined,
+        notes: form.notes || undefined,
+        estimated_value: form.estimated_value === '' ? 0 : Number(form.estimated_value),
+        country: form.country || undefined,
+        source: user?.role === 'telesales' ? 'telesales' : form.source || 'manual',
+      };
+      const created = await api('/leads', { method: 'POST', body });
       setShowCreate(false);
       setForm({
-        name: '',
-        email: '',
-        phone: '',
-        company: '',
-        country: 'US',
-        source: 'manual',
-        estimated_value: 65,
+        ...EMPTY_FORM,
+        source: user?.role === 'telesales' ? 'telesales' : 'manual',
       });
       load();
       if (created?.id) openLead(created.id);
@@ -130,7 +153,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
       <div className="toolbar">
         <input
           className="input"
-          placeholder="Search name, email, company…"
+          placeholder="Search name, email, company, state…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && load()}
@@ -172,7 +195,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
               <th>Lead</th>
               <th>Source</th>
               <th>Status</th>
-              <th>Country</th>
+              <th>State</th>
               <th>Owner</th>
               <th>Next FU</th>
             </tr>
@@ -186,15 +209,17 @@ export default function LeadsPage({ refreshSidebarCounts }) {
               >
                 <td>
                   <div style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{l.name}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{l.email}</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                    {[l.company, l.job_title].filter(Boolean).join(' · ') || l.email || '—'}
+                  </div>
                 </td>
                 <td>
-                  <SourceBadge source={l.source} />
+                  <SourceBadge source={l.source} createdByName={l.created_by_name} />
                 </td>
                 <td>
                   <StatusBadge status={l.status} />
                 </td>
-                <td>{l.country || '—'}</td>
+                <td>{l.state || l.country || '—'}</td>
                 <td>{l.assigned_name || 'Unassigned'}</td>
                 <td style={{ fontSize: '0.82rem' }}>
                   {l.next_follow_up_at ? new Date(l.next_follow_up_at).toLocaleString() : '—'}
@@ -219,36 +244,104 @@ export default function LeadsPage({ refreshSidebarCounts }) {
       {showCreate ? (
         <div className="modal-backdrop" onClick={() => setShowCreate(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Create lead</h3>
+            <h3>Lead generation</h3>
+            <p className="page-sub" style={{ marginTop: 0 }}>
+              Source will show as{' '}
+              <strong>
+                {user?.role === 'telesales' ? 'Telesales' : form.source === 'telesales' ? 'Telesales' : 'Manual'} ·{' '}
+                {user?.name || 'you'}
+              </strong>
+            </p>
             <form onSubmit={createLead}>
-              {['name', 'email', 'phone', 'company', 'country'].map((k) => (
-                <div className="field" key={k}>
-                  <label className="label">{k}</label>
-                  <input
-                    className="input"
-                    required={k === 'name'}
-                    value={form[k]}
-                    onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-                  />
-                </div>
-              ))}
               <div className="field">
-                <label className="label">source</label>
-                <select
-                  className="select"
-                  value={form.source}
-                  onChange={(e) => setForm({ ...form, source: e.target.value })}
-                >
-                  {meta.sources.map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
+                <label className="label">Name</label>
+                <input
+                  className="input"
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
               </div>
+              <div className="field">
+                <label className="label">Contact</label>
+                <input
+                  className="input"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="label">Company</label>
+                <input
+                  className="input"
+                  value={form.company}
+                  onChange={(e) => setForm({ ...form, company: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="label">State</label>
+                <input
+                  className="input"
+                  value={form.state}
+                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="label">Job title</label>
+                <input
+                  className="input"
+                  value={form.job_title}
+                  onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="label">Email</label>
+                <input
+                  className="input"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="label">Estimated revenue</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.estimated_value}
+                  onChange={(e) => setForm({ ...form, estimated_value: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="label">Follow-up notes</label>
+                <textarea
+                  className="textarea"
+                  rows={3}
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                />
+              </div>
+              {user?.role !== 'telesales' ? (
+                <div className="field">
+                  <label className="label">Source</label>
+                  <select
+                    className="select"
+                    value={form.source}
+                    onChange={(e) => setForm({ ...form, source: e.target.value })}
+                  >
+                    {createSources.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="row-actions">
                 <button type="submit" className="btn btn-primary">
-                  Create
+                  Create lead
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>
                   Cancel

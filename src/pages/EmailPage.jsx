@@ -353,7 +353,7 @@ export default function EmailPage() {
           <h3 style={{ marginTop: 0 }}>Setup checklist</h3>
           <ol style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--muted)' }}>
             <li>Brevo → SMTP &amp; API → create API key (<code>xkeysib-…</code>)</li>
-            <li>Verify sender domain / email (e.g. sales@bmgenie.ai)</li>
+            <li>Verify sender domain / email (e.g. magic.retouching@bmgenie.ai)</li>
             <li>On CRM API server <code>.env</code>: set <code>BREVO_ENABLED=true</code>, <code>BREVO_API_KEY</code>, <code>BREVO_LIST_ID=2</code></li>
             <li>Restart API: <code>pm2 restart bmg-crm-api</code></li>
           </ol>
