@@ -189,6 +189,32 @@ button, input, select, textarea { font: inherit; }
 .btn-ghost { background: transparent; color: var(--muted); }
 .btn-danger { background: #fef2f2; color: var(--danger); }
 
+.segmented {
+  display: inline-flex;
+  width: 100%;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--alabaster, #f8fafc);
+  gap: 2px;
+}
+.segmented-btn {
+  flex: 1;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.segmented-btn.active {
+  background: #fff;
+  color: var(--brand-primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
 .input, .select, .textarea {
   width: 100%;
   border: 1px solid var(--border);

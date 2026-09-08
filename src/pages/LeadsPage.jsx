@@ -32,12 +32,14 @@ const FILTER_QUERY = {
 };
 
 const EMPTY_FORM = {
+  contact_format: 'company',
   name: '',
   email: '',
   phone: '',
   company: '',
   state: '',
   job_title: '',
+  industry: '',
   notes: '',
   estimated_value: '',
   country: '',
@@ -111,14 +113,21 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
   const createLead = async (e) => {
     e.preventDefault();
+    if (!form.industry.trim()) {
+      setError('Industry is required');
+      return;
+    }
     try {
+      const isCompany = form.contact_format === 'company';
       const body = {
+        contact_format: form.contact_format,
         name: form.name,
         email: form.email || undefined,
         phone: form.phone || undefined,
-        company: form.company || undefined,
+        company: isCompany ? form.name : form.company || undefined,
         state: form.state || undefined,
-        job_title: form.job_title || undefined,
+        job_title: isCompany ? undefined : form.job_title || undefined,
+        industry: form.industry.trim(),
         notes: form.notes || undefined,
         estimated_value: form.estimated_value === '' ? 0 : Number(form.estimated_value),
         country: form.country || undefined,
@@ -153,7 +162,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
       <div className="toolbar">
         <input
           className="input"
-          placeholder="Search name, email, company, state…"
+          placeholder="Search name, email, company, industry, state…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && load()}
@@ -210,7 +219,14 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                 <td>
                   <div style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{l.name}</div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-                    {[l.company, l.job_title].filter(Boolean).join(' · ') || l.email || '—'}
+                    {[
+                      l.contact_format === 'employee' ? 'Employee' : l.contact_format === 'company' ? 'Company' : null,
+                      l.industry,
+                      l.company && l.company !== l.name ? l.company : null,
+                      l.job_title,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || l.email || '—'}
                   </div>
                 </td>
                 <td>
@@ -254,12 +270,43 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             </p>
             <form onSubmit={createLead}>
               <div className="field">
-                <label className="label">Name</label>
+                <label className="label">Contact format</label>
+                <div className="segmented" role="group" aria-label="Contact format">
+                  <button
+                    type="button"
+                    className={`segmented-btn${form.contact_format === 'company' ? ' active' : ''}`}
+                    onClick={() => setForm({ ...form, contact_format: 'company', job_title: '' })}
+                  >
+                    Company
+                  </button>
+                  <button
+                    type="button"
+                    className={`segmented-btn${form.contact_format === 'employee' ? ' active' : ''}`}
+                    onClick={() => setForm({ ...form, contact_format: 'employee' })}
+                  >
+                    Employee
+                  </button>
+                </div>
+              </div>
+              <div className="field">
+                <label className="label">
+                  {form.contact_format === 'company' ? 'Company name' : 'Employee name'}
+                </label>
                 <input
                   className="input"
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="label">Industry</label>
+                <input
+                  className="input"
+                  required
+                  placeholder="e.g. Real estate photography"
+                  value={form.industry}
+                  onChange={(e) => setForm({ ...form, industry: e.target.value })}
                 />
               </div>
               <div className="field">
@@ -270,28 +317,32 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
               </div>
-              <div className="field">
-                <label className="label">Company</label>
-                <input
-                  className="input"
-                  value={form.company}
-                  onChange={(e) => setForm({ ...form, company: e.target.value })}
-                />
-              </div>
+              {form.contact_format === 'employee' ? (
+                <>
+                  <div className="field">
+                    <label className="label">Company</label>
+                    <input
+                      className="input"
+                      value={form.company}
+                      onChange={(e) => setForm({ ...form, company: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label">Job title</label>
+                    <input
+                      className="input"
+                      value={form.job_title}
+                      onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+                    />
+                  </div>
+                </>
+              ) : null}
               <div className="field">
                 <label className="label">State</label>
                 <input
                   className="input"
                   value={form.state}
                   onChange={(e) => setForm({ ...form, state: e.target.value })}
-                />
-              </div>
-              <div className="field">
-                <label className="label">Job title</label>
-                <input
-                  className="input"
-                  value={form.job_title}
-                  onChange={(e) => setForm({ ...form, job_title: e.target.value })}
                 />
               </div>
               <div className="field">

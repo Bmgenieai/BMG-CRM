@@ -296,7 +296,19 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   ) : null}
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: '0.82rem', marginTop: 4 }}>
-                  {[lead.company, lead.job_title, lead.state || lead.country].filter(Boolean).join(' · ') || '—'}
+                  {[
+                    lead.contact_format === 'employee'
+                      ? 'Employee'
+                      : lead.contact_format === 'company'
+                        ? 'Company'
+                        : null,
+                    lead.industry,
+                    lead.company && lead.company !== lead.name ? lead.company : null,
+                    lead.job_title,
+                    lead.state || lead.country,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || '—'}
                 </div>
               </>
             ) : (
@@ -344,7 +356,9 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
               <section className="lead-drawer-section">
                 <h3 className="lead-drawer-h3">Employees</h3>
                 <p className="stat-hint" style={{ marginTop: 0 }}>
-                  People at this company/store — add, edit, or delete.
+                  {lead.contact_format === 'employee'
+                    ? 'Additional people linked to this contact — add, edit, or delete.'
+                    : 'People at this company/store — add, edit, or delete.'}
                 </p>
                 {(lead.employees || []).length ? (
                   <div className="table-wrap" style={{ marginBottom: 12 }}>

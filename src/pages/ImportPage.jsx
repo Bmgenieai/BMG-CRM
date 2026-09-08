@@ -102,7 +102,17 @@ export default function ImportPage() {
                 <tr>
                   <td><code>company</code></td>
                   <td>No</td>
-                  <td>Also <code>Company</code></td>
+                  <td>Also <code>Company</code>. For employee format = employer name</td>
+                </tr>
+                <tr>
+                  <td><code>industry</code></td>
+                  <td>Recommended</td>
+                  <td>Also <code>Industry</code>. Required on manual New lead</td>
+                </tr>
+                <tr>
+                  <td><code>contact_format</code></td>
+                  <td>No</td>
+                  <td><code>company</code> (default) or <code>employee</code></td>
                 </tr>
                 <tr>
                   <td><code>state</code></td>
@@ -149,8 +159,8 @@ export default function ImportPage() {
             fontSize: '0.82rem',
             overflow: 'auto',
           }}
-        >{`name,contact,company,state,job_title,follow_up_notes,email,estimated_revenue
-Abdullah Khan,+1-602-555-0144,Sunset Realty Photos,Arizona,Owner,Called Mon — interested,info@sunset.com,450`}</pre>
+        >{`name,contact,company,state,job_title,industry,contact_format,follow_up_notes,email,estimated_revenue
+Sunset Realty Photos,+1-602-555-0144,Sunset Realty Photos,Arizona,,Real estate photography,company,Called Mon — interested,info@sunset.com,450`}</pre>
         <p style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: 0 }}>
           Template: <code>backend/sample-leads.csv</code>
         </p>
