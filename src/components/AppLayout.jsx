@@ -23,13 +23,12 @@ const TOOL_LINKS = [
 ];
 
 const STATUS_TABS = [
-  { slug: 'new', label: 'New Leads' },
-  { slug: 'contacted', label: 'Contacted' },
-  { slug: 'interested', label: 'Interested' },
-  { slug: 'neutral', label: 'Neutral' },
-  { slug: 'follow-up', label: 'Follow Up' },
-  { slug: 'not-interested', label: 'Not Interested' },
-  { slug: 'converted', label: 'Converted' },
+  { slug: 'qualified', label: 'Qualified' },
+  { slug: 'conversation', label: 'Conversation' },
+  { slug: 'demo-booked', label: 'Demo booked' },
+  { slug: 'trial', label: 'Trial' },
+  { slug: 'paid', label: 'Paid' },
+  { slug: 'lost', label: 'Lost' },
 ];
 
 const PRODUCT_TABS = [

@@ -4,13 +4,40 @@ import { api } from '../api.js';
 import { fmtDate, money, SourceBadge, StatusBadge } from './Badges.jsx';
 
 const STATUSES = [
-  { key: 'new', label: 'New' },
-  { key: 'contacted', label: 'Contacted' },
-  { key: 'interested', label: 'Interested' },
-  { key: 'neutral', label: 'Neutral' },
-  { key: 'follow_up_scheduled', label: 'Follow Up' },
-  { key: 'not_interested', label: 'Not Interested' },
-  { key: 'converted', label: 'Converted' },
+  { key: 'qualified', label: 'Qualified' },
+  { key: 'conversation', label: 'Conversation' },
+  { key: 'demo_booked', label: 'Demo booked' },
+  { key: 'trial', label: 'Trial' },
+  { key: 'paid', label: 'Paid' },
+  { key: 'lost', label: 'Lost' },
+];
+
+const LOST_REASONS = [
+  'No response',
+  'Not interested',
+  'Budget / price',
+  'Competitor',
+  'Timing / not ready',
+  'Wrong fit',
+  'Unqualified',
+  'Other',
+];
+
+const ACTIVITY_TYPES = [
+  { value: 'call', label: 'Phone call' },
+  { value: 'email', label: 'Email' },
+  { value: 'linkedin', label: 'LinkedIn touch' },
+  { value: 'reply', label: 'Reply' },
+  { value: 'demo_shown', label: 'Demo shown' },
+  { value: 'note', label: 'Comment / note' },
+  { value: 'whatsapp', label: 'WhatsApp / SMS' },
+];
+
+const REPLY_OUTCOMES = [
+  { value: 'positive', label: 'Positive' },
+  { value: 'negative', label: 'Negative' },
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'no_reply', label: 'No reply' },
 ];
 
 /**
@@ -22,6 +49,9 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [callOutcome, setCallOutcome] = useState('');
   const [callType, setCallType] = useState('call');
+  const [replyOutcome, setReplyOutcome] = useState('positive');
+  const [lostReason, setLostReason] = useState('');
+  const [showLostPicker, setShowLostPicker] = useState(false);
   const [fuDue, setFuDue] = useState('');
   const [fuNote, setFuNote] = useState('');
   const [emailOpen, setEmailOpen] = useState(false);
@@ -50,6 +80,10 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   useEffect(() => {
     setLead(null);
     setCallOutcome('');
+    setCallType('call');
+    setReplyOutcome('positive');
+    setLostReason('');
+    setShowLostPicker(false);
     setFuDue('');
     setFuNote('');
     setEmailOpen(false);
@@ -78,11 +112,19 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     onChanged?.();
   };
 
-  const setStatus = async (status) => {
+  const setStatus = async (status, reason) => {
+    if (status === 'lost' && !reason) {
+      setShowLostPicker(true);
+      setLostReason(lead?.lost_reason || '');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
-      await api(`/leads/${leadId}`, { method: 'PATCH', body: { status } });
+      const body = { status };
+      if (status === 'lost') body.lost_reason = reason;
+      await api(`/leads/${leadId}`, { method: 'PATCH', body });
+      setShowLostPicker(false);
       await load();
       notifyChanged();
     } catch (e) {
@@ -98,16 +140,14 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setBusy(true);
     setError('');
     try {
-      const nextStatus =
-        callType === 'call' && lead?.status === 'new' ? 'contacted' : undefined;
+      const body = {
+        type: callType,
+        summary: callOutcome.trim(),
+        outcome: callType === 'reply' ? replyOutcome : callType === 'call' ? callOutcome.trim() : undefined,
+      };
       await api(`/leads/${leadId}/activities`, {
         method: 'POST',
-        body: {
-          type: callType,
-          summary: callOutcome.trim(),
-          outcome: callType === 'call' ? callOutcome.trim() : undefined,
-          status: nextStatus,
-        },
+        body,
       });
       setCallOutcome('');
       await load();
@@ -471,7 +511,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
               </section>
 
               <section className="lead-drawer-section">
-                <h3 className="lead-drawer-h3">Update status</h3>
+                <h3 className="lead-drawer-h3">Funnel stage</h3>
                 <div className="lead-status-grid">
                   {STATUSES.map((s) => (
                     <button
@@ -485,9 +525,48 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     </button>
                   ))}
                 </div>
-                <div style={{ marginTop: 8 }}>
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <StatusBadge status={lead.status} />
+                  {lead.status === 'lost' && lead.lost_reason ? (
+                    <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                      Reason: {lead.lost_reason}
+                    </span>
+                  ) : null}
                 </div>
+                {showLostPicker ? (
+                  <div style={{ marginTop: 12 }}>
+                    <label className="label">Lost reason</label>
+                    <select
+                      className="select"
+                      value={lostReason}
+                      onChange={(e) => setLostReason(e.target.value)}
+                    >
+                      <option value="">Select reason…</option>
+                      {LOST_REASONS.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={busy || !lostReason}
+                        onClick={() => setStatus('lost', lostReason)}
+                      >
+                        Mark lost
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => setShowLostPicker(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </section>
 
               <section className="lead-drawer-section">
@@ -579,24 +658,52 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
 
               <section className="lead-drawer-section">
                 <h3 className="lead-drawer-h3">
-                  <MessageSquare size={16} /> Add comment / call note
+                  <MessageSquare size={16} /> Log outreach / reply
                 </h3>
+                <p className="stat-hint" style={{ marginTop: 0 }}>
+                  Emails, LinkedIn, calls, and replies feed the Funnel dashboard rates.
+                </p>
                 <form onSubmit={logActivity}>
                   <div className="field">
                     <label className="label">Type</label>
                     <select className="select" value={callType} onChange={(e) => setCallType(e.target.value)}>
-                      <option value="call">Phone call</option>
-                      <option value="note">Comment / note</option>
-                      <option value="email">Email</option>
-                      <option value="whatsapp">WhatsApp / SMS</option>
+                      {ACTIVITY_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
+                  {callType === 'reply' ? (
+                    <div className="field">
+                      <label className="label">Reply outcome</label>
+                      <select
+                        className="select"
+                        value={replyOutcome}
+                        onChange={(e) => setReplyOutcome(e.target.value)}
+                      >
+                        {REPLY_OUTCOMES.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   <div className="field">
                     <textarea
                       className="textarea"
                       rows={3}
                       required
-                      placeholder="What happened on this call? Any feedback from client…"
+                      placeholder={
+                        callType === 'linkedin'
+                          ? 'LinkedIn touch note…'
+                          : callType === 'reply'
+                            ? 'What did they reply?'
+                            : callType === 'demo_shown'
+                              ? 'Demo notes / attendees…'
+                              : 'What happened…'
+                      }
                       value={callOutcome}
                       onChange={(e) => setCallOutcome(e.target.value)}
                     />

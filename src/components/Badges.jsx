@@ -1,27 +1,38 @@
 export function StatusBadge({ status }) {
   const map = {
+    qualified: 'badge-blue',
+    conversation: 'badge-amber',
+    demo_booked: 'badge-amber',
+    trial: 'badge-green',
+    paid: 'badge-green',
+    lost: 'badge-grey',
+    // legacy
     new: 'badge-blue',
     contacted: 'badge-amber',
-    interested: 'badge-green',
+    interested: 'badge-amber',
     neutral: 'badge-amber',
     follow_up_scheduled: 'badge-amber',
     not_interested: 'badge-grey',
     converted: 'badge-green',
-    lost: 'badge-grey',
     pending: 'badge-amber',
     overdue: 'badge-red',
     completed: 'badge-green',
     cancelled: 'badge-grey',
   };
   const labels = {
-    new: 'New',
-    contacted: 'Contacted',
-    interested: 'Interested',
-    neutral: 'Neutral',
-    follow_up_scheduled: 'Follow Up',
-    not_interested: 'Not Interested',
-    converted: 'Converted',
-    lost: 'Not Interested',
+    qualified: 'Qualified',
+    conversation: 'Conversation',
+    demo_booked: 'Demo booked',
+    trial: 'Trial',
+    paid: 'Paid',
+    lost: 'Lost',
+    new: 'Qualified',
+    contacted: 'Qualified',
+    interested: 'Conversation',
+    neutral: 'Conversation',
+    follow_up_scheduled: 'Conversation',
+    not_interested: 'Lost',
+    converted: 'Paid',
   };
   const label = labels[status] || String(status || '').replace(/_/g, ' ');
   return <span className={`badge ${map[status] || 'badge-grey'}`}>{label}</span>;

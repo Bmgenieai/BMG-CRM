@@ -523,3 +523,58 @@ tr:hover td { background: #f8fafc; }
   display: flex;
   flex-direction: column;
 }
+
+.funnel-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.35rem 0.25rem;
+  margin-bottom: 0.75rem;
+}
+.funnel-step {
+  flex: 1 1 88px;
+  min-width: 76px;
+  max-width: 120px;
+  background: var(--alabaster, #f8fafc);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.45rem;
+  text-align: center;
+}
+.funnel-step-link {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+.funnel-step-link:hover .funnel-step-value {
+  color: var(--brand-primary);
+}
+.funnel-step-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.funnel-step-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+  line-height: 1.25;
+}
+.funnel-step-rate {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--brand-primary);
+  margin-top: 0.2rem;
+}
+.funnel-arrow {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0 0.1rem;
+  flex: 0 0 auto;
+}
+@media (max-width: 900px) {
+  .funnel-arrow { display: none; }
+  .funnel-step { max-width: none; flex: 1 1 calc(33% - 0.5rem); }
+}

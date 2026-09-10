@@ -20,7 +20,7 @@ export default function EmailPage() {
   const [previewLeadId, setPreviewLeadId] = useState('');
   const [preview, setPreview] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('new');
+  const [statusFilter, setStatusFilter] = useState('qualified');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -274,9 +274,10 @@ export default function EmailPage() {
           <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', flexWrap: 'wrap' }}>
             <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ flex: 1, minWidth: 120 }}>
               <option value="">All statuses</option>
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="follow_up_scheduled">Follow-up</option>
+              <option value="qualified">Qualified</option>
+              <option value="conversation">Conversation</option>
+              <option value="demo_booked">Demo booked</option>
+              <option value="trial">Trial</option>
             </select>
             <select className="select" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ flex: 1, minWidth: 120 }}>
               <option value="">All sources</option>

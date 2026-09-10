@@ -4,21 +4,45 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { money, SourceBadge, StatusBadge } from '../components/Badges.jsx';
 
+function FunnelStep({ label, value, to, rate }) {
+  return (
+    <div className="funnel-step">
+      {to ? (
+        <Link to={to} className="funnel-step-link">
+          <div className="funnel-step-value">{value ?? 0}</div>
+          <div className="funnel-step-label">{label}</div>
+        </Link>
+      ) : (
+        <>
+          <div className="funnel-step-value">{value ?? 0}</div>
+          <div className="funnel-step-label">{label}</div>
+        </>
+      )}
+      {rate != null ? <div className="funnel-step-rate">{rate}%</div> : null}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user, can } = useAuth();
   const [data, setData] = useState(null);
+  const [funnel, setFunnel] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api('/analytics/overview')
-      .then(setData)
+    Promise.all([api('/analytics/overview'), api('/analytics/funnel')])
+      .then(([overview, funnelData]) => {
+        setData(overview);
+        setFunnel(funnelData);
+      })
       .catch((e) => setError(e.message));
   }, []);
 
   if (error) return <div className="card">{error}</div>;
-  if (!data) return <div className="card">Loading analytics…</div>;
+  if (!data || !funnel) return <div className="card">Loading analytics…</div>;
 
   const { totals, bySource, revenue, performance, recentLeads, followUpHealth } = data;
+  const { stages, outreach, rates, lostReasons } = funnel;
 
   return (
     <div>
@@ -26,31 +50,53 @@ export default function DashboardPage() {
         {user.role === 'ceo' ? 'CEO analytics' : user.role === 'manager' ? 'Manager overview' : 'My dashboard'}
       </h1>
       <p className="page-sub">
-        Leads from product segments + CSV/Meta — not geography zones. US & Europe focus.
+        Sales funnel: qualified → outreach → replies → conversations → demos → trials → paid.
       </p>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3 style={{ marginTop: 0 }}>Sales funnel</h3>
+        <div className="funnel-flow">
+          <FunnelStep label="Qualified prospects" value={stages.qualifiedProspects} to="/leads" />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Emails" value={outreach.emails} />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="LinkedIn" value={outreach.linkedinTouches} />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Calls" value={outreach.calls} />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Reply rate" value={`${rates.replyRate}%`} />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Positive reply" value={`${rates.positiveReplyRate}%`} />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Conversations" value={stages.conversations} to="/leads/conversation" />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Demos booked" value={stages.demosBooked} to="/leads/demo-booked" />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Show rate" value={`${rates.showRate}%`} />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Trials" value={stages.trials} to="/leads/trial" />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Paid" value={stages.paid} to="/leads/paid" />
+          <span className="funnel-arrow">→</span>
+          <FunnelStep label="Conversion" value={`${rates.conversionRate}%`} />
+        </div>
+        <p className="stat-hint" style={{ marginBottom: 0 }}>
+          Reply / positive reply / show rates come from logged activities. Mark replies and “Demo shown” on each lead.
+        </p>
+      </div>
 
       <div className="grid grid-4" style={{ marginBottom: '1rem' }}>
         <div className="card">
-          <p className="stat-label">Total leads</p>
-          <p className="stat-value">{totals.total_leads}</p>
-          <p className="stat-hint">{totals.open_leads} open · {totals.unassigned} unassigned</p>
-        </div>
-        <div className="card">
-          <p className="stat-label">New (uncontacted)</p>
-          <p className="stat-value">{totals.new_leads ?? '—'}</p>
-          <Link to="/leads/new" className="stat-hint" style={{ color: 'var(--brand-primary)' }}>
-            View new leads →
+          <p className="stat-label">Qualified (queue)</p>
+          <p className="stat-value">{stages.qualified ?? 0}</p>
+          <Link to="/leads/qualified" className="stat-hint" style={{ color: 'var(--brand-primary)' }}>
+            View qualified →
           </Link>
         </div>
         <div className="card">
-          <p className="stat-label">Converted</p>
-          <p className="stat-value">{totals.converted}</p>
-          <p className="stat-hint">
-            {totals.total_leads
-              ? Math.round((totals.converted / totals.total_leads) * 1000) / 10
-              : 0}
-            % conversion
-          </p>
+          <p className="stat-label">Paid</p>
+          <p className="stat-value">{stages.paid}</p>
+          <p className="stat-hint">{rates.conversionRate}% conversion</p>
         </div>
         {can('revenue:view') ? (
           <div className="card">
@@ -60,7 +106,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="card">
-            <p className="stat-label">My conversions</p>
+            <p className="stat-label">My paid</p>
             <p className="stat-value">{performance[0]?.converted ?? 0}</p>
             <p className="stat-hint">{performance[0]?.conversionRate ?? 0}% rate</p>
           </div>
@@ -72,22 +118,32 @@ export default function DashboardPage() {
             overdue · {followUpHealth?.pending || 0} pending · {followUpHealth?.completed || 0} done
           </p>
         </div>
+        <div className="card">
+          <p className="stat-label">Lost</p>
+          <p className="stat-value">{stages.lost ?? 0}</p>
+          <Link to="/leads/lost" className="stat-hint" style={{ color: 'var(--brand-primary)' }}>
+            View lost →
+          </Link>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>Quick actions</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link to="/leads/new" className="btn btn-secondary">
-            New leads ({totals.new_leads ?? 0})
+          <Link to="/leads/qualified" className="btn btn-secondary">
+            Qualified ({stages.qualified ?? 0})
           </Link>
-          <Link to="/leads/interested" className="btn btn-secondary">
-            Interested ({totals.interested ?? 0})
+          <Link to="/leads/conversation" className="btn btn-secondary">
+            Conversations ({stages.conversations ?? 0})
           </Link>
-          <Link to="/leads/follow-up" className="btn btn-secondary">
-            Follow-up ({totals.follow_up ?? 0})
+          <Link to="/leads/demo-booked" className="btn btn-secondary">
+            Demos ({stages.demosBooked ?? 0})
           </Link>
-          <Link to="/leads/converted" className="btn btn-primary">
-            Converted ({totals.converted ?? 0})
+          <Link to="/leads/trial" className="btn btn-secondary">
+            Trials ({stages.trials ?? 0})
+          </Link>
+          <Link to="/leads/paid" className="btn btn-primary">
+            Paid ({stages.paid ?? 0})
           </Link>
           <Link to="/email" className="btn btn-secondary">
             Cold email (Brevo)
@@ -97,6 +153,36 @@ export default function DashboardPage() {
 
       <div className="grid grid-2">
         <div className="card">
+          <h3 style={{ marginTop: 0 }}>Lost reasons</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Reason</th>
+                  <th>Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(lostReasons || []).length ? (
+                  lostReasons.map((r) => (
+                    <tr key={r.reason}>
+                      <td>{r.reason}</td>
+                      <td>{r.count}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={2} className="empty">
+                      No lost leads yet
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="card">
           <h3 style={{ marginTop: 0 }}>Leads by source</h3>
           <div className="table-wrap">
             <table>
@@ -104,7 +190,7 @@ export default function DashboardPage() {
                 <tr>
                   <th>Source</th>
                   <th>Leads</th>
-                  <th>Converted</th>
+                  <th>Paid</th>
                   <th>Rate</th>
                 </tr>
               </thead>
@@ -121,35 +207,35 @@ export default function DashboardPage() {
             </table>
           </div>
         </div>
+      </div>
 
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>
-            {can('analytics:view_team') ? 'Telesales performance' : 'My performance'}
-          </h3>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Rep</th>
-                  <th>Assigned</th>
-                  <th>Won</th>
-                  <th>Rate</th>
-                  <th>Overdue FU</th>
+      <div className="card" style={{ marginTop: '1rem' }}>
+        <h3 style={{ marginTop: 0 }}>
+          {can('analytics:view_team') ? 'Telesales performance' : 'My performance'}
+        </h3>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rep</th>
+                <th>Assigned</th>
+                <th>Paid</th>
+                <th>Rate</th>
+                <th>Overdue FU</th>
+              </tr>
+            </thead>
+            <tbody>
+              {performance.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.name}</td>
+                  <td>{p.leads_assigned}</td>
+                  <td>{p.converted}</td>
+                  <td>{p.conversionRate}%</td>
+                  <td>{p.overdue_followups ?? '—'}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {performance.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.name}</td>
-                    <td>{p.leads_assigned}</td>
-                    <td>{p.converted}</td>
-                    <td>{p.conversionRate}%</td>
-                    <td>{p.overdue_followups ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

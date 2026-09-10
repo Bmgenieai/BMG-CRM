@@ -6,26 +6,39 @@ import { SourceBadge, StatusBadge } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 
 const FILTER_TITLES = {
-  new: 'New Leads',
-  contacted: 'Contacted',
-  interested: 'Interested',
-  neutral: 'Neutral',
-  'follow-up': 'Follow Up',
-  'not-interested': 'Not Interested',
-  converted: 'Converted',
+  qualified: 'Qualified prospects',
+  conversation: 'Conversations',
+  'demo-booked': 'Demos booked',
+  trial: 'Trials',
+  paid: 'Paid',
+  lost: 'Lost',
+  // legacy URL redirects still labelled
+  new: 'Qualified prospects',
+  contacted: 'Qualified prospects',
+  interested: 'Conversations',
+  neutral: 'Conversations',
+  'follow-up': 'Conversations',
+  'not-interested': 'Lost',
+  converted: 'Paid',
   signup: 'Signup · no purchase',
   'free-credit': 'Free credit · no purchase',
   winback: 'Win-back · no repurchase',
 };
 
 const FILTER_QUERY = {
-  new: { status: 'new' },
-  contacted: { status: 'contacted' },
-  interested: { status: 'interested' },
-  neutral: { status: 'neutral' },
-  'follow-up': { status: 'follow_up_scheduled' },
-  'not-interested': { status: 'not_interested,lost' },
-  converted: { status: 'converted' },
+  qualified: { status: 'qualified' },
+  conversation: { status: 'conversation' },
+  'demo-booked': { status: 'demo_booked' },
+  trial: { status: 'trial' },
+  paid: { status: 'paid' },
+  lost: { status: 'lost' },
+  new: { status: 'qualified' },
+  contacted: { status: 'qualified' },
+  interested: { status: 'conversation' },
+  neutral: { status: 'conversation' },
+  'follow-up': { status: 'conversation' },
+  'not-interested': { status: 'lost' },
+  converted: { status: 'paid' },
   signup: { source: 'signup_no_listing' },
   'free-credit': { source: 'free_credit_no_purchase' },
   winback: { source: 'purchased_no_repurchase' },
@@ -154,7 +167,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         {filter === 'free-credit' && 'Used free listing credit but has not purchased yet.'}
         {filter === 'winback' && 'Bought a package, used all credits, has not repurchased.'}
         {!filter && 'Click a row to open the side panel — list stays visible.'}
-        {filter && !['signup', 'free-credit', 'winback'].includes(filter) && 'Filter by marketing pipeline stage.'}
+        {filter && !['signup', 'free-credit', 'winback'].includes(filter) && 'Filter by sales funnel stage.'}
       </p>
 
       {error ? <div className="login-error">{error}</div> : null}
