@@ -108,6 +108,15 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Ensure no leftover body lock if a parent ever sets one
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   const notifyChanged = () => {
     onChanged?.();
   };

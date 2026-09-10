@@ -164,7 +164,7 @@ export default function WorkingTreePage() {
         </div>
       ))}
 
-      {modal ? (
+      {modal && !selectedLeadId ? (
         <div className="modal-backdrop" onClick={() => setModal(null)}>
           <div className="modal tree-leads-modal" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start' }}>
