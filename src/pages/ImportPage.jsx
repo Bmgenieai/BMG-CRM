@@ -4,13 +4,15 @@ import { apiUrl, getToken } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
 export default function ImportPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   if (!can('leads:import')) return <Navigate to="/" replace />;
+  const isTelesales = user?.role === 'telesales';
+  const sourcePreview = isTelesales ? 'Telesales' : 'CSV / Google Sheet';
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -43,7 +45,8 @@ export default function ImportPage() {
       <h1 className="page-title">CSV / Google Sheet import</h1>
       <p className="page-sub">
         Export your Google Sheet as CSV (File → Download → CSV), then upload here. Same columns as
-        manual lead generation. Source shows as <strong>CSV / Google Sheet · your name</strong>.
+        manual lead generation. Imported leads are assigned to you so you can work them. Source
+        shows as <strong>{sourcePreview} · {user?.name || 'your name'}</strong>.
       </p>
 
       {error ? <div className="login-error">{error}</div> : null}

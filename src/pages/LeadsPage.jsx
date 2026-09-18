@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { SourceBadge, StatusBadge } from '../components/Badges.jsx';
@@ -203,6 +203,11 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         <button type="button" className="btn btn-secondary" onClick={load}>
           Refresh
         </button>
+        {can('leads:import') ? (
+          <Link to="/import" className="btn btn-secondary">
+            CSV upload
+          </Link>
+        ) : null}
         {can('leads:create') ? (
           <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
             New lead
