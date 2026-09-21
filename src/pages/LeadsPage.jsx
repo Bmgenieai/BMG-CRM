@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { SourceBadge, StatusBadge } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
+import CohortFilter from '../components/CohortFilter.jsx';
 
 const FILTER_TITLES = {
   qualified: 'Qualified prospects',
@@ -68,6 +69,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const { can, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('id');
+  const cohort = searchParams.get('cohort') || 'all';
 
   const preset = FILTER_QUERY[filter] || {};
 
@@ -82,6 +84,13 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     source: user?.role === 'telesales' ? 'telesales' : 'manual',
   }));
   const [error, setError] = useState('');
+
+  const setCohort = (next) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (!next || next === 'all') nextParams.delete('cohort');
+    else nextParams.set('cohort', next);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const pageTitle = useMemo(() => {
     if (filter && FILTER_TITLES[filter]) return FILTER_TITLES[filter];
@@ -106,6 +115,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     if (q) params.set('q', q);
     if (source) params.set('source', source);
     if (status) params.set('status', status);
+    if (cohort && cohort !== 'all') params.set('cohort', cohort);
     api(`/leads?${params}`)
       .then(setLeads)
       .catch((e) => setError(e.message));
@@ -118,14 +128,18 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
   useEffect(() => {
     load();
-  }, [filter, source, status]);
+  }, [filter, source, status, cohort]);
 
   const openLead = (id) => {
-    setSearchParams({ id });
+    const next = new URLSearchParams(searchParams);
+    next.set('id', id);
+    setSearchParams(next);
   };
 
   const closeLead = () => {
-    setSearchParams({});
+    const next = new URLSearchParams(searchParams);
+    next.delete('id');
+    setSearchParams(next);
   };
 
   const createLead = async (e) => {
@@ -175,6 +189,10 @@ export default function LeadsPage({ refreshSidebarCounts }) {
       </p>
 
       {error ? <div className="login-error">{error}</div> : null}
+
+      <div style={{ marginBottom: '1rem' }}>
+        <CohortFilter value={cohort} onChange={setCohort} />
+      </div>
 
       <div className="toolbar">
         <input

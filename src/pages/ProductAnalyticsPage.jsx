@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtDate } from '../components/Badges.jsx';
+import CohortFilter from '../components/CohortFilter.jsx';
 
 function EmailModal({ card, onClose }) {
   if (!card) return null;
@@ -19,6 +20,7 @@ function EmailModal({ card, onClose }) {
             <h3 style={{ margin: 0 }}>{card.title}</h3>
             <p className="page-sub" style={{ margin: '0.35rem 0 0' }}>
               {card.count} · {card.date}
+              {card.cohort ? ` · ${card.cohort} users` : ''}
               {card.source === 'crm_fallback' ? ' · CRM fallback' : ' · Live from BMGenie'}
             </p>
           </div>
@@ -32,7 +34,7 @@ function EmailModal({ card, onClose }) {
           </p>
         ) : null}
         {users.length === 0 ? (
-          <p style={{ marginTop: '1rem' }}>No users for this day.</p>
+          <p style={{ marginTop: '1rem' }}>No users for this filter.</p>
         ) : (
           <table className="table" style={{ marginTop: '1rem' }}>
             <thead>
@@ -69,18 +71,29 @@ function EmailModal({ card, onClose }) {
 }
 
 export default function ProductAnalyticsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const cohort = searchParams.get('cohort') || 'all';
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [modalCard, setModalCard] = useState(null);
 
+  const setCohort = (next) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (!next || next === 'all') nextParams.delete('cohort');
+    else nextParams.set('cohort', next);
+    setSearchParams(nextParams, { replace: true });
+  };
+
   useEffect(() => {
     setError('');
     setData(null);
-    api(`/analytics/product-tracking?date=${encodeURIComponent(date)}`)
+    const params = new URLSearchParams({ date });
+    if (cohort && cohort !== 'all') params.set('cohort', cohort);
+    api(`/analytics/product-tracking?${params}`)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [date]);
+  }, [date, cohort]);
 
   if (error) return <div className="card">{error}</div>;
   if (!data) return <div className="card">Loading product analytics…</div>;
@@ -92,6 +105,7 @@ export default function ProductAnalyticsPage() {
           <h1 className="page-title">Product analytics</h1>
           <p className="page-sub">
             BMGenie site user tracking for CEO / managers. Click a number to see emails.
+            New users = signed up on the selected date only; after that day they are old users.
           </p>
         </div>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.85rem' }}>
@@ -103,6 +117,10 @@ export default function ProductAnalyticsPage() {
             onChange={(e) => setDate(e.target.value)}
           />
         </label>
+      </div>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <CohortFilter value={cohort} onChange={setCohort} />
       </div>
 
       {!data.bmgenieApiConfigured ? (
@@ -139,12 +157,20 @@ export default function ProductAnalyticsPage() {
       </div>
 
       <div className="grid grid-2" style={{ marginBottom: '1rem' }}>
-        <Link to="/demos" className="card" style={{ display: 'block' }}>
+        <Link
+          to={data.extras?.demosHref || `/demos?cohort=${cohort}`}
+          className="card"
+          style={{ display: 'block' }}
+        >
           <p className="stat-label">Book a demo (today)</p>
           <p className="stat-value">{data.extras?.demosToday ?? 0}</p>
           <p className="stat-hint">Open demo bookings tab →</p>
         </Link>
-        <Link to="/chats" className="card" style={{ display: 'block' }}>
+        <Link
+          to={data.extras?.chatsHref || `/chats?cohort=${cohort}`}
+          className="card"
+          style={{ display: 'block' }}
+        >
           <p className="stat-label">Chat support (today)</p>
           <p className="stat-value">{data.extras?.chatsToday ?? 0}</p>
           <p className="stat-hint">Open chat support tab →</p>

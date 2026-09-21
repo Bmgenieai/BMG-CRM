@@ -1,17 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtDate } from '../components/Badges.jsx';
+import CohortFilter from '../components/CohortFilter.jsx';
 
 export default function DemosPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const cohort = searchParams.get('cohort') || 'all';
   const [rows, setRows] = useState(null);
   const [counts, setCounts] = useState(null);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
 
+  const setCohort = (next) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (!next || next === 'all') nextParams.delete('cohort');
+    else nextParams.set('cohort', next);
+    setSearchParams(nextParams, { replace: true });
+  };
+
   const load = () => {
-    const qs = q ? `?q=${encodeURIComponent(q)}` : '';
-    Promise.all([api(`/demos${qs}`), api('/demos/counts')])
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (cohort && cohort !== 'all') params.set('cohort', cohort);
+    const qs = params.toString() ? `?${params}` : '';
+    const countQs =
+      cohort && cohort !== 'all' ? `?cohort=${encodeURIComponent(cohort)}` : '';
+    Promise.all([api(`/demos${qs}`), api(`/demos/counts${countQs}`)])
       .then(([list, c]) => {
         setRows(list);
         setCounts(c);
@@ -22,7 +37,7 @@ export default function DemosPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cohort]);
 
   if (error) return <div className="card">{error}</div>;
   if (!rows) return <div className="card">Loading demo bookings…</div>;
@@ -34,6 +49,10 @@ export default function DemosPage() {
         Calendly bookings from bmgenie.ai — name, email, and scheduled time. Point Calendly webhooks to{' '}
         <code>/api/ingest/calendly</code>.
       </p>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <CohortFilter value={cohort} onChange={setCohort} />
+      </div>
 
       <div className="grid grid-3" style={{ marginBottom: '1rem' }}>
         <div className="card">
@@ -57,6 +76,7 @@ export default function DemosPage() {
             placeholder="Search name, email, phone…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && load()}
             style={{ flex: 1, minWidth: 200 }}
           />
           <button type="button" className="btn btn-primary" onClick={load}>
@@ -78,13 +98,13 @@ export default function DemosPage() {
                 <th>Phone</th>
                 <th>Timezone</th>
                 <th>Status</th>
-                <th>Lead</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td>{fmtDate(r.scheduled_at)}</td>
+                  <td>{fmtDate(r.scheduled_at || r.created_at)}</td>
                   <td>{r.name || '—'}</td>
                   <td>
                     {r.email ? (
@@ -100,12 +120,10 @@ export default function DemosPage() {
                   <td>{r.status}</td>
                   <td>
                     {r.lead_id ? (
-                      <Link to={`/leads?id=${r.lead_id}`} style={{ color: 'var(--brand-primary)' }}>
-                        Open lead
+                      <Link className="btn btn-ghost" to={`/leads?id=${r.lead_id}`}>
+                        Lead
                       </Link>
-                    ) : (
-                      '—'
-                    )}
+                    ) : null}
                   </td>
                 </tr>
               ))}
