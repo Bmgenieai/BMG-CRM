@@ -23,6 +23,8 @@ const FILTER_TITLES = {
   signup: 'Signup · no purchase',
   'free-credit': 'Free credit · no purchase',
   winback: 'Win-back · no repurchase',
+  'checkout-abandoned': 'Stripe · abandoned checkout',
+  revisions: 'Asked for revisions',
 };
 
 const FILTER_QUERY = {
@@ -42,6 +44,8 @@ const FILTER_QUERY = {
   signup: { source: 'signup_no_listing' },
   'free-credit': { source: 'free_credit_no_purchase' },
   winback: { source: 'purchased_no_repurchase' },
+  'checkout-abandoned': { source: 'checkout_abandoned' },
+  revisions: { source: 'revision_requested' },
 };
 
 const EMPTY_FORM = {

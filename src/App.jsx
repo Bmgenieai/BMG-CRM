@@ -4,6 +4,7 @@ import { useAuth } from './auth.jsx';
 import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
+import ProductAnalyticsPage from './pages/ProductAnalyticsPage.jsx';
 import LeadsPage from './pages/LeadsPage.jsx';
 import LeadDetailPage from './pages/LeadDetailPage.jsx';
 import DistributionPage from './pages/DistributionPage.jsx';
@@ -12,6 +13,8 @@ import WorkingTreePage from './pages/WorkingTreePage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import ImportPage from './pages/ImportPage.jsx';
 import EmailPage from './pages/EmailPage.jsx';
+import DemosPage from './pages/DemosPage.jsx';
+import ChatsPage from './pages/ChatsPage.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -32,6 +35,9 @@ function ProtectedLayout() {
       <AppLayout>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/product-analytics" element={<ProductAnalyticsPage />} />
+          <Route path="/demos" element={<DemosPage />} />
+          <Route path="/chats" element={<ChatsPage />} />
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/leads/:filter" element={<LeadsPage />} />
           <Route path="/leads/:id" element={<LeadDetailPage />} />

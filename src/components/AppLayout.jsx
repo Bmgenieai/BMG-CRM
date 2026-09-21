@@ -9,6 +9,9 @@ import {
   Shield,
   LogOut,
   Mail,
+  BarChart3,
+  CalendarDays,
+  MessageCircle,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -35,6 +38,8 @@ const PRODUCT_TABS = [
   { slug: 'signup', label: 'Signup · no purchase' },
   { slug: 'free-credit', label: 'Free credit · no purchase' },
   { slug: 'winback', label: 'Win-back · no repurchase' },
+  { slug: 'checkout-abandoned', label: 'Stripe · abandoned' },
+  { slug: 'revisions', label: 'Asked for revisions' },
 ];
 
 function TabLink({ to, label, count, end = false }) {
@@ -86,6 +91,16 @@ export default function AppLayout({ children }) {
             Dashboard
           </NavLink>
 
+          {can('analytics:view_team') ? (
+            <NavLink
+              to="/product-analytics"
+              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+            >
+              <BarChart3 size={18} />
+              Product analytics
+            </NavLink>
+          ) : null}
+
           <div className="nav-section-label">Leads</div>
           <TabLink to="/leads" label="All leads" count={counts?.total} end />
           {STATUS_TABS.map((t) => (
@@ -106,6 +121,28 @@ export default function AppLayout({ children }) {
               count={counts?.productCounts?.[t.slug]}
             />
           ))}
+
+          <div className="nav-section-label">Inbound</div>
+          <NavLink
+            to="/demos"
+            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+          >
+            <CalendarDays size={16} />
+            <span style={{ flex: 1 }}>Book a demo</span>
+            {counts?.demosCount != null ? (
+              <span className="nav-count">{counts.demosCount}</span>
+            ) : null}
+          </NavLink>
+          <NavLink
+            to="/chats"
+            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+          >
+            <MessageCircle size={16} />
+            <span style={{ flex: 1 }}>Chat support</span>
+            {counts?.chatsOpen != null ? (
+              <span className="nav-count">{counts.chatsOpen}</span>
+            ) : null}
+          </NavLink>
 
           <div className="nav-section-label">Tools</div>
           {TOOL_LINKS.filter((l) => !l.perm || can(l.perm)).map((l) => (
