@@ -5,6 +5,7 @@ import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import ProductAnalyticsPage from './pages/ProductAnalyticsPage.jsx';
+import TelesalesWorkingPage from './pages/TelesalesWorkingPage.jsx';
 import LeadsPage from './pages/LeadsPage.jsx';
 import LeadDetailPage from './pages/LeadDetailPage.jsx';
 import DistributionPage from './pages/DistributionPage.jsx';
@@ -36,6 +37,7 @@ function ProtectedLayout() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/product-analytics" element={<ProductAnalyticsPage />} />
+          <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
           <Route path="/demos" element={<DemosPage />} />
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/leads" element={<LeadsPage />} />

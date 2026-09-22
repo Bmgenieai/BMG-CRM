@@ -12,6 +12,7 @@ import {
   BarChart3,
   CalendarDays,
   MessageCircle,
+  ClipboardList,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -100,6 +101,14 @@ export default function AppLayout({ children }) {
               Product analytics
             </NavLink>
           ) : null}
+
+          <NavLink
+            to="/telesales-working"
+            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+          >
+            <ClipboardList size={18} />
+            Telesales working
+          </NavLink>
 
           <div className="nav-section-label">Leads</div>
           <TabLink to="/leads" label="All leads" count={counts?.total} end />

@@ -27,13 +27,19 @@ export default function DashboardPage() {
   const { user, can } = useAuth();
   const [data, setData] = useState(null);
   const [funnel, setFunnel] = useState(null);
+  const [todayWork, setTodayWork] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([api('/analytics/overview'), api('/analytics/funnel')])
-      .then(([overview, funnelData]) => {
+    Promise.all([
+      api('/analytics/overview'),
+      api('/analytics/funnel'),
+      api('/analytics/telesales-working?period=today').catch(() => null),
+    ])
+      .then(([overview, funnelData, working]) => {
         setData(overview);
         setFunnel(funnelData);
+        setTodayWork(working);
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -52,6 +58,56 @@ export default function DashboardPage() {
       <p className="page-sub">
         Sales funnel: qualified → outreach → replies → conversations → demos → trials → paid.
       </p>
+
+      {todayWork?.totals ? (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <h3 style={{ margin: 0 }}>Today&apos;s telesales working</h3>
+              <p className="stat-hint" style={{ margin: '0.25rem 0 0' }}>
+                {todayWork.timezone} · leads, calls, messages, emails
+              </p>
+            </div>
+            <Link to="/telesales-working?period=today" className="btn btn-secondary">
+              Open working report
+            </Link>
+          </div>
+          <div className="grid grid-4" style={{ marginTop: '0.75rem' }}>
+            <div>
+              <p className="stat-label">Leads added</p>
+              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                {todayWork.totals.leadsAdded ?? 0}
+              </p>
+            </div>
+            <div>
+              <p className="stat-label">Calls</p>
+              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                {todayWork.totals.calls ?? 0}
+              </p>
+            </div>
+            <div>
+              <p className="stat-label">Messages</p>
+              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                {todayWork.totals.messages ?? 0}
+              </p>
+            </div>
+            <div>
+              <p className="stat-label">Emails</p>
+              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                {todayWork.totals.emails ?? 0}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>Sales funnel</h3>
@@ -210,10 +266,15 @@ export default function DashboardPage() {
       </div>
 
       <div className="card" style={{ marginTop: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>
-          {can('analytics:view_team') ? 'Telesales performance' : 'My performance'}
-        </h3>
-        <div className="table-wrap">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <h3 style={{ margin: 0 }}>
+            {can('analytics:view_team') ? 'Telesales performance' : 'My performance'}
+          </h3>
+          <Link to="/telesales-working" className="btn btn-ghost">
+            Period working →
+          </Link>
+        </div>
+        <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
           <table>
             <thead>
               <tr>
