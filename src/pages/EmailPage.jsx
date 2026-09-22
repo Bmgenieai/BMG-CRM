@@ -6,7 +6,7 @@ import { SourceBadge, StatusBadge } from '../components/Badges.jsx';
 
 export default function EmailPage() {
   const { can } = useAuth();
-  const canBulk = can('leads:assign');
+  const canBulk = can('email:bulk_send');
 
   const [status, setStatus] = useState(null);
   const [lists, setLists] = useState([]);
@@ -248,7 +248,9 @@ export default function EmailPage() {
                 </button>
               </>
             ) : (
-              <p className="stat-hint">Bulk send requires manager role — use lead drawer for one-off sends.</p>
+              <p className="stat-hint">
+                Bulk send is unavailable for your role — use the lead drawer for one-off sends.
+              </p>
             )}
           </div>
 
