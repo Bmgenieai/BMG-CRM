@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Mail, RefreshCw, Send, Users } from 'lucide-react';
+import { CalendarClock, Mail, RefreshCw, Send, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { SourceBadge, StatusBadge } from '../components/Badges.jsx';
+import { SourceBadge, StatusBadge, fmtDate } from '../components/Badges.jsx';
+
+function toLocalInputValue() {
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function EmailPage() {
   const { can } = useAuth();
@@ -24,6 +30,9 @@ export default function EmailPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState(() => toLocalInputValue());
+  const [scheduledBatches, setScheduledBatches] = useState([]);
 
   const load = async () => {
     setError('');
@@ -42,6 +51,12 @@ export default function EmailPage() {
           setLists(listData.lists || []);
         } catch {
           setLists([]);
+        }
+        try {
+          const sched = await api('/email/scheduled?status=pending');
+          setScheduledBatches(sched.batches || []);
+        } catch {
+          setScheduledBatches([]);
         }
       }
     } catch (e) {
@@ -150,6 +165,64 @@ export default function EmailPage() {
     }
   };
 
+  const scheduleBulk = async () => {
+    if (!selected.length) {
+      setError('Select at least one lead');
+      return;
+    }
+    if (!scheduleAt) {
+      setError('Pick a date and time to schedule');
+      return;
+    }
+    const when = new Date(scheduleAt);
+    if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      setError('Schedule time must be in the future');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const data = await api('/email/schedule', {
+        method: 'POST',
+        body: {
+          leadIds: selected,
+          templateId: templateId || undefined,
+          subject,
+          htmlContent,
+          textContent,
+          syncToBrevo: true,
+          scheduledAt: when.toISOString(),
+        },
+      });
+      setMessage(
+        `Scheduled ${data.count} email(s) for ${fmtDate(data.scheduledAt)} (sends automatically)`,
+      );
+      setSelected([]);
+      setShowSchedule(false);
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelBatch = async (batchId) => {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const data = await api(`/email/scheduled/${batchId}/cancel`, { method: 'POST' });
+      setMessage(`Cancelled ${data.cancelled} scheduled email(s)`);
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <h1 className="page-title">Cold email (Brevo)</h1>
@@ -243,6 +316,14 @@ export default function EmailPage() {
                 <button type="button" className="btn btn-primary" disabled={busy || !status?.enabled} onClick={sendBulk}>
                   <Send size={16} /> Send to selected ({selected.length})
                 </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || !status?.enabled}
+                  onClick={() => setShowSchedule((v) => !v)}
+                >
+                  <CalendarClock size={16} /> Schedule
+                </button>
                 <button type="button" className="btn btn-secondary" disabled={busy || !status?.enabled} onClick={syncBulk}>
                   <Users size={16} /> Sync to Brevo
                 </button>
@@ -253,6 +334,43 @@ export default function EmailPage() {
               </p>
             )}
           </div>
+
+          {canBulk && showSchedule ? (
+            <div
+              style={{
+                marginTop: '0.75rem',
+                padding: '0.75rem',
+                background: 'var(--brand-soft)',
+                borderRadius: 8,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                alignItems: 'flex-end',
+              }}
+            >
+              <label className="field" style={{ margin: 0, minWidth: 220 }}>
+                <span className="label">Send at (your local time)</span>
+                <input
+                  type="datetime-local"
+                  className="input"
+                  value={scheduleAt}
+                  onChange={(e) => setScheduleAt(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy || !status?.enabled || !selected.length}
+                onClick={scheduleBulk}
+              >
+                Confirm schedule ({selected.length})
+              </button>
+              <p className="stat-hint" style={{ margin: 0, flexBasis: '100%' }}>
+                CRM will send via Brevo automatically at that time (checked every ~30s). Max 25 leads per
+                schedule.
+              </p>
+            </div>
+          ) : null}
 
           {preview ? (
             <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--brand-soft)', borderRadius: 8 }}>
@@ -350,6 +468,45 @@ export default function EmailPage() {
           </div>
         </div>
       </div>
+
+      {canBulk && scheduledBatches.length ? (
+        <div className="card" style={{ marginTop: '1rem' }}>
+          <h3 style={{ marginTop: 0 }}>Upcoming scheduled sends</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Subject / template</th>
+                  <th>Recipients</th>
+                  <th>By</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {scheduledBatches.map((b) => (
+                  <tr key={b.batchId}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(b.scheduledAt)}</td>
+                    <td>{b.subject || b.templateId || '—'}</td>
+                    <td>{b.count}</td>
+                    <td>{b.scheduledByName || '—'}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={busy}
+                        onClick={() => cancelBatch(b.batchId)}
+                      >
+                        Cancel
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {!status?.enabled ? (
         <div className="card" style={{ marginTop: '1rem' }}>
