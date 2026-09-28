@@ -2,12 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Mail, RefreshCw, Send, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { SourceBadge, StatusBadge, fmtDate } from '../components/Badges.jsx';
+import { SourceBadge, fmtDate } from '../components/Badges.jsx';
 
 function toLocalInputValue() {
   const d = new Date(Date.now() + 60 * 60 * 1000);
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fmtDay(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString();
+  } catch {
+    return iso;
+  }
 }
 
 export default function EmailPage() {
@@ -27,6 +36,7 @@ export default function EmailPage() {
   const [preview, setPreview] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('qualified');
+  const [emailStatusFilter, setEmailStatusFilter] = useState('not_sent');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -73,9 +83,11 @@ export default function EmailPage() {
       if (!l.email) return false;
       if (sourceFilter && l.source !== sourceFilter) return false;
       if (statusFilter && l.status !== statusFilter) return false;
+      if (emailStatusFilter === 'sent' && !l.last_emailed_at) return false;
+      if (emailStatusFilter === 'not_sent' && l.last_emailed_at) return false;
       return true;
     });
-  }, [leads, sourceFilter, statusFilter]);
+  }, [leads, sourceFilter, statusFilter, emailStatusFilter]);
 
   const applyTemplate = (id) => {
     setTemplateId(id);
@@ -228,7 +240,9 @@ export default function EmailPage() {
       <h1 className="page-title">Cold email (Brevo)</h1>
       <p className="page-sub">
         Send personalized outreach from {status?.sender || 'your verified Brevo sender'}. Templates use merge tags like{' '}
-        <code>{'{{first_name}}'}</code>, <code>{'{{company}}'}</code>.
+        <code>{'{{first_name}}'}</code>, <code>{'{{company}}'}</code>. Default list filter shows{' '}
+        <strong>not emailed yet</strong> so you can work the outbox. Opens/replies appear after Brevo webhooks are pointed at{' '}
+        <code>/api/email/webhooks/brevo</code>.
       </p>
 
       {error ? <div className="login-error">{error}</div> : null}
@@ -405,6 +419,17 @@ export default function EmailPage() {
               <option value="free_credit_no_purchase">Free credit</option>
               <option value="purchased_no_repurchase">Win-back</option>
               <option value="csv_import">CSV / Meta</option>
+              <option value="telesales">Telesales</option>
+            </select>
+            <select
+              className="select"
+              value={emailStatusFilter}
+              onChange={(e) => setEmailStatusFilter(e.target.value)}
+              style={{ flex: 1, minWidth: 120 }}
+            >
+              <option value="">All email</option>
+              <option value="not_sent">Not emailed yet</option>
+              <option value="sent">Already emailed</option>
             </select>
           </div>
 
@@ -435,7 +460,8 @@ export default function EmailPage() {
                   </th>
                   <th>Lead</th>
                   <th>Source</th>
-                  <th>Status</th>
+                  <th>Date added</th>
+                  <th>Email</th>
                 </tr>
               </thead>
               <tbody>
@@ -451,14 +477,32 @@ export default function EmailPage() {
                     <td>
                       <SourceBadge source={l.source} />
                     </td>
+                    <td style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                      {fmtDay(l.date_added_effective || l.date_added || l.created_at)}
+                    </td>
                     <td>
-                      <StatusBadge status={l.status} />
+                      {l.last_emailed_at ? (
+                        <div>
+                          <span className="badge badge-blue">
+                            {(l.email_reply_count || 0) > 0
+                              ? 'Replied'
+                              : (l.email_open_count || 0) > 0
+                                ? 'Opened'
+                                : 'Sent'}
+                          </span>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
+                            {fmtDay(l.last_emailed_at)}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="badge badge-grey">Not sent</span>
+                      )}
                     </td>
                   </tr>
                 ))}
                 {!filteredLeads.length ? (
                   <tr>
-                    <td colSpan={4} className="empty">
+                    <td colSpan={5} className="empty">
                       No leads with email match filters
                     </td>
                   </tr>

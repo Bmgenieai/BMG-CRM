@@ -383,8 +383,31 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     <SourceBadge source={lead.source} createdByName={lead.created_by_name} />
                   </div>
                   <div>
+                    <div className="stat-label">Date added</div>
+                    <span style={{ fontSize: '0.85rem' }}>
+                      {fmtDate(lead.date_added_effective || lead.date_added || lead.created_at)}
+                    </span>
+                    {lead.import_batch_filename ? (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                        {lead.import_batch_filename}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div>
                     <div className="stat-label">Est. revenue</div>
                     <strong>{money(lead.estimated_value)}</strong>
+                  </div>
+                  <div>
+                    <div className="stat-label">Email status</div>
+                    <span style={{ fontSize: '0.85rem' }}>
+                      {!lead.last_emailed_at
+                        ? 'Not emailed'
+                        : (lead.email_reply_count || 0) > 0
+                          ? `Replied (${lead.email_reply_count})`
+                          : (lead.email_open_count || 0) > 0
+                            ? `Opened (${lead.email_open_count})`
+                            : `Sent ${fmtDate(lead.last_emailed_at)}`}
+                    </span>
                   </div>
                   <div>
                     <div className="stat-label">Next follow-up</div>
@@ -663,6 +686,53 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     )}
                   </>
                 )}
+
+                <div style={{ marginTop: '1rem' }}>
+                  <h4 className="lead-drawer-h3" style={{ fontSize: '0.92rem', marginBottom: 8 }}>
+                    Brevo email history
+                  </h4>
+                  {(lead.emailHistory?.messages || []).length ? (
+                    <ul className="lead-activity-list">
+                      {lead.emailHistory.messages.map((m) => (
+                        <li key={m.id}>
+                          <strong>{m.subject || '(no subject)'}</strong>
+                          <div className="muted-line">
+                            {[
+                              m.status || 'sent',
+                              m.sent_by_name,
+                              fmtDate(m.sent_at),
+                              m.open_count ? `${m.open_count} open(s)` : null,
+                              m.click_count ? `${m.click_count} click(s)` : null,
+                              m.reply_count ? `${m.reply_count} reply` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty" style={{ marginBottom: 8 }}>
+                      No Brevo sends logged yet
+                    </p>
+                  )}
+                  {(lead.emailHistory?.events || []).length ? (
+                    <>
+                      <p className="stat-hint" style={{ marginBottom: 6 }}>
+                        Tracking events (opens / clicks / replies)
+                      </p>
+                      <ul className="lead-activity-list">
+                        {lead.emailHistory.events.slice(0, 12).map((ev) => (
+                          <li key={ev.id}>
+                            <strong style={{ textTransform: 'capitalize' }}>{ev.event}</strong>
+                            {ev.subject ? ` — ${ev.subject}` : ''}
+                            <div className="muted-line">{fmtDate(ev.occurred_at)}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
               </section>
 
               <section className="lead-drawer-section">

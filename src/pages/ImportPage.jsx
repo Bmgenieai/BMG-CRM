@@ -3,9 +3,16 @@ import { Navigate } from 'react-router-dom';
 import { apiUrl, getToken } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
+function todayLocal() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export default function ImportPage() {
   const { can, user } = useAuth();
   const [file, setFile] = useState(null);
+  const [dateAdded, setDateAdded] = useState(() => todayLocal());
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,6 +31,7 @@ export default function ImportPage() {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('source_label', 'csv_import');
+      if (dateAdded) fd.append('date_added', dateAdded);
       const res = await fetch(apiUrl('/leads/import/csv'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -64,6 +72,28 @@ export default function ImportPage() {
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
             </div>
+            <div
+              className="field"
+              style={{
+                padding: '0.85rem',
+                background: 'var(--brand-soft)',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+              }}
+            >
+              <label className="label">Import date</label>
+              <input
+                className="input"
+                type="date"
+                required
+                value={dateAdded}
+                onChange={(e) => setDateAdded(e.target.value)}
+              />
+              <p className="stat-hint" style={{ marginTop: 8, marginBottom: 0 }}>
+                Tags this whole batch so on Cold email / All leads you can see when they were uploaded,
+                whether the first email went out, and when — avoids mixing older and newer lists.
+              </p>
+            </div>
             <button className="btn btn-primary" type="submit" disabled={!file || busy}>
               {busy ? 'Importing…' : 'Import leads'}
             </button>
@@ -72,7 +102,8 @@ export default function ImportPage() {
           {result ? (
             <div style={{ marginTop: '1rem', fontSize: '0.92rem' }}>
               Imported <strong>{result.imported}</strong> / {result.rowCount} rows
-              {result.skipped ? ` · skipped ${result.skipped}` : ''}. Batch {result.batchId}.
+              {result.skipped ? ` · skipped ${result.skipped}` : ''}. Batch {result.batchId}
+              {result.dateAdded ? ` · Date added ${String(result.dateAdded).slice(0, 10)}` : ''}.
             </div>
           ) : null}
         </div>

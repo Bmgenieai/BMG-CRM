@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { SourceBadge, StatusBadge } from '../components/Badges.jsx';
+import { SourceBadge, StatusBadge, fmtDate } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 import CohortFilter from '../components/CohortFilter.jsx';
 
@@ -13,7 +13,6 @@ const FILTER_TITLES = {
   trial: 'Trials',
   paid: 'Paid',
   lost: 'Lost',
-  // legacy URL redirects still labelled
   new: 'Qualified prospects',
   contacted: 'Qualified prospects',
   interested: 'Conversations',
@@ -64,6 +63,40 @@ const EMPTY_FORM = {
   source: 'telesales',
 };
 
+function fmtDay(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString();
+  } catch {
+    return iso;
+  }
+}
+
+function EmailStatusCell({ lead }) {
+  if (!lead.last_emailed_at) {
+    return <span className="badge badge-grey">Not emailed</span>;
+  }
+  const opens = Number(lead.email_open_count) || 0;
+  const replies = Number(lead.email_reply_count) || 0;
+  let label = 'Sent';
+  let cls = 'badge-blue';
+  if (replies > 0) {
+    label = `Replied (${replies})`;
+    cls = 'badge-green';
+  } else if (opens > 0) {
+    label = `Opened (${opens})`;
+    cls = 'badge-amber';
+  }
+  return (
+    <div>
+      <span className={`badge ${cls}`}>{label}</span>
+      <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
+        {fmtDay(lead.last_emailed_at)}
+      </div>
+    </div>
+  );
+}
+
 export default function LeadsPage({ refreshSidebarCounts }) {
   const { filter } = useParams();
   const { can, user } = useAuth();
@@ -74,10 +107,14 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const preset = FILTER_QUERY[filter] || {};
 
   const [leads, setLeads] = useState([]);
-  const [meta, setMeta] = useState({ sources: [], statuses: [] });
+  const [meta, setMeta] = useState({ sources: [], statuses: [], importBatches: [] });
   const [q, setQ] = useState('');
   const [source, setSource] = useState(preset.source || '');
   const [status, setStatus] = useState(preset.status || '');
+  const [emailStatus, setEmailStatus] = useState('');
+  const [importBatchId, setImportBatchId] = useState('');
+  const [dateAddedFrom, setDateAddedFrom] = useState('');
+  const [dateAddedTo, setDateAddedTo] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(() => ({
     ...EMPTY_FORM,
@@ -116,6 +153,10 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     if (source) params.set('source', source);
     if (status) params.set('status', status);
     if (cohort && cohort !== 'all') params.set('cohort', cohort);
+    if (emailStatus) params.set('emailStatus', emailStatus);
+    if (importBatchId) params.set('importBatchId', importBatchId);
+    if (dateAddedFrom) params.set('dateAddedFrom', dateAddedFrom);
+    if (dateAddedTo) params.set('dateAddedTo', dateAddedTo);
     api(`/leads?${params}`)
       .then(setLeads)
       .catch((e) => setError(e.message));
@@ -128,7 +169,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
   useEffect(() => {
     load();
-  }, [filter, source, status, cohort]);
+  }, [filter, source, status, cohort, emailStatus, importBatchId, dateAddedFrom, dateAddedTo]);
 
   const openLead = (id) => {
     const next = new URLSearchParams(searchParams);
@@ -222,6 +263,40 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             </select>
           </>
         )}
+        <select className="select" value={emailStatus} onChange={(e) => setEmailStatus(e.target.value)}>
+          <option value="">All email</option>
+          <option value="sent">Emailed</option>
+          <option value="not_sent">Not emailed</option>
+        </select>
+        <select
+          className="select"
+          value={importBatchId}
+          onChange={(e) => setImportBatchId(e.target.value)}
+          title="Filter by CSV upload batch"
+        >
+          <option value="">All upload batches</option>
+          {(meta.importBatches || []).map((b) => (
+            <option key={b.id} value={b.id}>
+              {fmtDay(b.created_at)} · {b.filename || 'CSV'} ({b.imported_count ?? '?'})
+            </option>
+          ))}
+        </select>
+        <input
+          className="input"
+          type="date"
+          title="Date added from"
+          value={dateAddedFrom}
+          onChange={(e) => setDateAddedFrom(e.target.value)}
+          style={{ maxWidth: 150 }}
+        />
+        <input
+          className="input"
+          type="date"
+          title="Date added to"
+          value={dateAddedTo}
+          onChange={(e) => setDateAddedTo(e.target.value)}
+          style={{ maxWidth: 150 }}
+        />
         <button type="button" className="btn btn-secondary" onClick={load}>
           Refresh
         </button>
@@ -244,6 +319,8 @@ export default function LeadsPage({ refreshSidebarCounts }) {
               <th>Lead</th>
               <th>Source</th>
               <th>Status</th>
+              <th>Email</th>
+              <th>Date added</th>
               <th>State</th>
               <th>Owner</th>
               <th>Next FU</th>
@@ -275,16 +352,29 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                 <td>
                   <StatusBadge status={l.status} />
                 </td>
+                <td>
+                  <EmailStatusCell lead={l} />
+                </td>
+                <td style={{ fontSize: '0.82rem' }}>
+                  <div>{fmtDay(l.date_added_effective || l.date_added || l.created_at)}</div>
+                  {l.import_batch_filename ? (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }} title={l.import_batch_filename}>
+                      {l.import_batch_filename.length > 22
+                        ? `${l.import_batch_filename.slice(0, 20)}…`
+                        : l.import_batch_filename}
+                    </div>
+                  ) : null}
+                </td>
                 <td>{l.state || l.country || '—'}</td>
                 <td>{l.assigned_name || 'Unassigned'}</td>
                 <td style={{ fontSize: '0.82rem' }}>
-                  {l.next_follow_up_at ? new Date(l.next_follow_up_at).toLocaleString() : '—'}
+                  {l.next_follow_up_at ? fmtDate(l.next_follow_up_at) : '—'}
                 </td>
               </tr>
             ))}
             {!leads.length ? (
               <tr>
-                <td colSpan={6} className="empty">
+                <td colSpan={8} className="empty">
                   No leads match this view
                 </td>
               </tr>
