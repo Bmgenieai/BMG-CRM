@@ -28,8 +28,9 @@ function ThreadBlock({ title, meta, children, tone = 'reply' }) {
 }
 
 export default function EmailRepliesPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const canSeeAll = user?.role === 'ceo' || user?.role === 'manager';
+  const canReply = can('leads:update_any') || can('leads:update_own');
   const [rows, setRows] = useState(null);
   const [counts, setCounts] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -37,6 +38,10 @@ export default function EmailRepliesPage() {
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [inboundReady, setInboundReady] = useState(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [sendOk, setSendOk] = useState('');
 
   const load = () => {
     const params = new URLSearchParams();
@@ -64,6 +69,9 @@ export default function EmailRepliesPage() {
 
   const openReply = async (row) => {
     try {
+      setReplyDraft('');
+      setSendError('');
+      setSendOk('');
       const full = await api(`/email/replies/${row.id}`);
       setSelected(full);
       if (!full.read_at) {
@@ -93,10 +101,34 @@ export default function EmailRepliesPage() {
     }
   };
 
+  const sendCrmReply = async () => {
+    if (!selected?.id || !replyDraft.trim()) return;
+    setSending(true);
+    setSendError('');
+    setSendOk('');
+    try {
+      const result = await api(`/email/replies/${selected.id}/reply`, {
+        method: 'POST',
+        body: { message: replyDraft.trim() },
+      });
+      setSelected(result.reply);
+      setReplyDraft('');
+      setSendOk('Reply sent from your Brevo mailbox.');
+      load();
+    } catch (e) {
+      setSendError(e.message || 'Failed to send reply');
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (error) return <div className="card">{error}</div>;
   if (!rows) return <div className="card">Loading email replies…</div>;
 
   const original = selected?.originalMessage || null;
+  const crmReplies = selected?.crmReplies || [];
+  const recipient =
+    selected?.from_email || selected?.lead_email || null;
 
   return (
     <div>
@@ -105,6 +137,7 @@ export default function EmailRepliesPage() {
         {canSeeAll
           ? 'All BD cold-email replies. Open a row to see what we sent and what the prospect replied.'
           : 'Replies to your cold emails. Open a row to see what you sent and what they replied.'}
+        {canReply ? ' Reply from CRM through your Brevo mailbox.' : ''}
       </p>
 
       {inboundReady === false ? (
@@ -302,13 +335,77 @@ export default function EmailRepliesPage() {
               />
             </ThreadBlock>
 
+            {crmReplies.map((cr, idx) => (
+              <ThreadBlock
+                key={cr.id}
+                title={idx === 0 ? 'We replied from CRM' : 'CRM follow-up'}
+                tone="sent"
+                meta={[
+                  cr.subject || null,
+                  cr.sentByName ? `by ${cr.sentByName}` : null,
+                  cr.sentAt ? fmtDate(cr.sentAt) : null,
+                  cr.toEmail ? `to ${cr.toEmail}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              >
+                <MessageBody
+                  html={cr.htmlContent}
+                  text={cr.textContent}
+                  emptyHint="Body not stored for this send."
+                />
+              </ThreadBlock>
+            ))}
+
+            {canReply && selected.lead_id && recipient ? (
+              <div style={{ marginTop: '1.25rem' }}>
+                <h4 style={{ margin: '0 0 6px', fontSize: '0.95rem' }}>Reply from CRM</h4>
+                <p className="stat-hint" style={{ margin: '0 0 8px' }}>
+                  Sends from your Brevo mailbox to {recipient}. Their next reply still lands here.
+                </p>
+                <textarea
+                  className="input"
+                  rows={5}
+                  placeholder="Type your reply…"
+                  value={replyDraft}
+                  onChange={(e) => setReplyDraft(e.target.value)}
+                  disabled={sending}
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+                {sendError ? (
+                  <p style={{ color: 'var(--danger, #b91c1c)', margin: '8px 0 0' }}>{sendError}</p>
+                ) : null}
+                {sendOk ? (
+                  <p style={{ color: 'var(--success, #15803d)', margin: '8px 0 0' }}>{sendOk}</p>
+                ) : null}
+                <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={sending || !replyDraft.trim()}
+                    onClick={sendCrmReply}
+                  >
+                    {sending ? 'Sending…' : 'Send via Brevo'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {!canReply ? (
+              <p className="stat-hint" style={{ marginTop: '1rem' }}>
+                Managers can view threads; BD / CEO can reply from CRM.
+              </p>
+            ) : null}
+
             <div style={{ marginTop: '1rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {selected.from_email ? (
                 <a
-                  className="btn btn-primary"
-                  href={`mailto:${selected.from_email}?subject=${encodeURIComponent(selected.subject || 'Re:')}`}
+                  className="btn btn-ghost"
+                  href={`mailto:${selected.from_email}?subject=${encodeURIComponent(
+                    selected.subject?.startsWith('Re:') ? selected.subject : `Re: ${selected.subject || ''}`,
+                  )}`}
                 >
-                  Reply in email client
+                  Open in email client
                 </a>
               ) : null}
               {selected.read_at ? (
