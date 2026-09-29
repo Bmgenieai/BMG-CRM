@@ -111,6 +111,42 @@ button, input, select, textarea { font: inherit; }
   margin-top: 0.25rem;
 }
 
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 0.25rem;
+}
+
+.nav-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 0.75rem 0.5rem 0.25rem;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.nav-section-toggle:hover {
+  color: var(--charcoal);
+  background: var(--alabaster);
+}
+
+.nav-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .nav-link-sub {
   padding-left: 1.25rem;
   font-size: 0.88rem;

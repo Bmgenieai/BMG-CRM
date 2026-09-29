@@ -48,6 +48,10 @@ const PRODUCT_TABS = [
   { slug: 'revisions', label: 'Asked for revisions' },
 ];
 
+const PRODUCT_SLUGS = new Set(PRODUCT_TABS.map((t) => t.slug));
+const INBOUND_PATHS = new Set(['/demos', '/chats', '/email-replies']);
+const TOOL_PATHS = new Set(TOOL_LINKS.map((l) => l.to));
+
 function TabLink({ to, label, count, end = false }) {
   return (
     <NavLink
@@ -61,21 +65,61 @@ function TabLink({ to, label, count, end = false }) {
   );
 }
 
+function NavSection({ label, open, onToggle, children }) {
+  return (
+    <div className="nav-section">
+      <button
+        type="button"
+        className="nav-section-toggle"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <span>{label}</span>
+      </button>
+      {open ? <div className="nav-section-body">{children}</div> : null}
+    </div>
+  );
+}
+
 export default function AppLayout({ children }) {
   const { user, logout, can } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [counts, setCounts] = useState(null);
   const [leadsOpen, setLeadsOpen] = useState(false);
+  const [productOpen, setProductOpen] = useState(true);
+  const [inboundOpen, setInboundOpen] = useState(true);
+  const [toolsOpen, setToolsOpen] = useState(true);
 
   const statusPathOpen = (() => {
     const m = location.pathname.match(/^\/leads\/([^/]+)/);
     return Boolean(m && STATUS_SLUGS.has(m[1]));
   })();
 
+  const productPathOpen = (() => {
+    const m = location.pathname.match(/^\/leads\/([^/]+)/);
+    return Boolean(m && PRODUCT_SLUGS.has(m[1]));
+  })();
+
+  const inboundPathOpen = INBOUND_PATHS.has(location.pathname);
+  const toolsPathOpen = TOOL_PATHS.has(location.pathname);
+
   useEffect(() => {
     if (statusPathOpen) setLeadsOpen(true);
   }, [statusPathOpen]);
+
+  useEffect(() => {
+    if (productPathOpen) setProductOpen(true);
+  }, [productPathOpen]);
+
+  useEffect(() => {
+    if (inboundPathOpen) setInboundOpen(true);
+  }, [inboundPathOpen]);
+
+  useEffect(() => {
+    if (toolsPathOpen) setToolsOpen(true);
+  }, [toolsPathOpen]);
 
   useEffect(() => {
     api('/leads/counts')
@@ -177,59 +221,74 @@ export default function AppLayout({ children }) {
             ) : null}
           </div>
 
-          <div className="nav-section-label">From bmgenie.ai</div>
-          {PRODUCT_TABS.map((t) => (
-            <TabLink
-              key={t.slug}
-              to={`/leads/${t.slug}`}
-              label={t.label}
-              count={counts?.productCounts?.[t.slug]}
-            />
-          ))}
+          <NavSection
+            label="From bmgenie.ai"
+            open={productOpen}
+            onToggle={() => setProductOpen((o) => !o)}
+          >
+            {PRODUCT_TABS.map((t) => (
+              <TabLink
+                key={t.slug}
+                to={`/leads/${t.slug}`}
+                label={t.label}
+                count={counts?.productCounts?.[t.slug]}
+              />
+            ))}
+          </NavSection>
 
-          <div className="nav-section-label">Inbound</div>
-          <NavLink
-            to="/demos"
-            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+          <NavSection
+            label="Inbound"
+            open={inboundOpen}
+            onToggle={() => setInboundOpen((o) => !o)}
           >
-            <CalendarDays size={16} />
-            <span style={{ flex: 1 }}>Book a demo</span>
-            {counts?.demosCount != null ? (
-              <span className="nav-count">{counts.demosCount}</span>
-            ) : null}
-          </NavLink>
-          <NavLink
-            to="/chats"
-            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-          >
-            <MessageCircle size={16} />
-            <span style={{ flex: 1 }}>Chat support</span>
-            {counts?.chatsOpen != null ? (
-              <span className="nav-count">{counts.chatsOpen}</span>
-            ) : null}
-          </NavLink>
-          <NavLink
-            to="/email-replies"
-            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-          >
-            <Inbox size={16} />
-            <span style={{ flex: 1 }}>Email replies</span>
-            {counts?.emailRepliesUnread != null ? (
-              <span className="nav-count">{counts.emailRepliesUnread}</span>
-            ) : null}
-          </NavLink>
-
-          <div className="nav-section-label">Tools</div>
-          {TOOL_LINKS.filter((l) => !l.perm || can(l.perm)).map((l) => (
             <NavLink
-              key={l.to}
-              to={l.to}
-              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              to="/demos"
+              className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
             >
-              <l.icon size={18} />
-              {l.label}
+              <CalendarDays size={16} />
+              <span style={{ flex: 1 }}>Book a demo</span>
+              {counts?.demosCount != null ? (
+                <span className="nav-count">{counts.demosCount}</span>
+              ) : null}
             </NavLink>
-          ))}
+            <NavLink
+              to="/chats"
+              className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+            >
+              <MessageCircle size={16} />
+              <span style={{ flex: 1 }}>Chat support</span>
+              {counts?.chatsOpen != null ? (
+                <span className="nav-count">{counts.chatsOpen}</span>
+              ) : null}
+            </NavLink>
+            <NavLink
+              to="/email-replies"
+              className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+            >
+              <Inbox size={16} />
+              <span style={{ flex: 1 }}>Email replies</span>
+              {counts?.emailRepliesUnread != null ? (
+                <span className="nav-count">{counts.emailRepliesUnread}</span>
+              ) : null}
+            </NavLink>
+          </NavSection>
+
+          <NavSection
+            label="Tools"
+            open={toolsOpen}
+            onToggle={() => setToolsOpen((o) => !o)}
+          >
+            {TOOL_LINKS.filter((l) => !l.perm || can(l.perm)).map((l) => (
+              <NavLink
+                key={l.to}
+                to={l.to}
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                <l.icon size={18} />
+                {l.label}
+              </NavLink>
+            ))}
+          </NavSection>
         </nav>
 
         <div className="user-chip">
