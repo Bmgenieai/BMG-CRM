@@ -14,6 +14,7 @@ import WorkingTreePage from './pages/WorkingTreePage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import ImportPage from './pages/ImportPage.jsx';
 import EmailPage from './pages/EmailPage.jsx';
+import EmailRepliesPage from './pages/EmailRepliesPage.jsx';
 import DemosPage from './pages/DemosPage.jsx';
 import ChatsPage from './pages/ChatsPage.jsx';
 
@@ -40,6 +41,7 @@ function ProtectedLayout() {
           <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
           <Route path="/demos" element={<DemosPage />} />
           <Route path="/chats" element={<ChatsPage />} />
+          <Route path="/email-replies" element={<EmailRepliesPage />} />
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/leads/:filter" element={<LeadsPage />} />
           <Route path="/leads/:id" element={<LeadDetailPage />} />

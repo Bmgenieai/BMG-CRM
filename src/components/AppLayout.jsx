@@ -9,6 +9,7 @@ import {
   Shield,
   LogOut,
   Mail,
+  Inbox,
   BarChart3,
   CalendarDays,
   MessageCircle,
@@ -150,6 +151,16 @@ export default function AppLayout({ children }) {
             <span style={{ flex: 1 }}>Chat support</span>
             {counts?.chatsOpen != null ? (
               <span className="nav-count">{counts.chatsOpen}</span>
+            ) : null}
+          </NavLink>
+          <NavLink
+            to="/email-replies"
+            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+          >
+            <Inbox size={16} />
+            <span style={{ flex: 1 }}>Email replies</span>
+            {counts?.emailRepliesUnread != null ? (
+              <span className="nav-count">{counts.emailRepliesUnread}</span>
             ) : null}
           </NavLink>
 

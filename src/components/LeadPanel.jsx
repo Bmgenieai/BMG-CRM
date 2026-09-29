@@ -732,6 +732,31 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       </ul>
                     </>
                   ) : null}
+                  {(lead.emailHistory?.replies || []).length ? (
+                    <>
+                      <p className="stat-hint" style={{ margin: '10px 0 6px' }}>
+                        Reply messages
+                      </p>
+                      <ul className="lead-activity-list">
+                        {lead.emailHistory.replies.slice(0, 8).map((r) => (
+                          <li key={r.id}>
+                            <strong>{r.subject || 'Reply'}</strong>
+                            <div className="muted-line">
+                              {[r.from_email, fmtDate(r.received_at)].filter(Boolean).join(' · ')}
+                            </div>
+                            {(r.body_markdown || r.body_text) ? (
+                              <div className="muted-line" style={{ marginTop: 4 }}>
+                                {String(r.body_markdown || r.body_text)
+                                  .replace(/\s+/g, ' ')
+                                  .trim()
+                                  .slice(0, 160)}
+                              </div>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
                 </div>
               </section>
 

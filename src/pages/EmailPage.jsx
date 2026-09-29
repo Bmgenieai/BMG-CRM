@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CalendarClock, Mail, RefreshCw, Send, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -242,7 +243,8 @@ export default function EmailPage() {
         Send personalized outreach from {status?.sender || 'your verified Brevo sender'}. Templates use merge tags like{' '}
         <code>{'{{first_name}}'}</code>, <code>{'{{company}}'}</code>. Default list filter shows{' '}
         <strong>not emailed yet</strong> so you can work the outbox. Opens/replies appear after Brevo webhooks are pointed at{' '}
-        <code>/api/email/webhooks/brevo</code>.
+        <code>/api/email/webhooks/brevo</code>. View reply messages under{' '}
+        <Link to="/email-replies">Email replies</Link>.
       </p>
 
       {error ? <div className="login-error">{error}</div> : null}
