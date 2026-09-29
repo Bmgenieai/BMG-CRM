@@ -1,9 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import { fmtDate } from '../components/Badges.jsx';
 
+function MessageBody({ html, text, markdown, emptyHint }) {
+  const body = markdown || text || '';
+  if (html && !markdown && !text) {
+    return <div dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+  if (body) {
+    return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{body}</div>;
+  }
+  return <span className="stat-hint">{emptyHint}</span>;
+}
+
+function ThreadBlock({ title, meta, children, tone = 'reply' }) {
+  const bg = tone === 'sent' ? 'rgba(37, 99, 235, 0.06)' : 'var(--surface-2, #f6f6f6)';
+  const border = tone === 'sent' ? '1px solid rgba(37, 99, 235, 0.25)' : '1px solid transparent';
+  return (
+    <div style={{ marginTop: '1rem' }}>
+      <h4 style={{ margin: '0 0 6px', fontSize: '0.95rem' }}>{title}</h4>
+      {meta ? <p className="stat-hint" style={{ margin: '0 0 8px' }}>{meta}</p> : null}
+      <div style={{ padding: '1rem', background: bg, border, borderRadius: 8 }}>{children}</div>
+    </div>
+  );
+}
+
 export default function EmailRepliesPage() {
+  const { user } = useAuth();
+  const canSeeAll = user?.role === 'ceo' || user?.role === 'manager';
   const [rows, setRows] = useState(null);
   const [counts, setCounts] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -70,15 +96,15 @@ export default function EmailRepliesPage() {
   if (error) return <div className="card">{error}</div>;
   if (!rows) return <div className="card">Loading email replies…</div>;
 
-  const body =
-    selected?.body_markdown || selected?.body_text || selected?.body_html || '';
+  const original = selected?.originalMessage || null;
 
   return (
     <div>
       <h1 className="page-title">Email replies</h1>
       <p className="page-sub">
-        Replies to cold emails sent from CRM (Brevo). Open a row to read the message, then follow up
-        from the lead.
+        {canSeeAll
+          ? 'All BD cold-email replies. Open a row to see what we sent and what the prospect replied.'
+          : 'Replies to your cold emails. Open a row to see what you sent and what they replied.'}
       </p>
 
       {inboundReady === false ? (
@@ -113,7 +139,7 @@ export default function EmailRepliesPage() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input
             className="input"
-            placeholder="Search subject, sender, lead…"
+            placeholder={canSeeAll ? 'Search subject, sender, lead, BD…' : 'Search subject, sender, lead…'}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && load()}
@@ -147,6 +173,7 @@ export default function EmailRepliesPage() {
                 <th>Received</th>
                 <th>From</th>
                 <th>Lead</th>
+                {canSeeAll ? <th>BD / sent by</th> : null}
                 <th>Subject</th>
                 <th>Preview</th>
                 <th />
@@ -170,7 +197,10 @@ export default function EmailRepliesPage() {
                     )}
                   </td>
                   <td>{r.lead_name || r.lead_email || '—'}</td>
-                  <td style={{ maxWidth: 200 }}>{r.subject || '—'}</td>
+                  {canSeeAll ? (
+                    <td>{r.sent_by_name || r.assigned_to_name || '—'}</td>
+                  ) : null}
+                  <td style={{ maxWidth: 200 }}>{r.subject || r.original_subject || '—'}</td>
                   <td style={{ maxWidth: 280 }}>
                     {r.hasBody ? r.preview || '—' : (
                       <span className="stat-hint">Reply notified (body pending inbound)</span>
@@ -178,7 +208,7 @@ export default function EmailRepliesPage() {
                   </td>
                   <td style={{ display: 'flex', gap: 6 }}>
                     <button type="button" className="btn btn-ghost" onClick={() => openReply(r)}>
-                      View
+                      View thread
                     </button>
                     {r.lead_id ? (
                       <Link className="btn btn-ghost" to={`/leads?id=${r.lead_id}`}>
@@ -197,7 +227,7 @@ export default function EmailRepliesPage() {
         <div className="modal-backdrop" onClick={() => setSelected(null)} role="presentation">
           <div
             className="modal"
-            style={{ maxWidth: 720, maxHeight: '85vh', overflow: 'auto' }}
+            style={{ maxWidth: 760, maxHeight: '85vh', overflow: 'auto' }}
             onClick={(e) => e.stopPropagation()}
             role="dialog"
           >
@@ -208,10 +238,9 @@ export default function EmailRepliesPage() {
               </button>
             </div>
             <p className="stat-hint">
-              From {selected.from_name || selected.from_email || 'unknown'}
-              {selected.from_email ? ` <${selected.from_email}>` : ''} ·{' '}
-              {fmtDate(selected.received_at)}
+              Lead {selected.lead_name || selected.lead_email || '—'}
               {selected.assigned_to_name ? ` · Owner ${selected.assigned_to_name}` : ''}
+              {original?.sentByName ? ` · Sent by ${original.sentByName}` : ''}
             </p>
             {selected.lead_id ? (
               <p style={{ marginTop: 8 }}>
@@ -225,33 +254,60 @@ export default function EmailRepliesPage() {
               </p>
             )}
 
-            <div
-              style={{
-                marginTop: '1rem',
-                padding: '1rem',
-                background: 'var(--surface-2, #f6f6f6)',
-                borderRadius: 8,
-                whiteSpace: 'pre-wrap',
-                lineHeight: 1.5,
-              }}
+            <ThreadBlock
+              title="We sent"
+              tone="sent"
+              meta={
+                original
+                  ? [
+                      original.subject || '(no subject)',
+                      original.sentByName ? `by ${original.sentByName}` : null,
+                      original.sentAt ? fmtDate(original.sentAt) : null,
+                      original.toEmail ? `to ${original.toEmail}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : null
+              }
             >
-              {body ? (
-                selected.body_html && !selected.body_markdown && !selected.body_text ? (
-                  <div dangerouslySetInnerHTML={{ __html: selected.body_html }} />
-                ) : (
-                  body
-                )
+              {original ? (
+                <MessageBody
+                  html={original.htmlContent}
+                  text={original.textContent}
+                  emptyHint="Original email body was not stored (sent before body logging). Subject and sender are still available above."
+                />
               ) : (
                 <span className="stat-hint">
-                  No reply body stored yet. Enable Brevo Inbound Parsing so the full message is
-                  captured.
+                  No linked outbound email found for this reply yet.
                 </span>
               )}
-            </div>
+            </ThreadBlock>
+
+            <ThreadBlock
+              title="They replied"
+              tone="reply"
+              meta={[
+                selected.from_name || selected.from_email || 'unknown',
+                selected.from_email ? `<${selected.from_email}>` : null,
+                fmtDate(selected.received_at),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            >
+              <MessageBody
+                html={selected.body_html}
+                text={selected.body_text}
+                markdown={selected.body_markdown}
+                emptyHint="No reply body stored yet. Enable Brevo Inbound Parsing so the full message is captured."
+              />
+            </ThreadBlock>
 
             <div style={{ marginTop: '1rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {selected.from_email ? (
-                <a className="btn btn-primary" href={`mailto:${selected.from_email}?subject=${encodeURIComponent(selected.subject || 'Re:')}`}>
+                <a
+                  className="btn btn-primary"
+                  href={`mailto:${selected.from_email}?subject=${encodeURIComponent(selected.subject || 'Re:')}`}
+                >
                   Reply in email client
                 </a>
               ) : null}
