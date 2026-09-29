@@ -132,6 +132,52 @@ button, input, select, textarea { font: inherit; }
   background: #fff;
 }
 
+.nav-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-dropdown-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nav-dropdown-link {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-dropdown-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.nav-dropdown-toggle:hover {
+  background: var(--alabaster);
+  color: var(--charcoal);
+}
+
+.nav-dropdown-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 0.35rem;
+  margin-left: 0.35rem;
+  border-left: 2px solid var(--brand-border);
+}
+
 .main { padding: 1.5rem 1.75rem 2.5rem; }
 .page-title { margin: 0 0 0.25rem; font-size: 1.6rem; letter-spacing: -0.03em; }
 .page-sub { margin: 0 0 1.5rem; color: var(--muted); font-size: 0.95rem; }

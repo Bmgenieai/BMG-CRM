@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   GitBranch,
@@ -14,6 +14,8 @@ import {
   CalendarDays,
   MessageCircle,
   ClipboardList,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -35,6 +37,8 @@ const STATUS_TABS = [
   { slug: 'paid', label: 'Paid' },
   { slug: 'lost', label: 'Lost' },
 ];
+
+const STATUS_SLUGS = new Set(STATUS_TABS.map((t) => t.slug));
 
 const PRODUCT_TABS = [
   { slug: 'signup', label: 'Signup · no purchase' },
@@ -60,7 +64,18 @@ function TabLink({ to, label, count, end = false }) {
 export default function AppLayout({ children }) {
   const { user, logout, can } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [counts, setCounts] = useState(null);
+  const [leadsOpen, setLeadsOpen] = useState(false);
+
+  const statusPathOpen = (() => {
+    const m = location.pathname.match(/^\/leads\/([^/]+)/);
+    return Boolean(m && STATUS_SLUGS.has(m[1]));
+  })();
+
+  useEffect(() => {
+    if (statusPathOpen) setLeadsOpen(true);
+  }, [statusPathOpen]);
 
   useEffect(() => {
     api('/leads/counts')
@@ -73,6 +88,15 @@ export default function AppLayout({ children }) {
       .then(setCounts)
       .catch(() => {});
   };
+
+  const roleDisplay =
+    user?.role === 'telesales'
+      ? 'BD'
+      : user?.role === 'ceo'
+        ? 'CEO'
+        : user?.role === 'manager'
+          ? 'Manager'
+          : user?.role;
 
   return (
     <div className="app-shell">
@@ -112,15 +136,46 @@ export default function AppLayout({ children }) {
           </NavLink>
 
           <div className="nav-section-label">Leads</div>
-          <TabLink to="/leads" label="All leads" count={counts?.total} end />
-          {STATUS_TABS.map((t) => (
-            <TabLink
-              key={t.slug}
-              to={`/leads/${t.slug}`}
-              label={t.label}
-              count={counts?.statusCounts?.[t.slug]}
-            />
-          ))}
+          <div className="nav-dropdown">
+            <div className="nav-dropdown-row">
+              <NavLink
+                to="/leads"
+                end
+                className={({ isActive }) =>
+                  `nav-link nav-link-sub nav-dropdown-link${isActive && !statusPathOpen ? ' active' : ''}`
+                }
+                onClick={() => setLeadsOpen(true)}
+              >
+                <span style={{ flex: 1 }}>All leads</span>
+                {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
+              </NavLink>
+              <button
+                type="button"
+                className="nav-dropdown-toggle"
+                aria-expanded={leadsOpen}
+                aria-label={leadsOpen ? 'Hide lead statuses' : 'Show lead statuses'}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setLeadsOpen((o) => !o);
+                }}
+              >
+                {leadsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+            </div>
+            {leadsOpen ? (
+              <div className="nav-dropdown-children">
+                {STATUS_TABS.map((t) => (
+                  <TabLink
+                    key={t.slug}
+                    to={`/leads/${t.slug}`}
+                    label={t.label}
+                    count={counts?.statusCounts?.[t.slug]}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
 
           <div className="nav-section-label">From bmgenie.ai</div>
           {PRODUCT_TABS.map((t) => (
@@ -179,7 +234,7 @@ export default function AppLayout({ children }) {
 
         <div className="user-chip">
           <strong>{user?.name}</strong>
-          <span>{user?.role}</span>
+          <span>{roleDisplay}</span>
           <button
             type="button"
             className="btn btn-ghost"
