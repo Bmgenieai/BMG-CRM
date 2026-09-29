@@ -421,7 +421,7 @@ export default function EmailPage() {
               <option value="free_credit_no_purchase">Free credit</option>
               <option value="purchased_no_repurchase">Win-back</option>
               <option value="csv_import">CSV / Meta</option>
-              <option value="telesales">Telesales</option>
+              <option value="telesales">BD</option>
             </select>
             <select
               className="select"

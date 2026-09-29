@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import { fmtDate } from '../components/Badges.jsx';
 import CohortFilter from '../components/CohortFilter.jsx';
 
 export default function ChatsPage() {
+  const { can } = useAuth();
+  const canReply = can('leads:update_any') || can('leads:update_own');
   const [searchParams, setSearchParams] = useSearchParams();
   const cohort = searchParams.get('cohort') || 'all';
   const [rows, setRows] = useState(null);
@@ -91,7 +94,7 @@ export default function ChatsPage() {
     <div>
       <h1 className="page-title">Chat support</h1>
       <p className="page-sub">
-        Homepage Tawk chats for telesales. View queries here, write a reply in CRM, then send the same
+        Homepage Tawk chats for BDs. View queries here, write a reply in CRM, then send the same
         message in Tawk so the visitor sees it (Tawk cannot receive CRM replies automatically).
       </p>
 
@@ -240,6 +243,8 @@ export default function ChatsPage() {
             )}
 
             <div style={{ marginTop: '1.25rem' }}>
+              {canReply ? (
+                <>
               <label className="stat-label" htmlFor="crm-chat-reply">
                 Reply from CRM
               </label>
@@ -275,6 +280,19 @@ export default function ChatsPage() {
                   Send live in Tawk
                 </a>
               </div>
+                </>
+              ) : (
+                <p className="stat-hint">
+                  View only — BDs save chat replies from their account.{' '}
+                  <a
+                    href={selected.tawkDashboardUrl || 'https://dashboard.tawk.to/'}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Tawk
+                  </a>
+                </p>
+              )}
             </div>
           </div>
         </div>

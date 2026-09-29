@@ -64,7 +64,7 @@ export default function AdminPage() {
   return (
     <div>
       <h1 className="page-title">Admin controls</h1>
-      <p className="page-sub">Create and manage CEO / Manager / Telesales employees (Ilaan-style admin).</p>
+      <p className="page-sub">Create and manage CEO / Manager / BD employees.</p>
 
       {error ? <div className="login-error">{error}</div> : null}
 
@@ -92,8 +92,8 @@ export default function AdminPage() {
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
               >
                 <option value="ceo">CEO</option>
-                <option value="manager">Manager</option>
-                <option value="telesales">Telesales</option>
+                <option value="manager">Manager (view team performance)</option>
+                <option value="telesales">BD</option>
               </select>
             </div>
             <button className="btn btn-primary" type="submit">
@@ -150,7 +150,7 @@ export default function AdminPage() {
               <tr key={u.id}>
                 <td>{u.name}</td>
                 <td>{u.email}</td>
-                <td style={{ textTransform: 'capitalize' }}>{u.role}</td>
+                <td>{u.role === 'telesales' ? 'BD' : u.role === 'ceo' ? 'CEO' : u.role === 'manager' ? 'Manager' : u.role}</td>
                 <td>{u.is_active ? 'Active' : 'Inactive'}</td>
                 <td>{fmtDate(u.created_at)}</td>
                 <td>

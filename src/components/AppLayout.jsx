@@ -21,7 +21,7 @@ import { useAuth } from '../auth.jsx';
 const TOOL_LINKS = [
   { to: '/distribution', label: 'Distribution', icon: Share2, perm: 'leads:assign' },
   { to: '/follow-ups', label: 'Follow-ups', icon: CalendarClock, perm: null },
-  { to: '/email', label: 'Cold email', icon: Mail, perm: null },
+  { to: '/email', label: 'Cold email', icon: Mail, perm: 'email:bulk_send' },
   { to: '/working-tree', label: 'Working tree', icon: GitBranch, perm: null },
   { to: '/import', label: 'CSV / Sheet import', icon: Upload, perm: 'leads:import' },
   { to: '/admin', label: 'Admin', icon: Shield, perm: 'admin:employees' },
@@ -108,7 +108,7 @@ export default function AppLayout({ children }) {
             className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           >
             <ClipboardList size={18} />
-            Telesales working
+            BD working
           </NavLink>
 
           <div className="nav-section-label">Leads</div>

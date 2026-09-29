@@ -83,7 +83,7 @@ export default function TelesalesWorkingPage() {
   }, [period, userId]);
 
   if (error) return <div className="card">{error}</div>;
-  if (!data) return <div className="card">Loading telesales working…</div>;
+  if (!data) return <div className="card">Loading BD working…</div>;
 
   const { totals, reps, feed, leadsCreated, focusUserId, canViewTeam, label, fromYmd, toYmd, timezone } =
     data;
@@ -104,7 +104,7 @@ export default function TelesalesWorkingPage() {
       >
         <div>
           <h1 className="page-title">
-            {canViewTeam ? 'Telesales working' : 'My working'}
+            {canViewTeam ? 'BD working' : 'My working'}
           </h1>
           <p className="page-sub">
             {label}
@@ -301,7 +301,7 @@ export default function TelesalesWorkingPage() {
       ) : (
         <div className="card">
           <p className="page-sub" style={{ margin: 0 }}>
-            Select a telesales rep above to see their call comments, notes, and leads added.
+            Select a BD above to see their call comments, notes, and leads added.
           </p>
         </div>
       )}

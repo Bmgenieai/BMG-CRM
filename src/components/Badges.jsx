@@ -47,7 +47,7 @@ const SOURCE_LABELS = {
   demo_booking: 'Book a demo',
   chat_support: 'Chat support',
   csv_import: 'CSV / Google Sheet',
-  telesales: 'Telesales',
+  telesales: 'BD',
   manual: 'Manual',
 };
 

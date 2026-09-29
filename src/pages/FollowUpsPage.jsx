@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import { fmtDate, StatusBadge } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 
 export default function FollowUpsPage() {
+  const { can } = useAuth();
+  const canManage = can('followups:manage_own') || can('followups:manage_team');
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -91,7 +94,7 @@ export default function FollowUpsPage() {
                 </td>
                 <td>{f.note || '—'}</td>
                 <td>
-                  {['pending', 'overdue'].includes(f.status) ? (
+                  {canManage && ['pending', 'overdue'].includes(f.status) ? (
                     <button
                       type="button"
                       className="btn btn-secondary"

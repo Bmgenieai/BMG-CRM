@@ -19,7 +19,7 @@ export default function ImportPage() {
 
   if (!can('leads:import')) return <Navigate to="/" replace />;
   const isTelesales = user?.role === 'telesales';
-  const sourcePreview = isTelesales ? 'Telesales' : 'CSV / Google Sheet';
+  const sourcePreview = isTelesales ? 'BD' : 'CSV / Google Sheet';
 
   const onSubmit = async (e) => {
     e.preventDefault();

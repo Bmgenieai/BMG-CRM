@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Phone, MessageSquare, CalendarPlus, X, Mail } from 'lucide-react';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import { fmtDate, money, SourceBadge, StatusBadge } from './Badges.jsx';
 
 const STATUSES = [
@@ -44,6 +45,10 @@ const REPLY_OUTCOMES = [
  * Ilaan-style right drawer — list stays visible behind the dimmed backdrop.
  */
 export default function LeadPanel({ leadId, onClose, onChanged }) {
+  const { can } = useAuth();
+  const canEditLead = can('leads:update_any') || can('leads:update_own');
+  const canSendEmail = can('email:bulk_send') || can('leads:update_any') || can('leads:update_own');
+  const canManageFollowUps = can('followups:manage_own') || can('followups:manage_team');
   const [lead, setLead] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -544,6 +549,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
 
               <section className="lead-drawer-section">
                 <h3 className="lead-drawer-h3">Funnel stage</h3>
+                {canEditLead ? (
+                  <>
                 <div className="lead-status-grid">
                   {STATUSES.map((s) => (
                     <button
@@ -599,6 +606,18 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     </div>
                   </div>
                 ) : null}
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <StatusBadge status={lead.status} />
+                    {lead.status === 'lost' && lead.lost_reason ? (
+                      <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                        Reason: {lead.lost_reason}
+                      </span>
+                    ) : null}
+                    <span className="stat-hint">View only — BDs change stage from their account</span>
+                  </div>
+                )}
               </section>
 
               <section className="lead-drawer-section">
@@ -609,7 +628,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   <p className="empty">No email on this lead</p>
                 ) : brevoOk === false ? (
                   <p className="stat-hint">Brevo not configured on API — set BREVO_ENABLED + API key</p>
-                ) : (
+                ) : canSendEmail ? (
                   <>
                     {emailMsg ? (
                       <p style={{ color: 'var(--success)', fontSize: '0.85rem', marginTop: 0 }}>{emailMsg}</p>
@@ -685,6 +704,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       </form>
                     )}
                   </>
+                ) : (
+                  <p className="stat-hint">View only — BDs send cold email from their account</p>
                 )}
 
                 <div style={{ marginTop: '1rem' }}>
@@ -764,6 +785,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 <h3 className="lead-drawer-h3">
                   <MessageSquare size={16} /> Log outreach / reply
                 </h3>
+                {canEditLead ? (
+                  <>
                 <p className="stat-hint" style={{ marginTop: 0 }}>
                   Emails, LinkedIn, calls, and replies feed the Funnel dashboard rates.
                 </p>
@@ -816,12 +839,17 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     Save to activity log
                   </button>
                 </form>
+                  </>
+                ) : (
+                  <p className="stat-hint">View only — BDs log calls and notes from their account</p>
+                )}
               </section>
 
               <section className="lead-drawer-section">
                 <h3 className="lead-drawer-h3">
                   <CalendarPlus size={16} /> Schedule follow-up
                 </h3>
+                {canManageFollowUps ? (
                 <form onSubmit={scheduleFu}>
                   <div className="field">
                     <label className="label">Due</label>
@@ -846,6 +874,11 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     Schedule follow-up
                   </button>
                 </form>
+                ) : (
+                  <p className="stat-hint" style={{ marginTop: 0 }}>
+                    View only — BDs schedule follow-ups from their account
+                  </p>
+                )}
 
                 <div style={{ marginTop: '1rem' }}>
                   {(lead.followUps || []).map((f) => (
@@ -857,7 +890,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                           {f.note || '—'}
                         </div>
                       </div>
-                      {['pending', 'overdue'].includes(f.status) ? (
+                      {canManageFollowUps && ['pending', 'overdue'].includes(f.status) ? (
                         <button
                           type="button"
                           className="btn btn-secondary"

@@ -394,7 +394,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             <p className="page-sub" style={{ marginTop: 0 }}>
               Source will show as{' '}
               <strong>
-                {user?.role === 'telesales' ? 'Telesales' : form.source === 'telesales' ? 'Telesales' : 'Manual'} ·{' '}
+                {user?.role === 'telesales' ? 'BD' : form.source === 'telesales' ? 'BD' : 'Manual'} ·{' '}
                 {user?.name || 'you'}
               </strong>
             </p>

@@ -71,7 +71,7 @@ export default function DashboardPage() {
             }}
           >
             <div>
-              <h3 style={{ margin: 0 }}>Today&apos;s telesales working</h3>
+              <h3 style={{ margin: 0 }}>Today&apos;s BD working</h3>
               <p className="stat-hint" style={{ margin: '0.25rem 0 0' }}>
                 {todayWork.timezone} · leads, calls, messages, emails
               </p>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
       <div className="card" style={{ marginTop: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <h3 style={{ margin: 0 }}>
-            {can('analytics:view_team') ? 'Telesales performance' : 'My performance'}
+            {can('analytics:view_team') ? 'BD performance' : 'My performance'}
           </h3>
           <Link to="/telesales-working" className="btn btn-ghost">
             Period working →
