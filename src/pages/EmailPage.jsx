@@ -487,9 +487,9 @@ export default function EmailPage() {
                         <div>
                           <span className="badge badge-blue">
                             {(l.email_reply_count || 0) > 0
-                              ? 'Replied'
+                              ? `Replied (${l.email_reply_count})`
                               : (l.email_open_count || 0) > 0
-                                ? 'Opened'
+                                ? `Opened (${l.email_open_count})`
                                 : 'Sent'}
                           </span>
                           <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
