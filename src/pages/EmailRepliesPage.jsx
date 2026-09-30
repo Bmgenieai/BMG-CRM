@@ -216,13 +216,19 @@ export default function EmailRepliesPage() {
               {rows.map((r) => (
                 <tr
                   key={r.id}
-                  style={{ fontWeight: r.read_at ? 400 : 600 }}
+                  className="clickable-row"
+                  style={{ fontWeight: r.read_at ? 400 : 600, cursor: 'pointer' }}
+                  onClick={() => openReply(r)}
                 >
                   <td>{fmtDate(r.received_at)}</td>
                   <td>
                     {r.from_name ? `${r.from_name} ` : null}
                     {r.from_email ? (
-                      <a href={`mailto:${r.from_email}`} style={{ color: 'var(--brand-primary)' }}>
+                      <a
+                        href={`mailto:${r.from_email}`}
+                        style={{ color: 'var(--brand-primary)' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {r.from_email}
                       </a>
                     ) : (
@@ -239,7 +245,7 @@ export default function EmailRepliesPage() {
                       <span className="stat-hint">Reply notified (body pending inbound)</span>
                     )}
                   </td>
-                  <td style={{ display: 'flex', gap: 6 }}>
+                  <td style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
                     <button type="button" className="btn btn-ghost" onClick={() => openReply(r)}>
                       View thread
                     </button>
