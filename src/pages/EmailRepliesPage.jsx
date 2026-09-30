@@ -34,7 +34,7 @@ export default function EmailRepliesPage() {
   const [rows, setRows] = useState(null);
   const [counts, setCounts] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [status, setStatus] = useState('unread');
+  const [status, setStatus] = useState('all');
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [inboundReady, setInboundReady] = useState(null);
@@ -43,10 +43,11 @@ export default function EmailRepliesPage() {
   const [sendError, setSendError] = useState('');
   const [sendOk, setSendOk] = useState('');
 
-  const load = () => {
+  const load = (statusOverride) => {
+    const filter = statusOverride ?? status;
     const params = new URLSearchParams();
     if (q) params.set('q', q);
-    if (status === 'unread') params.set('unread', '1');
+    if (filter === 'unread') params.set('unread', '1');
     const qs = params.toString() ? `?${params}` : '';
     Promise.all([
       api(`/email/replies${qs}`),
@@ -80,7 +81,12 @@ export default function EmailRepliesPage() {
           body: { read: true },
         });
         setSelected(updated);
-        load();
+        // Opening marks as read — switch off Unread filter so the thread stays in the list
+        if (status === 'unread') {
+          setStatus('all');
+        } else {
+          load();
+        }
       }
     } catch {
       setSelected(row);
@@ -195,9 +201,18 @@ export default function EmailRepliesPage() {
       <div className="card">
         {rows.length === 0 ? (
           <p>
-            No replies yet. After BD sends cold email, inbound replies appear here. Confirm Brevo
-            webhooks point to <code>/api/email/webhooks/brevo</code> (events) and{' '}
-            <code>/api/email/webhooks/brevo-inbound</code> (bodies).
+            {status === 'unread' && (counts?.total ?? 0) > 0 ? (
+              <>
+                No <strong>unread</strong> replies right now. Threads stay in CRM — switch the filter to{' '}
+                <strong>All replies</strong> to open them again and reply from CRM.
+              </>
+            ) : (
+              <>
+                No replies yet. After BD sends cold email, inbound replies appear here. Confirm Brevo
+                webhooks point to <code>/api/email/webhooks/brevo</code> (events) and{' '}
+                <code>/api/email/webhooks/brevo-inbound</code> (bodies).
+              </>
+            )}
           </p>
         ) : (
           <table className="table">
