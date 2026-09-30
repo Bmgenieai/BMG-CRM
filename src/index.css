@@ -38,6 +38,11 @@ button, input, select, textarea { font: inherit; }
   gap: 1.5rem;
   position: relative;
   z-index: 100; /* keep nav above lead drawer / modal backdrops */
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  position: sticky;
+  top: 0;
 }
 
 .brand {
@@ -387,11 +392,13 @@ tr:hover td { background: #f8fafc; }
 
 .user-chip {
   margin-top: auto;
+  flex-shrink: 0;
   padding: 0.85rem;
   border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  background: #fff;
 }
 .user-chip strong { font-size: 0.9rem; }
 .user-chip span { color: var(--muted); font-size: 0.78rem; text-transform: capitalize; }
