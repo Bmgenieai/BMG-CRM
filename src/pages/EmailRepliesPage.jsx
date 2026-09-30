@@ -419,16 +419,6 @@ export default function EmailRepliesPage() {
             ) : null}
 
             <div style={{ marginTop: '1rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {selected.from_email ? (
-                <a
-                  className="btn btn-ghost"
-                  href={`mailto:${selected.from_email}?subject=${encodeURIComponent(
-                    selected.subject?.startsWith('Re:') ? selected.subject : `Re: ${selected.subject || ''}`,
-                  )}`}
-                >
-                  Open in email client
-                </a>
-              ) : null}
               {selected.read_at ? (
                 <button type="button" className="btn btn-ghost" onClick={markUnread}>
                   Mark unread
