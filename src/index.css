@@ -36,13 +36,12 @@ button, input, select, textarea { font: inherit; }
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 100; /* keep nav above lead drawer / modal backdrops */
   height: 100vh;
   max-height: 100vh;
   overflow: hidden;
-  position: sticky;
-  top: 0;
 }
 
 .brand {
