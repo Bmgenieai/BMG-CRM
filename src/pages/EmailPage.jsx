@@ -86,6 +86,7 @@ export default function EmailPage() {
       if (statusFilter && l.status !== statusFilter) return false;
       if (emailStatusFilter === 'sent' && !l.last_emailed_at) return false;
       if (emailStatusFilter === 'not_sent' && l.last_emailed_at) return false;
+      if (emailStatusFilter === 'opened' && !(Number(l.email_open_count) > 0)) return false;
       return true;
     });
   }, [leads, sourceFilter, statusFilter, emailStatusFilter]);
@@ -432,6 +433,7 @@ export default function EmailPage() {
               <option value="">All email</option>
               <option value="not_sent">Not emailed yet</option>
               <option value="sent">Already emailed</option>
+              <option value="opened">Opened email</option>
             </select>
           </div>
 

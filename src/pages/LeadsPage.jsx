@@ -266,6 +266,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         <select className="select" value={emailStatus} onChange={(e) => setEmailStatus(e.target.value)}>
           <option value="">All email</option>
           <option value="sent">Emailed</option>
+          <option value="opened">Opened email</option>
           <option value="not_sent">Not emailed</option>
         </select>
         <select
