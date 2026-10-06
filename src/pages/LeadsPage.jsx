@@ -223,7 +223,8 @@ export default function LeadsPage({ refreshSidebarCounts }) {
       <h1 className="page-title">{pageTitle}</h1>
       <p className="page-sub">
         {filter === 'signup' && 'Auto-created when users sign up on bmgenie.ai without buying a package.'}
-        {filter === 'free-credit' && 'Used free listing credit but has not purchased yet.'}
+        {filter === 'free-credit' &&
+          'Product source from BMGenie: prospect used free trial credit and has not purchased. This is not a Brevo tag. “Added by” is who created the CRM lead.'}
         {filter === 'winback' && 'Bought a package, used all credits, has not repurchased.'}
         {!filter && 'Click a row to open the side panel — list stays visible.'}
         {filter && !['signup', 'free-credit', 'winback'].includes(filter) && 'Filter by sales funnel stage.'}
@@ -267,6 +268,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
           <option value="">All email</option>
           <option value="sent">Emailed</option>
           <option value="opened">Opened email</option>
+          <option value="replied">Replied email</option>
           <option value="not_sent">Not emailed</option>
         </select>
         <select
@@ -348,7 +350,12 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                   </div>
                 </td>
                 <td>
-                  <SourceBadge source={l.source} createdByName={l.created_by_name} />
+                  <SourceBadge source={l.source} />
+                  {l.created_by_name ? (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
+                      Added by {l.created_by_name}
+                    </div>
+                  ) : null}
                 </td>
                 <td>
                   <StatusBadge status={l.status} />

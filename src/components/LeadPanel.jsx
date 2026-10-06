@@ -49,6 +49,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const canEditLead = can('leads:update_any') || can('leads:update_own');
   const canSendEmail = can('email:bulk_send') || can('leads:update_any') || can('leads:update_own');
   const canManageFollowUps = can('followups:manage_own') || can('followups:manage_team');
+  const canDeleteLead = can('leads:delete');
   const [lead, setLead] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -69,6 +70,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [emailMsg, setEmailMsg] = useState('');
   const [empForm, setEmpForm] = useState({ name: '', phone: '', email: '', job_title: '', notes: '' });
   const [editingEmpId, setEditingEmpId] = useState(null);
+  const [expandedEmailId, setExpandedEmailId] = useState(null);
 
   const load = async () => {
     if (!leadId) return;
@@ -95,6 +97,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setEmailMsg('');
     setEmpForm({ name: '', phone: '', email: '', job_title: '', notes: '' });
     setEditingEmpId(null);
+    setExpandedEmailId(null);
     load();
   }, [leadId]);
 
@@ -124,6 +127,57 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
 
   const notifyChanged = () => {
     onChanged?.();
+  };
+
+  const archiveLead = async () => {
+    if (!window.confirm('Archive this lead? It will leave active lists but can be restored.')) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/leads/${leadId}/archive`, { method: 'POST', body: {} });
+      await load();
+      notifyChanged();
+      onClose?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unarchiveLead = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/leads/${leadId}/unarchive`, { method: 'POST', body: {} });
+      await load();
+      notifyChanged();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteLead = async () => {
+    if (
+      !window.confirm(
+        'Permanently delete this lead and its activity? This cannot be undone.',
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/leads/${leadId}`, { method: 'DELETE' });
+      notifyChanged();
+      onClose?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const setStatus = async (status, reason) => {
@@ -385,7 +439,16 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 <div className="lead-drawer-meta-grid">
                   <div>
                     <div className="stat-label">Source</div>
-                    <SourceBadge source={lead.source} createdByName={lead.created_by_name} />
+                    <SourceBadge source={lead.source} />
+                    {lead.source === 'free_credit_no_purchase' ? (
+                      <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 4 }}>
+                        BMGenie product signal: used free credit, no purchase (not from Brevo).
+                      </div>
+                    ) : null}
+                  </div>
+                  <div>
+                    <div className="stat-label">Added by</div>
+                    <span style={{ fontSize: '0.85rem' }}>{lead.created_by_name || '—'}</span>
                   </div>
                   <div>
                     <div className="stat-label">Date added</div>
@@ -712,25 +775,80 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   <h4 className="lead-drawer-h3" style={{ fontSize: '0.92rem', marginBottom: 8 }}>
                     Brevo email history
                   </h4>
+                  <p className="stat-hint" style={{ marginTop: 0 }}>
+                    Expand a send to read the exact body. Opens are tracked per email step (Email 1, 2, 3…).
+                  </p>
                   {(lead.emailHistory?.messages || []).length ? (
                     <ul className="lead-activity-list">
-                      {lead.emailHistory.messages.map((m) => (
-                        <li key={m.id}>
-                          <strong>{m.subject || '(no subject)'}</strong>
-                          <div className="muted-line">
-                            {[
-                              m.status || 'sent',
-                              m.sent_by_name,
-                              fmtDate(m.sent_at),
-                              m.open_count ? `${m.open_count} open(s)` : null,
-                              m.click_count ? `${m.click_count} click(s)` : null,
-                              m.reply_count ? `${m.reply_count} reply` : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </div>
-                        </li>
-                      ))}
+                      {[...(lead.emailHistory.messages || [])]
+                        .slice()
+                        .sort((a, b) => String(a.sentAt || a.sent_at || '').localeCompare(String(b.sentAt || b.sent_at || '')))
+                        .map((m, idx) => {
+                          const seq = m.sequence || idx + 1;
+                          const openCount = m.openCount ?? m.open_count ?? 0;
+                          const clickCount = m.clickCount ?? m.click_count ?? 0;
+                          const replyCount = m.replyCount ?? m.reply_count ?? 0;
+                          const bodyText = m.textContent || m.text_content || '';
+                          const bodyHtml = m.htmlContent || m.html_content || '';
+                          const hasBody = m.hasBody || Boolean(bodyText || bodyHtml);
+                          const expanded = expandedEmailId === m.id;
+                          return (
+                            <li key={m.id}>
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
+                                style={{
+                                  display: 'block',
+                                  width: '100%',
+                                  textAlign: 'left',
+                                  padding: '6px 0',
+                                  height: 'auto',
+                                }}
+                                onClick={() => setExpandedEmailId(expanded ? null : m.id)}
+                              >
+                                <strong>
+                                  Email {seq}: {m.subject || '(no subject)'}
+                                </strong>
+                                <div className="muted-line">
+                                  {[
+                                    m.status || 'sent',
+                                    m.sentByName || m.sent_by_name,
+                                    fmtDate(m.sentAt || m.sent_at),
+                                    openCount ? `${openCount} open(s)` : '0 opens',
+                                    clickCount ? `${clickCount} click(s)` : null,
+                                    replyCount ? `${replyCount} reply` : null,
+                                    expanded ? 'Hide body' : 'View body',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </div>
+                              </button>
+                              {expanded ? (
+                                <div
+                                  style={{
+                                    marginTop: 6,
+                                    padding: '0.75rem',
+                                    background: 'var(--surface-2, #f6f6f6)',
+                                    borderRadius: 8,
+                                    fontSize: '0.88rem',
+                                  }}
+                                >
+                                  {hasBody ? (
+                                    bodyText ? (
+                                      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{bodyText}</div>
+                                    ) : (
+                                      <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+                                    )
+                                  ) : (
+                                    <span className="stat-hint">
+                                      Body not stored for this send (sent before body logging). Subject and open counts above still apply.
+                                    </span>
+                                  )}
+                                </div>
+                              ) : null}
+                            </li>
+                          );
+                        })}
                     </ul>
                   ) : (
                     <p className="empty" style={{ marginBottom: 8 }}>
@@ -920,6 +1038,53 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   {!lead.activities?.length ? <li className="empty">No activity yet</li> : null}
                 </ul>
               </section>
+
+              {canEditLead || canDeleteLead ? (
+                <section className="lead-drawer-section">
+                  <h3 className="lead-drawer-h3">Clean up lead</h3>
+                  <p className="stat-hint" style={{ marginTop: 0 }}>
+                    Archive hides invalid / bounced leads from active views. Delete is permanent (CEO only).
+                  </p>
+                  {lead.archived_at ? (
+                    <p style={{ fontSize: '0.85rem', marginBottom: 8 }}>
+                      Archived {fmtDate(lead.archived_at)}
+                    </p>
+                  ) : null}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {canEditLead && !lead.archived_at ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busy}
+                        onClick={archiveLead}
+                      >
+                        Archive lead
+                      </button>
+                    ) : null}
+                    {canEditLead && lead.archived_at ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busy}
+                        onClick={unarchiveLead}
+                      >
+                        Restore lead
+                      </button>
+                    ) : null}
+                    {canDeleteLead ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ color: 'var(--danger, #b91c1c)' }}
+                        disabled={busy}
+                        onClick={deleteLead}
+                      >
+                        Delete permanently
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
             </>
           ) : null}
         </div>

@@ -53,6 +53,7 @@ const SOURCE_LABELS = {
 
 export function SourceBadge({ source, createdByName }) {
   const label = SOURCE_LABELS[source] || String(source || '').replace(/_/g, ' ');
+  // Prefer source-only; pass createdByName only when you intentionally want "Source · Name"
   const text = createdByName ? `${label} · ${createdByName}` : label;
   return <span className="badge badge-blue">{text}</span>;
 }
