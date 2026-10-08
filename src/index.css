@@ -692,3 +692,61 @@ tr:hover td { background: #f8fafc; }
   .funnel-arrow { display: none; }
   .funnel-step { max-width: none; flex: 1 1 calc(33% - 0.5rem); }
 }
+
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.65rem;
+}
+.activity-stat {
+  background: var(--alabaster, #f8fafc);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem 0.55rem;
+  text-align: center;
+}
+.activity-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--brand-primary);
+}
+.activity-stat-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+  line-height: 1.3;
+}
+
+.linkedin-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+.linkedin-metrics > div {
+  background: var(--alabaster, #f8fafc);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.linkedin-metrics strong {
+  font-size: 1.1rem;
+  color: var(--brand-primary);
+}
+.linkedin-metrics span {
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+}

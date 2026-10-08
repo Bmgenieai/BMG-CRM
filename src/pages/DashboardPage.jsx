@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { money, SourceBadge, StatusBadge } from '../components/Badges.jsx';
 
-function FunnelStep({ label, value, to, rate }) {
+function FunnelStep({ label, value, to, hint }) {
   return (
     <div className="funnel-step">
       {to ? (
@@ -18,7 +18,16 @@ function FunnelStep({ label, value, to, rate }) {
           <div className="funnel-step-label">{label}</div>
         </>
       )}
-      {rate != null ? <div className="funnel-step-rate">{rate}%</div> : null}
+      {hint ? <div className="funnel-step-rate">{hint}</div> : null}
+    </div>
+  );
+}
+
+function ActivityStat({ label, value }) {
+  return (
+    <div className="activity-stat">
+      <div className="activity-stat-value">{value ?? 0}</div>
+      <div className="activity-stat-label">{label}</div>
     </div>
   );
 }
@@ -48,15 +57,16 @@ export default function DashboardPage() {
   if (!data || !funnel) return <div className="card">Loading analytics…</div>;
 
   const { totals, bySource, revenue, performance, recentLeads, followUpHealth } = data;
-  const { stages, outreach, rates, lostReasons } = funnel;
+  const { stages, activities, outreach, rates, lostReasons } = funnel;
+  const act = activities || {};
 
   return (
     <div>
       <h1 className="page-title">
-        {user.role === 'ceo' ? 'CEO analytics' : user.role === 'manager' ? 'Manager overview' : 'My dashboard'}
+        {user.role === 'ceo' ? 'CEO command center' : user.role === 'manager' ? 'Manager overview' : 'My dashboard'}
       </h1>
       <p className="page-sub">
-        Sales funnel: qualified → outreach → replies → conversations → demos → trials → paid.
+        Activities = work volume. Funnel = unique leads (one prospect, one stage). Sending 1,000 emails ≠ 1,000 opportunities.
       </p>
 
       {todayWork?.totals ? (
@@ -71,13 +81,15 @@ export default function DashboardPage() {
             }}
           >
             <div>
-              <h3 style={{ margin: 0 }}>Today&apos;s BD working</h3>
+              <h3 style={{ margin: 0 }}>
+                {can('analytics:view_team') ? "Today's BD work (plain English)" : "Today's work"}
+              </h3>
               <p className="stat-hint" style={{ margin: '0.25rem 0 0' }}>
-                {todayWork.timezone} · leads, calls, messages, emails
+                {todayWork.timezone} · what the team actually did today
               </p>
             </div>
             <Link to="/telesales-working?period=today" className="btn btn-secondary">
-              Open working report
+              Open BD working report
             </Link>
           </div>
           <div className="grid grid-4" style={{ marginTop: '0.75rem' }}>
@@ -88,21 +100,47 @@ export default function DashboardPage() {
               </p>
             </div>
             <div>
+              <p className="stat-label">Emails sent</p>
+              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                {(todayWork.totals.emails || 0) + (todayWork.totals.emailFollowups || 0)}
+              </p>
+            </div>
+            <div>
+              <p className="stat-label">LinkedIn actions</p>
+              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                {todayWork.totals.linkedin ?? 0}
+              </p>
+            </div>
+            <div>
               <p className="stat-label">Calls</p>
               <p className="stat-value" style={{ fontSize: '1.35rem' }}>
                 {todayWork.totals.calls ?? 0}
               </p>
             </div>
+          </div>
+          <div className="grid grid-4" style={{ marginTop: '0.5rem' }}>
             <div>
-              <p className="stat-label">Messages</p>
-              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
-                {todayWork.totals.messages ?? 0}
+              <p className="stat-label">Replies received</p>
+              <p className="stat-value" style={{ fontSize: '1.15rem' }}>
+                {todayWork.totals.replies ?? 0}
               </p>
             </div>
             <div>
-              <p className="stat-label">Emails</p>
-              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
-                {todayWork.totals.emails ?? 0}
+              <p className="stat-label">Moved to Engaged</p>
+              <p className="stat-value" style={{ fontSize: '1.15rem' }}>
+                {todayWork.totals.toEngaged ?? todayWork.totals.toConversation ?? 0}
+              </p>
+            </div>
+            <div>
+              <p className="stat-label">Demos booked</p>
+              <p className="stat-value" style={{ fontSize: '1.15rem' }}>
+                {todayWork.totals.toDemo ?? 0}
+              </p>
+            </div>
+            <div>
+              <p className="stat-label">Paid this period</p>
+              <p className="stat-value" style={{ fontSize: '1.15rem' }}>
+                {todayWork.totals.paid ?? 0}
               </p>
             </div>
           </div>
@@ -110,49 +148,74 @@ export default function DashboardPage() {
       ) : null}
 
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>Sales funnel</h3>
+        <h3 style={{ marginTop: 0 }}>Activity dashboard</h3>
+        <p className="stat-hint" style={{ marginTop: 0 }}>
+          Completed work counts — emails and LinkedIn actions can exceed unique leads.
+        </p>
+        <div className="activity-grid">
+          <ActivityStat label="New leads added" value={act.leadsAdded} />
+          <ActivityStat label="Leads verified" value={act.leadsVerified} />
+          <ActivityStat label="Emails sent" value={act.emailsSent} />
+          <ActivityStat label="Email opens" value={act.emailOpens} />
+          <ActivityStat label="Email replies" value={act.emailReplies} />
+          <ActivityStat label="Follow-ups sent" value={act.followupsSent} />
+          <ActivityStat label="LI connection requests" value={act.linkedinConnectionSent} />
+          <ActivityStat label="LI connections accepted" value={act.linkedinConnectionAccepted} />
+          <ActivityStat label="LinkedIn messages" value={act.linkedinMessages} />
+          <ActivityStat label="LinkedIn replies" value={act.linkedinReplies} />
+          <ActivityStat label="Calls attempted" value={act.callsAttempted} />
+          <ActivityStat label="Calls connected" value={act.callsConnected} />
+          <ActivityStat label="Positive replies" value={act.positiveReplies} />
+          <ActivityStat label="Meetings requested" value={act.meetingsRequested} />
+          <ActivityStat label="Demos booked" value={act.demosBooked} />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3 style={{ marginTop: 0 }}>Conversion funnel</h3>
+        <p className="stat-hint" style={{ marginTop: 0 }}>
+          Unique prospects only — each lead appears in one stage.
+        </p>
         <div className="funnel-flow">
-          <FunnelStep label="Qualified prospects" value={stages.qualifiedProspects} to="/leads" />
+          <FunnelStep label="Uncontacted" value={stages.uncontacted} to="/leads/uncontacted" />
           <span className="funnel-arrow">→</span>
-          <FunnelStep label="Emails" value={outreach.emails} />
+          <FunnelStep label="Contacted" value={stages.contacted} to="/leads/contacted" />
           <span className="funnel-arrow">→</span>
-          <FunnelStep label="LinkedIn" value={outreach.linkedinTouches} />
+          <FunnelStep label="Engaged" value={stages.engaged} to="/leads/engaged" />
           <span className="funnel-arrow">→</span>
-          <FunnelStep label="Calls" value={outreach.calls} />
+          <FunnelStep label="Qualified" value={stages.qualified} to="/leads/qualified" />
           <span className="funnel-arrow">→</span>
-          <FunnelStep label="Reply rate" value={`${rates.replyRate}%`} />
+          <FunnelStep label="Demo scheduled" value={stages.demoScheduled} to="/leads/demo-scheduled" />
           <span className="funnel-arrow">→</span>
-          <FunnelStep label="Positive reply" value={`${rates.positiveReplyRate}%`} />
+          <FunnelStep label="Challenge offered" value={stages.challengeOffered} to="/leads/challenge-offered" />
           <span className="funnel-arrow">→</span>
-          <FunnelStep label="Conversations" value={stages.conversations} to="/leads/conversation" />
+          <FunnelStep label="Challenge accepted" value={stages.challengeAccepted} to="/leads/challenge-accepted" />
           <span className="funnel-arrow">→</span>
-          <FunnelStep label="Demos booked" value={stages.demosBooked} to="/leads/demo-booked" />
-          <span className="funnel-arrow">→</span>
-          <FunnelStep label="Show rate" value={`${rates.showRate}%`} />
-          <span className="funnel-arrow">→</span>
-          <FunnelStep label="Trials" value={stages.trials} to="/leads/trial" />
+          <FunnelStep label="Test done" value={stages.trials} to="/leads/trial" />
           <span className="funnel-arrow">→</span>
           <FunnelStep label="Paid" value={stages.paid} to="/leads/paid" />
           <span className="funnel-arrow">→</span>
-          <FunnelStep label="Conversion" value={`${rates.conversionRate}%`} />
+          <FunnelStep label="Repeat" value={stages.repeat} to="/leads/repeat" />
         </div>
         <p className="stat-hint" style={{ marginBottom: 0 }}>
-          Reply / positive reply / show rates come from logged activities. Mark replies and “Demo shown” on each lead.
+          Reply rate {rates.replyRate}% · Positive reply {rates.positiveReplyRate}% · Show rate{' '}
+          {rates.showRate}% · Paid conversion {rates.conversionRate}% · Nurture/DQ{' '}
+          {stages.nurture ?? 0}
         </p>
       </div>
 
       <div className="grid grid-4" style={{ marginBottom: '1rem' }}>
         <div className="card">
-          <p className="stat-label">Qualified (queue)</p>
-          <p className="stat-value">{stages.qualified ?? 0}</p>
-          <Link to="/leads/qualified" className="stat-hint" style={{ color: 'var(--brand-primary)' }}>
-            View qualified →
+          <p className="stat-label">Open pipeline</p>
+          <p className="stat-value">{totals.open_leads ?? 0}</p>
+          <Link to="/leads" className="stat-hint" style={{ color: 'var(--brand-primary)' }}>
+            View all leads →
           </Link>
         </div>
         <div className="card">
           <p className="stat-label">Paid</p>
           <p className="stat-value">{stages.paid}</p>
-          <p className="stat-hint">{rates.conversionRate}% conversion</p>
+          <p className="stat-hint">{rates.conversionRate}% of all leads</p>
         </div>
         {can('revenue:view') ? (
           <div className="card">
@@ -174,42 +237,35 @@ export default function DashboardPage() {
             overdue · {followUpHealth?.pending || 0} pending · {followUpHealth?.completed || 0} done
           </p>
         </div>
-        <div className="card">
-          <p className="stat-label">Lost</p>
-          <p className="stat-value">{stages.lost ?? 0}</p>
-          <Link to="/leads/lost" className="stat-hint" style={{ color: 'var(--brand-primary)' }}>
-            View lost →
-          </Link>
-        </div>
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>Quick actions</h3>
+        <h3 style={{ marginTop: 0 }}>Quick queues</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link to="/leads/qualified" className="btn btn-secondary">
-            Qualified ({stages.qualified ?? 0})
+          <Link to="/leads/uncontacted" className="btn btn-secondary">
+            Uncontacted ({stages.uncontacted ?? 0})
           </Link>
-          <Link to="/leads/conversation" className="btn btn-secondary">
-            Conversations ({stages.conversations ?? 0})
+          <Link to="/leads/engaged" className="btn btn-secondary">
+            Engaged ({stages.engaged ?? 0})
           </Link>
-          <Link to="/leads/demo-booked" className="btn btn-secondary">
-            Demos ({stages.demosBooked ?? 0})
+          <Link to="/leads/demo-scheduled" className="btn btn-secondary">
+            Demos ({stages.demoScheduled ?? 0})
           </Link>
-          <Link to="/leads/trial" className="btn btn-secondary">
-            Trials ({stages.trials ?? 0})
+          <Link to="/leads?followUpDue=today" className="btn btn-secondary">
+            Due follow-up today
           </Link>
           <Link to="/leads/paid" className="btn btn-primary">
             Paid ({stages.paid ?? 0})
           </Link>
           <Link to="/email" className="btn btn-secondary">
-            Cold email (Brevo)
+            Cold email
           </Link>
         </div>
       </div>
 
       <div className="grid grid-2">
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>Lost reasons</h3>
+          <h3 style={{ marginTop: 0 }}>Nurture / DQ reasons</h3>
           <div className="table-wrap">
             <table>
               <thead>
@@ -229,7 +285,7 @@ export default function DashboardPage() {
                 ) : (
                   <tr>
                     <td colSpan={2} className="empty">
-                      No lost leads yet
+                      None yet
                     </td>
                   </tr>
                 )}
@@ -268,21 +324,21 @@ export default function DashboardPage() {
       <div className="card" style={{ marginTop: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <h3 style={{ margin: 0 }}>
-            {can('analytics:view_team') ? 'BD performance' : 'My performance'}
+            {can('analytics:view_team') ? 'BD scoreboard' : 'My performance'}
           </h3>
           <Link to="/telesales-working" className="btn btn-ghost">
-            Period working →
+            Full BD working →
           </Link>
         </div>
         <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
           <table>
             <thead>
               <tr>
-                <th>Rep</th>
-                <th>Assigned</th>
+                <th>BD</th>
+                <th>Assigned leads</th>
                 <th>Paid</th>
-                <th>Rate</th>
-                <th>Overdue FU</th>
+                <th>Win rate</th>
+                <th>Overdue follow-ups</th>
               </tr>
             </thead>
             <tbody>

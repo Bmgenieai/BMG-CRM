@@ -30,12 +30,17 @@ const TOOL_LINKS = [
 ];
 
 const STATUS_TABS = [
+  { slug: 'uncontacted', label: 'Uncontacted' },
+  { slug: 'contacted', label: 'Contacted' },
+  { slug: 'engaged', label: 'Engaged' },
   { slug: 'qualified', label: 'Qualified' },
-  { slug: 'conversation', label: 'Conversation' },
-  { slug: 'demo-booked', label: 'Demo booked' },
-  { slug: 'trial', label: 'Trial' },
+  { slug: 'demo-scheduled', label: 'Demo scheduled' },
+  { slug: 'challenge-offered', label: 'Challenge offered' },
+  { slug: 'challenge-accepted', label: 'Challenge accepted' },
+  { slug: 'trial', label: 'Test completed' },
   { slug: 'paid', label: 'Paid' },
-  { slug: 'lost', label: 'Lost' },
+  { slug: 'repeat', label: 'Repeat' },
+  { slug: 'nurture', label: 'Nurture / DQ' },
 ];
 
 const STATUS_SLUGS = new Set(STATUS_TABS.map((t) => t.slug));

@@ -1,14 +1,21 @@
 export function StatusBadge({ status }) {
   const map = {
+    uncontacted: 'badge-grey',
+    contacted: 'badge-blue',
+    engaged: 'badge-amber',
     qualified: 'badge-blue',
-    conversation: 'badge-amber',
-    demo_booked: 'badge-amber',
+    demo_scheduled: 'badge-amber',
+    challenge_offered: 'badge-amber',
+    challenge_accepted: 'badge-amber',
     trial: 'badge-green',
     paid: 'badge-green',
-    lost: 'badge-grey',
+    repeat: 'badge-green',
+    nurture: 'badge-grey',
     // legacy
-    new: 'badge-blue',
-    contacted: 'badge-amber',
+    conversation: 'badge-amber',
+    demo_booked: 'badge-amber',
+    lost: 'badge-grey',
+    new: 'badge-grey',
     interested: 'badge-amber',
     neutral: 'badge-amber',
     follow_up_scheduled: 'badge-amber',
@@ -20,18 +27,23 @@ export function StatusBadge({ status }) {
     cancelled: 'badge-grey',
   };
   const labels = {
+    uncontacted: 'New / Uncontacted',
+    contacted: 'Contacted',
+    engaged: 'Engaged / Replied',
     qualified: 'Qualified',
-    conversation: 'Conversation',
-    demo_booked: 'Demo booked',
-    trial: 'Trial',
+    demo_scheduled: 'Demo scheduled',
+    challenge_offered: 'Challenge offered',
+    challenge_accepted: 'Challenge accepted',
+    trial: 'Test completed',
     paid: 'Paid',
-    lost: 'Lost',
-    new: 'Qualified',
-    contacted: 'Qualified',
-    interested: 'Conversation',
-    neutral: 'Conversation',
-    follow_up_scheduled: 'Conversation',
-    not_interested: 'Lost',
+    repeat: 'Repeat / expanded',
+    nurture: 'Nurture / DQ',
+    conversation: 'Engaged / Replied',
+    demo_booked: 'Demo scheduled',
+    lost: 'Nurture / DQ',
+    new: 'New / Uncontacted',
+    contacted_legacy: 'Contacted',
+    interested: 'Engaged / Replied',
     converted: 'Paid',
   };
   const label = labels[status] || String(status || '').replace(/_/g, ' ');
@@ -53,7 +65,6 @@ const SOURCE_LABELS = {
 
 export function SourceBadge({ source, createdByName }) {
   const label = SOURCE_LABELS[source] || String(source || '').replace(/_/g, ' ');
-  // Prefer source-only; pass createdByName only when you intentionally want "Source · Name"
   const text = createdByName ? `${label} · ${createdByName}` : label;
   return <span className="badge badge-blue">{text}</span>;
 }
@@ -74,3 +85,17 @@ export function fmtDate(iso) {
     return iso;
   }
 }
+
+export const FUNNEL_STATUSES = [
+  { key: 'uncontacted', label: 'New / Uncontacted' },
+  { key: 'contacted', label: 'Contacted' },
+  { key: 'engaged', label: 'Engaged / Replied' },
+  { key: 'qualified', label: 'Qualified' },
+  { key: 'demo_scheduled', label: 'Demo scheduled' },
+  { key: 'challenge_offered', label: 'Shoot Challenge offered' },
+  { key: 'challenge_accepted', label: 'Shoot Challenge accepted' },
+  { key: 'trial', label: 'Test completed' },
+  { key: 'paid', label: 'Paid customer' },
+  { key: 'repeat', label: 'Repeat / expanded' },
+  { key: 'nurture', label: 'Nurture / Disqualified' },
+];

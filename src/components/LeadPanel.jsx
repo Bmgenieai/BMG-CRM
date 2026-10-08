@@ -1,17 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Phone, MessageSquare, CalendarPlus, X, Mail } from 'lucide-react';
+import { Phone, MessageSquare, CalendarPlus, X, Mail, Linkedin } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { fmtDate, money, SourceBadge, StatusBadge } from './Badges.jsx';
+import { fmtDate, money, SourceBadge, StatusBadge, FUNNEL_STATUSES } from './Badges.jsx';
 
-const STATUSES = [
-  { key: 'qualified', label: 'Qualified' },
-  { key: 'conversation', label: 'Conversation' },
-  { key: 'demo_booked', label: 'Demo booked' },
-  { key: 'trial', label: 'Trial' },
-  { key: 'paid', label: 'Paid' },
-  { key: 'lost', label: 'Lost' },
-];
+const STATUSES = FUNNEL_STATUSES;
 
 const LOST_REASONS = [
   'No response',
@@ -26,12 +19,24 @@ const LOST_REASONS = [
 
 const ACTIVITY_TYPES = [
   { value: 'call', label: 'Phone call' },
+  { value: 'call_attempted', label: 'Call attempted' },
+  { value: 'call_connected', label: 'Call connected' },
   { value: 'email', label: 'Email' },
+  { value: 'email_followup', label: 'Email follow-up' },
   { value: 'linkedin', label: 'LinkedIn touch' },
   { value: 'reply', label: 'Reply' },
   { value: 'demo_shown', label: 'Demo shown' },
   { value: 'note', label: 'Comment / note' },
   { value: 'whatsapp', label: 'WhatsApp / SMS' },
+];
+
+const LINKEDIN_LOG_TYPES = [
+  { value: 'linkedin_connection_sent', label: 'Connection request sent' },
+  { value: 'linkedin_connection_accepted', label: 'Connection accepted' },
+  { value: 'linkedin_message', label: 'InMail / DM sent' },
+  { value: 'linkedin_reply', label: 'LinkedIn reply received' },
+  { value: 'linkedin_followup', label: 'Follow-up sent' },
+  { value: 'meeting_scheduled', label: 'Meeting scheduled' },
 ];
 
 const REPLY_OUTCOMES = [
@@ -71,6 +76,11 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [empForm, setEmpForm] = useState({ name: '', phone: '', email: '', job_title: '', notes: '' });
   const [editingEmpId, setEditingEmpId] = useState(null);
   const [expandedEmailId, setExpandedEmailId] = useState(null);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [liType, setLiType] = useState('linkedin_connection_sent');
+  const [liNote, setLiNote] = useState('');
+  const [fuDateField, setFuDateField] = useState('');
 
   const load = async () => {
     if (!leadId) return;
@@ -98,6 +108,11 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setEmpForm({ name: '', phone: '', email: '', job_title: '', notes: '' });
     setEditingEmpId(null);
     setExpandedEmailId(null);
+    setShowEdit(false);
+    setEditForm({});
+    setLiType('linkedin_connection_sent');
+    setLiNote('');
+    setFuDateField('');
     load();
   }, [leadId]);
 
@@ -181,7 +196,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   };
 
   const setStatus = async (status, reason) => {
-    if (status === 'lost' && !reason) {
+    if ((status === 'nurture' || status === 'lost') && !reason) {
       setShowLostPicker(true);
       setLostReason(lead?.lost_reason || '');
       return;
@@ -189,14 +204,92 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setBusy(true);
     setError('');
     try {
-      const body = { status };
-      if (status === 'lost') body.lost_reason = reason;
+      const body = { status: status === 'lost' ? 'nurture' : status };
+      if (status === 'nurture' || status === 'lost') body.lost_reason = reason;
       await api(`/leads/${leadId}`, { method: 'PATCH', body });
       setShowLostPicker(false);
       await load();
       notifyChanged();
     } catch (e) {
       setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openEdit = () => {
+    if (!lead) return;
+    setEditForm({
+      name: lead.name || '',
+      email: lead.email || '',
+      phone: lead.phone || '',
+      company: lead.company || '',
+      industry: lead.industry || '',
+      state: lead.state || '',
+      job_title: lead.job_title || '',
+      notes: lead.notes || '',
+      estimated_value: lead.estimated_value ?? '',
+      next_follow_up_at: lead.next_follow_up_at
+        ? String(lead.next_follow_up_at).slice(0, 10)
+        : '',
+    });
+    setShowEdit(true);
+  };
+
+  const saveLeadDetails = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/leads/${leadId}`, {
+        method: 'PATCH',
+        body: {
+          name: editForm.name,
+          email: editForm.email || null,
+          phone: editForm.phone || null,
+          company: editForm.company || null,
+          industry: editForm.industry,
+          state: editForm.state || null,
+          job_title: editForm.job_title || null,
+          notes: editForm.notes || null,
+          estimated_value: editForm.estimated_value === '' ? 0 : Number(editForm.estimated_value),
+          next_follow_up_at: editForm.next_follow_up_at
+            ? new Date(`${editForm.next_follow_up_at}T09:00:00`).toISOString()
+            : null,
+        },
+      });
+      setShowEdit(false);
+      await load();
+      notifyChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const logLinkedIn = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const label = LINKEDIN_LOG_TYPES.find((t) => t.value === liType)?.label || liType;
+      await api(`/leads/${leadId}/activities`, {
+        method: 'POST',
+        body: {
+          type: liType,
+          summary: liNote.trim() || label,
+          next_follow_up_at: fuDateField
+            ? new Date(`${fuDateField}T09:00:00`).toISOString()
+            : undefined,
+        },
+      });
+      setLiNote('');
+      setFuDateField('');
+      await load();
+      notifyChanged();
+    } catch (err) {
+      setError(err.message);
     } finally {
       setBusy(false);
     }
@@ -436,6 +529,14 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
           {lead ? (
             <>
               <section className="lead-drawer-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                  <StatusBadge status={lead.status} />
+                  {canEditLead ? (
+                    <button type="button" className="btn btn-secondary" disabled={busy} onClick={openEdit}>
+                      Update lead
+                    </button>
+                  ) : null}
+                </div>
                 <div className="lead-drawer-meta-grid">
                   <div>
                     <div className="stat-label">Source</div>
@@ -478,6 +579,12 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     </span>
                   </div>
                   <div>
+                    <div className="stat-label">Last contacted</div>
+                    <span style={{ fontSize: '0.85rem' }}>
+                      {fmtDate(lead.last_contacted_at || lead.last_emailed_at)}
+                    </span>
+                  </div>
+                  <div>
                     <div className="stat-label">Next follow-up</div>
                     <span style={{ fontSize: '0.85rem' }}>{fmtDate(lead.next_follow_up_at)}</span>
                   </div>
@@ -491,6 +598,147 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     <strong>Follow-up notes:</strong> {lead.notes}
                   </p>
                 ) : null}
+
+                {showEdit ? (
+                  <form onSubmit={saveLeadDetails} style={{ marginTop: 12 }}>
+                    <h4 className="lead-drawer-h3" style={{ fontSize: '0.95rem' }}>
+                      Update lead details
+                    </h4>
+                    <div className="field">
+                      <label className="label">Name</label>
+                      <input
+                        className="input"
+                        required
+                        value={editForm.name || ''}
+                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="label">Email</label>
+                      <input
+                        className="input"
+                        type="email"
+                        value={editForm.email || ''}
+                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="label">Phone</label>
+                      <input
+                        className="input"
+                        value={editForm.phone || ''}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="label">Industry</label>
+                      <input
+                        className="input"
+                        required
+                        value={editForm.industry || ''}
+                        onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="label">Next follow-up date</label>
+                      <input
+                        className="input"
+                        type="date"
+                        value={editForm.next_follow_up_at || ''}
+                        onChange={(e) => setEditForm({ ...editForm, next_follow_up_at: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="label">Notes</label>
+                      <textarea
+                        className="textarea"
+                        rows={2}
+                        value={editForm.notes || ''}
+                        onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="submit" className="btn btn-primary" disabled={busy}>
+                        Save changes
+                      </button>
+                      <button type="button" className="btn btn-ghost" onClick={() => setShowEdit(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
+              </section>
+
+              <section className="lead-drawer-section">
+                <h3 className="lead-drawer-h3">
+                  <Linkedin size={16} /> LinkedIn outreach
+                </h3>
+                <div className="linkedin-metrics">
+                  <div>
+                    <strong>{lead.linkedin_connection_sent || 0}</strong>
+                    <span>Requests sent</span>
+                  </div>
+                  <div>
+                    <strong>{lead.linkedin_connection_accepted || 0}</strong>
+                    <span>Accepted</span>
+                  </div>
+                  <div>
+                    <strong>{lead.linkedin_messages_sent || 0}</strong>
+                    <span>InMails / DMs</span>
+                  </div>
+                  <div>
+                    <strong>{lead.linkedin_replies || 0}</strong>
+                    <span>Replies</span>
+                  </div>
+                  <div>
+                    <strong>{lead.linkedin_followups_sent || 0}</strong>
+                    <span>Follow-ups</span>
+                  </div>
+                  <div>
+                    <strong>{lead.linkedin_meetings || 0}</strong>
+                    <span>Meetings</span>
+                  </div>
+                </div>
+                {canEditLead ? (
+                  <form onSubmit={logLinkedIn} style={{ marginTop: 12 }}>
+                    <div className="field">
+                      <label className="label">Log LinkedIn activity</label>
+                      <select
+                        className="select"
+                        value={liType}
+                        onChange={(e) => setLiType(e.target.value)}
+                      >
+                        {LINKEDIN_LOG_TYPES.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <input
+                        className="input"
+                        placeholder="Optional note"
+                        value={liNote}
+                        onChange={(e) => setLiNote(e.target.value)}
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="label">Next follow-up (optional)</label>
+                      <input
+                        className="input"
+                        type="date"
+                        value={fuDateField}
+                        onChange={(e) => setFuDateField(e.target.value)}
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary" disabled={busy}>
+                      Log LinkedIn activity
+                    </button>
+                  </form>
+                ) : (
+                  <p className="stat-hint">View only — BDs log LinkedIn from their account</p>
+                )}
               </section>
 
               <section className="lead-drawer-section">
@@ -629,7 +877,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 </div>
                 <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <StatusBadge status={lead.status} />
-                  {lead.status === 'lost' && lead.lost_reason ? (
+                  {(lead.status === 'nurture' || lead.status === 'lost') && lead.lost_reason ? (
                     <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
                       Reason: {lead.lost_reason}
                     </span>
@@ -637,7 +885,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 </div>
                 {showLostPicker ? (
                   <div style={{ marginTop: 12 }}>
-                    <label className="label">Lost reason</label>
+                    <label className="label">Nurture / DQ reason</label>
                     <select
                       className="select"
                       value={lostReason}
@@ -655,9 +903,9 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                         type="button"
                         className="btn btn-primary"
                         disabled={busy || !lostReason}
-                        onClick={() => setStatus('lost', lostReason)}
+                        onClick={() => setStatus('nurture', lostReason)}
                       >
-                        Mark lost
+                        Mark nurture / DQ
                       </button>
                       <button
                         type="button"
@@ -673,7 +921,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 ) : (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <StatusBadge status={lead.status} />
-                    {lead.status === 'lost' && lead.lost_reason ? (
+                    {(lead.status === 'nurture' || lead.status === 'lost') && lead.lost_reason ? (
                       <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
                         Reason: {lead.lost_reason}
                       </span>

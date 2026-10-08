@@ -2,24 +2,25 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { SourceBadge, StatusBadge, fmtDate } from '../components/Badges.jsx';
+import { SourceBadge, StatusBadge, fmtDate, FUNNEL_STATUSES } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 import CohortFilter from '../components/CohortFilter.jsx';
 
 const FILTER_TITLES = {
-  qualified: 'Qualified prospects',
-  conversation: 'Conversations',
-  'demo-booked': 'Demos booked',
-  trial: 'Trials',
-  paid: 'Paid',
-  lost: 'Lost',
-  new: 'Qualified prospects',
-  contacted: 'Qualified prospects',
-  interested: 'Conversations',
-  neutral: 'Conversations',
-  'follow-up': 'Conversations',
-  'not-interested': 'Lost',
-  converted: 'Paid',
+  uncontacted: 'New / Uncontacted',
+  contacted: 'Contacted',
+  engaged: 'Engaged / Replied',
+  qualified: 'Qualified',
+  'demo-scheduled': 'Demo scheduled',
+  'challenge-offered': 'Shoot Challenge offered',
+  'challenge-accepted': 'Shoot Challenge accepted',
+  trial: 'Test completed',
+  paid: 'Paid customers',
+  repeat: 'Repeat / expanded',
+  nurture: 'Nurture / Disqualified',
+  conversation: 'Engaged / Replied',
+  'demo-booked': 'Demo scheduled',
+  lost: 'Nurture / Disqualified',
   signup: 'Signup · no purchase',
   'free-credit': 'Free credit · no purchase',
   winback: 'Win-back · no repurchase',
@@ -28,25 +29,28 @@ const FILTER_TITLES = {
 };
 
 const FILTER_QUERY = {
+  uncontacted: { status: 'uncontacted' },
+  contacted: { status: 'contacted' },
+  engaged: { status: 'engaged' },
   qualified: { status: 'qualified' },
-  conversation: { status: 'conversation' },
-  'demo-booked': { status: 'demo_booked' },
+  'demo-scheduled': { status: 'demo_scheduled' },
+  'challenge-offered': { status: 'challenge_offered' },
+  'challenge-accepted': { status: 'challenge_accepted' },
   trial: { status: 'trial' },
   paid: { status: 'paid' },
-  lost: { status: 'lost' },
-  new: { status: 'qualified' },
-  contacted: { status: 'qualified' },
-  interested: { status: 'conversation' },
-  neutral: { status: 'conversation' },
-  'follow-up': { status: 'conversation' },
-  'not-interested': { status: 'lost' },
-  converted: { status: 'paid' },
+  repeat: { status: 'repeat' },
+  nurture: { status: 'nurture' },
+  conversation: { status: 'engaged' },
+  'demo-booked': { status: 'demo_scheduled' },
+  lost: { status: 'nurture' },
   signup: { source: 'signup_no_listing' },
   'free-credit': { source: 'free_credit_no_purchase' },
   winback: { source: 'purchased_no_repurchase' },
   'checkout-abandoned': { source: 'checkout_abandoned' },
   revisions: { source: 'revision_requested' },
 };
+
+const STATUS_LABELS_UI = Object.fromEntries(FUNNEL_STATUSES.map((s) => [s.key, s.label]));
 
 const EMPTY_FORM = {
   contact_format: 'company',
@@ -103,6 +107,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('id');
   const cohort = searchParams.get('cohort') || 'all';
+  const followUpDueParam = searchParams.get('followUpDue') || '';
 
   const preset = FILTER_QUERY[filter] || {};
 
@@ -115,6 +120,13 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [importBatchId, setImportBatchId] = useState('');
   const [dateAddedFrom, setDateAddedFrom] = useState('');
   const [dateAddedTo, setDateAddedTo] = useState('');
+  const [followUpDue, setFollowUpDue] = useState(followUpDueParam);
+  const [followUpFrom, setFollowUpFrom] = useState('');
+  const [followUpTo, setFollowUpTo] = useState('');
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkFuDate, setBulkFuDate] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(() => ({
     ...EMPTY_FORM,
@@ -157,8 +169,14 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     if (importBatchId) params.set('importBatchId', importBatchId);
     if (dateAddedFrom) params.set('dateAddedFrom', dateAddedFrom);
     if (dateAddedTo) params.set('dateAddedTo', dateAddedTo);
+    if (followUpDue) params.set('followUpDue', followUpDue);
+    if (followUpFrom) params.set('followUpFrom', followUpFrom);
+    if (followUpTo) params.set('followUpTo', followUpTo);
     api(`/leads?${params}`)
-      .then(setLeads)
+      .then((rows) => {
+        setLeads(rows);
+        setSelected(new Set());
+      })
       .catch((e) => setError(e.message));
     refreshSidebarCounts?.();
   };
@@ -168,8 +186,73 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   }, []);
 
   useEffect(() => {
+    setFollowUpDue(followUpDueParam);
+  }, [followUpDueParam]);
+
+  useEffect(() => {
     load();
-  }, [filter, source, status, cohort, emailStatus, importBatchId, dateAddedFrom, dateAddedTo]);
+  }, [
+    filter,
+    source,
+    status,
+    cohort,
+    emailStatus,
+    importBatchId,
+    dateAddedFrom,
+    dateAddedTo,
+    followUpDue,
+    followUpFrom,
+    followUpTo,
+  ]);
+
+  const allSelected = leads.length > 0 && selected.size === leads.length;
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(leads.map((l) => l.id)));
+  };
+  const toggleOne = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const runBulkUpdate = async () => {
+    if (!selected.size) return;
+    if (!bulkStatus && !bulkFuDate) {
+      setError('Choose a status and/or next follow-up date for bulk update');
+      return;
+    }
+    let lostReason;
+    if (bulkStatus === 'nurture') {
+      lostReason = window.prompt('Reason for Nurture / Disqualified:') || '';
+      if (!lostReason.trim()) {
+        setError('Reason required for nurture / DQ');
+        return;
+      }
+    }
+    setBulkBusy(true);
+    setError('');
+    try {
+      const body = { ids: [...selected] };
+      if (bulkStatus) body.status = bulkStatus;
+      if (bulkFuDate) body.next_follow_up_at = new Date(`${bulkFuDate}T09:00:00`).toISOString();
+      if (lostReason) body.lost_reason = lostReason;
+      const result = await api('/leads/bulk', { method: 'POST', body });
+      setBulkStatus('');
+      setBulkFuDate('');
+      load();
+      if (result.skipped?.length) {
+        setError(`Updated ${result.updated}; skipped ${result.skipped.length}`);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const openLead = (id) => {
     const next = new URLSearchParams(searchParams);
@@ -256,14 +339,41 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             </select>
             <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">All statuses</option>
-              {meta.statuses.map((s) => (
+              {(meta.statuses?.length ? meta.statuses : FUNNEL_STATUSES.map((s) => s.key)).map((s) => (
                 <option key={s} value={s}>
-                  {s.replace(/_/g, ' ')}
+                  {STATUS_LABELS_UI[s] || meta.statusLabels?.[s] || String(s).replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
           </>
         )}
+        <select
+          className="select"
+          value={followUpDue}
+          onChange={(e) => setFollowUpDue(e.target.value)}
+          title="Follow-up due filter"
+        >
+          <option value="">All follow-ups</option>
+          <option value="today">Due for follow-up today</option>
+          <option value="overdue">Overdue follow-up</option>
+          <option value="upcoming">Upcoming follow-up</option>
+        </select>
+        <input
+          className="input"
+          type="date"
+          title="Follow-up from"
+          value={followUpFrom}
+          onChange={(e) => setFollowUpFrom(e.target.value)}
+          style={{ maxWidth: 150 }}
+        />
+        <input
+          className="input"
+          type="date"
+          title="Follow-up to"
+          value={followUpTo}
+          onChange={(e) => setFollowUpTo(e.target.value)}
+          style={{ maxWidth: 150 }}
+        />
         <select className="select" value={emailStatus} onChange={(e) => setEmailStatus(e.target.value)}>
           <option value="">All email</option>
           <option value="sent">Emailed</option>
@@ -315,10 +425,52 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         ) : null}
       </div>
 
+      {selected.size > 0 && can('leads:update_own') ? (
+        <div className="card bulk-bar" style={{ marginBottom: '0.75rem' }}>
+          <strong>{selected.size} selected</strong>
+          <select
+            className="select"
+            value={bulkStatus}
+            onChange={(e) => setBulkStatus(e.target.value)}
+            style={{ maxWidth: 220 }}
+          >
+            <option value="">Update status…</option>
+            {FUNNEL_STATUSES.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <input
+            className="input"
+            type="date"
+            title="Next follow-up date"
+            value={bulkFuDate}
+            onChange={(e) => setBulkFuDate(e.target.value)}
+            style={{ maxWidth: 160 }}
+          />
+          <button type="button" className="btn btn-primary" disabled={bulkBusy} onClick={runBulkUpdate}>
+            {bulkBusy ? 'Updating…' : 'Apply to selected'}
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={() => setSelected(new Set())}>
+            Clear
+          </button>
+        </div>
+      ) : null}
+
       <div className="card table-wrap">
         <table className="leads-table">
           <thead>
             <tr>
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Select all leads"
+                />
+              </th>
               <th>Lead</th>
               <th>Source</th>
               <th>Status</th>
@@ -336,6 +488,14 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                 className={`clickable-row${selectedId === l.id ? ' row-selected' : ''}`}
                 onClick={() => openLead(l.id)}
               >
+                <td onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(l.id)}
+                    onChange={() => toggleOne(l.id)}
+                    aria-label={`Select ${l.name}`}
+                  />
+                </td>
                 <td>
                   <div style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{l.name}</div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
@@ -382,7 +542,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             ))}
             {!leads.length ? (
               <tr>
-                <td colSpan={8} className="empty">
+                <td colSpan={9} className="empty">
                   No leads match this view
                 </td>
               </tr>
