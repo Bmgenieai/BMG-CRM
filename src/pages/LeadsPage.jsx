@@ -9,6 +9,8 @@ import {
   FUNNEL_STATUSES,
   BusinessTypeBadge,
   BUSINESS_TYPE_LABELS,
+  StateBadge,
+  US_STATES,
 } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 import CohortFilter from '../components/CohortFilter.jsx';
@@ -131,6 +133,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [source, setSource] = useState(preset.source || '');
   const [status, setStatus] = useState(preset.status || '');
   const [businessType, setBusinessType] = useState('');
+  const [stateFilter, setStateFilter] = useState('');
   const [emailStatus, setEmailStatus] = useState('');
   const [importBatchId, setImportBatchId] = useState('');
   const [dateAddedFrom, setDateAddedFrom] = useState('');
@@ -188,6 +191,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     if (source) params.set('source', source);
     if (status) params.set('status', status);
     if (businessType) params.set('business_type', businessType);
+    if (stateFilter) params.set('state', stateFilter);
     if (cohort && cohort !== 'all') params.set('cohort', cohort);
     if (emailStatus) params.set('emailStatus', emailStatus);
     if (importBatchId) params.set('importBatchId', importBatchId);
@@ -220,6 +224,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     source,
     status,
     businessType,
+    stateFilter,
     cohort,
     emailStatus,
     importBatchId,
@@ -388,6 +393,23 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         </select>
         <select
           className="select"
+          value={stateFilter}
+          onChange={(e) => setStateFilter(e.target.value)}
+          title="Filter by US state"
+        >
+          <option value="">All states</option>
+          {(meta.states?.length
+            ? meta.states.map((s) => s.state)
+            : US_STATES.map((s) => s.code)
+          ).map((st) => (
+            <option key={st} value={st}>
+              {st}
+            </option>
+          ))}
+          <option value="unspecified">No state set</option>
+        </select>
+        <select
+          className="select"
           value={followUpDue}
           onChange={(e) => setFollowUpDue(e.target.value)}
           title="Follow-up due filter"
@@ -538,6 +560,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{l.name}</span>
+                    <StateBadge state={l.state} />
                     {l.business_type ? <BusinessTypeBadge type={l.business_type} /> : null}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
@@ -575,7 +598,9 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                     </div>
                   ) : null}
                 </td>
-                <td>{l.state || l.country || '—'}</td>
+                <td>
+                  {l.state ? <StateBadge state={l.state} /> : <span className="stat-hint">{l.country || '—'}</span>}
+                </td>
                 <td>{l.assigned_name || 'Unassigned'}</td>
                 <td style={{ fontSize: '0.82rem' }}>
                   {l.next_follow_up_at ? fmtDate(l.next_follow_up_at) : '—'}
@@ -693,12 +718,21 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                 </>
               ) : null}
               <div className="field">
-                <label className="label">State</label>
+                <label className="label">State (US)</label>
                 <input
                   className="input"
+                  list="create-us-states"
+                  placeholder="e.g. TX or Texas"
                   value={form.state}
                   onChange={(e) => setForm({ ...form, state: e.target.value })}
                 />
+                <datalist id="create-us-states">
+                  {US_STATES.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.name}
+                    </option>
+                  ))}
+                </datalist>
               </div>
               <div className="field">
                 <label className="label">Email</label>

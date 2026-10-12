@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
-import { fmtDate, StatusBadge, BusinessTypeBadge } from './Badges.jsx';
+import { fmtDate, StatusBadge, BusinessTypeBadge, StateBadge } from './Badges.jsx';
 
 export default function DrilldownModal({
   title,
@@ -9,6 +9,7 @@ export default function DrilldownModal({
   userId,
   stage,
   businessType,
+  state,
   reason,
   onClose,
   onOpenLead,
@@ -19,7 +20,7 @@ export default function DrilldownModal({
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (!metric && !stage && !businessType) return;
+    if (!metric && !stage && !businessType && !state) return;
     setLoading(true);
     setError('');
 
@@ -29,6 +30,7 @@ export default function DrilldownModal({
     if (userId) params.set('userId', userId);
     if (stage) params.set('stage', stage);
     if (businessType) params.set('businessType', businessType);
+    if (state) params.set('state', state);
     if (reason) params.set('reason', reason);
 
     api(`/analytics/drilldown?${params}`)
@@ -40,7 +42,7 @@ export default function DrilldownModal({
         setError(e.message || 'Failed to load details');
         setLoading(false);
       });
-  }, [metric, period, userId, stage, businessType, reason]);
+  }, [metric, period, userId, stage, businessType, state, reason]);
 
   const items = data?.items || [];
 
@@ -61,6 +63,8 @@ export default function DrilldownModal({
         it.summary?.toLowerCase().includes(q) ||
         it.notes?.toLowerCase().includes(q) ||
         it.business_type?.toLowerCase().includes(q) ||
+        it.state?.toLowerCase().includes(q) ||
+        it.lead_state?.toLowerCase().includes(q) ||
         it.status?.toLowerCase().includes(q)
       );
     });
@@ -118,6 +122,7 @@ export default function DrilldownModal({
               Period: <strong>{periodLabel}</strong>
               {data?.dateRange ? ` (${data.dateRange})` : ''}
               {businessType ? ` · Segment: ${businessType}` : ''}
+              {state ? ` · State: ${state}` : ''}
             </p>
           </div>
           <button type="button" className="btn btn-ghost" onClick={onClose}>
@@ -169,6 +174,7 @@ export default function DrilldownModal({
                 <thead>
                   <tr>
                     <th>Lead / Contact</th>
+                    <th>State</th>
                     <th>Business type</th>
                     <th>Activity / Details</th>
                     <th>BD / Rep</th>
@@ -184,6 +190,7 @@ export default function DrilldownModal({
                     const leadCompany = item.lead_company || item.company;
                     const leadStatus = item.lead_status || item.status;
                     const bType = item.business_type;
+                    const leadState = item.state || item.lead_state;
                     const detail =
                       item.subject ||
                       item.summary ||
@@ -202,7 +209,10 @@ export default function DrilldownModal({
                         className="clickable-row"
                       >
                         <td>
-                          <div style={{ fontWeight: 600 }}>{leadName}</div>
+                          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span>{leadName}</span>
+                            <StateBadge state={leadState} />
+                          </div>
                           <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
                             {leadCompany ? <span>{leadCompany} · </span> : null}
                             {leadEmail ? <span>{leadEmail}</span> : null}
@@ -212,6 +222,9 @@ export default function DrilldownModal({
                               <StatusBadge status={leadStatus} />
                             </div>
                           ) : null}
+                        </td>
+                        <td>
+                          {leadState ? <StateBadge state={leadState} /> : <span className="stat-hint">—</span>}
                         </td>
                         <td>
                           <BusinessTypeBadge type={bType} />

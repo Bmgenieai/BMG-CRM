@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { fmtDate } from '../components/Badges.jsx';
+import { fmtDate, StateBadge } from '../components/Badges.jsx';
 
 function MessageBody({ html, text, markdown, emptyHint }) {
   const body = markdown || text || '';
@@ -221,6 +221,7 @@ export default function EmailRepliesPage() {
                 <th>Received</th>
                 <th>From</th>
                 <th>Lead</th>
+                <th>State</th>
                 {canSeeAll ? <th>BD / sent by</th> : null}
                 <th>Subject</th>
                 <th>Preview</th>
@@ -252,7 +253,13 @@ export default function EmailRepliesPage() {
                     ) : null}
                   </td>
                   <td>
-                    <span style={{ fontWeight: 500 }}>{r.lead_name || r.lead_email || '—'}</span>
+                    <span style={{ fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {r.lead_name || r.lead_email || '—'}
+                      <StateBadge state={r.lead_state} />
+                    </span>
+                  </td>
+                  <td>
+                    {r.lead_state ? <StateBadge state={r.lead_state} /> : <span className="stat-hint">—</span>}
                   </td>
                   {canSeeAll ? (
                     <td>{r.sent_by_name || r.assigned_to_name || '—'}</td>

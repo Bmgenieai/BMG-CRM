@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { money, BusinessTypeBadge, SourceBadge, StatusBadge } from '../components/Badges.jsx';
+import { money, BusinessTypeBadge, StateBadge, SourceBadge, StatusBadge } from '../components/Badges.jsx';
 import DrilldownModal from '../components/DrilldownModal.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 
@@ -79,7 +79,7 @@ export default function DashboardPage() {
   if (error) return <div className="card">{error}</div>;
   if (!data || !funnel) return <div className="card">Loading analytics…</div>;
 
-  const { totals, bySource, byBusinessType = [], revenue, performance, recentLeads, followUpHealth } = data;
+  const { totals, bySource, byBusinessType = [], byState = [], revenue, performance, recentLeads, followUpHealth } = data;
   const { stages, activities, outreach, rates, lostReasons } = funnel;
   const act = activities || {};
 
@@ -425,6 +425,79 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Outreach by US state — BD geography */}
+      {(user.role === 'ceo' || user.role === 'manager') && byState.length > 0 ? (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <h3 style={{ margin: 0 }}>Outreach by US state</h3>
+              <p className="stat-hint" style={{ margin: '0.2rem 0 0' }}>
+                See where BDs are working geographically. Click leads / emails / replies for that state.
+              </p>
+            </div>
+            <Link to="/telesales-working" className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
+              BD working by state →
+            </Link>
+          </div>
+          <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>State</th>
+                  <th>Leads</th>
+                  <th>Emails sent</th>
+                  <th>Replies</th>
+                  <th>Paid / Repeat</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byState.slice(0, 20).map((s) => (
+                  <tr key={s.key}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <StateBadge state={s.label === 'Unspecified' ? null : s.label} />
+                        <strong>{s.label}</strong>
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() =>
+                          openDrilldown('by_state', `Leads in ${s.label}`, { state: s.key })
+                        }
+                      >
+                        {s.leadsCount}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() =>
+                          openDrilldown('emails_by_state', `Emails to ${s.label}`, { state: s.key })
+                        }
+                      >
+                        {s.emailsSent}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() =>
+                          openDrilldown('email_replies', `Replies from ${s.label}`, { state: s.key })
+                        }
+                      >
+                        {s.repliesCount}
+                      </span>
+                    </td>
+                    <td>{s.converted || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
       {/* 4. Conversion Funnel (Image 1 Section 3) */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>Conversion funnel</h3>
@@ -631,6 +704,7 @@ export default function DashboardPage() {
           userId={drilldown.userId}
           stage={drilldown.stage}
           businessType={drilldown.businessType}
+          state={drilldown.state}
           reason={drilldown.reason}
           onClose={() => setDrilldown(null)}
           onOpenLead={(id) => setActiveLeadId(id)}

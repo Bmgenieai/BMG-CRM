@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { fmtDate, StatusBadge } from '../components/Badges.jsx';
+import { fmtDate, StatusBadge, StateBadge } from '../components/Badges.jsx';
 import DrilldownModal from '../components/DrilldownModal.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 
@@ -76,6 +76,7 @@ export default function TelesalesWorkingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const period = searchParams.get('period') || 'today';
   const userId = searchParams.get('userId') || '';
+  const stateFilter = searchParams.get('state') || '';
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [drilldown, setDrilldown] = useState(null);
@@ -94,30 +95,51 @@ export default function TelesalesWorkingPage() {
     setSearchParams(p, { replace: true });
   };
 
+  const setStateFilter = (next) => {
+    const p = new URLSearchParams(searchParams);
+    if (next) p.set('state', next);
+    else p.delete('state');
+    setSearchParams(p, { replace: true });
+  };
+
   useEffect(() => {
     setError('');
     setData(null);
     const q = new URLSearchParams({ period });
     if (userId) q.set('userId', userId);
+    if (stateFilter) q.set('state', stateFilter);
     api(`/analytics/telesales-working?${q}`)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [period, userId]);
+  }, [period, userId, stateFilter]);
 
-  const openDrilldown = (metric, title, repId = null) => {
+  const openDrilldown = (metric, title, repId = null, extra = {}) => {
     setDrilldown({
       metric,
       title: title || String(metric).replace(/_/g, ' '),
       period,
       userId: repId || userId || undefined,
+      state: stateFilter || undefined,
+      ...extra,
     });
   };
 
   if (error) return <div className="card">{error}</div>;
   if (!data) return <div className="card">Loading BD working…</div>;
 
-  const { totals, reps, feed, leadsCreated, focusUserId, canViewTeam, label, fromYmd, toYmd, timezone } =
-    data;
+  const {
+    totals,
+    reps,
+    byState = [],
+    feed,
+    leadsCreated,
+    focusUserId,
+    canViewTeam,
+    label,
+    fromYmd,
+    toYmd,
+    timezone,
+  } = data;
   const focusRep = focusUserId ? reps.find((r) => r.id === focusUserId) : null;
   const showTeamTable = canViewTeam && reps.length > 0;
 
@@ -147,8 +169,43 @@ export default function TelesalesWorkingPage() {
             </p>
           ) : null}
         </div>
-        <PeriodChips value={period} onChange={setPeriod} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+          <PeriodChips value={period} onChange={setPeriod} />
+          {canViewTeam ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span className="stat-hint" style={{ fontWeight: 600 }}>State:</span>
+              <select
+                className="select"
+                value={stateFilter}
+                onChange={(e) => setStateFilter(e.target.value)}
+                style={{ minWidth: 160 }}
+                title="Filter BD working by US state"
+              >
+                <option value="">All states</option>
+                {byState.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+                {!byState.some((s) => s.key === 'unspecified') ? (
+                  <option value="unspecified">Unspecified</option>
+                ) : null}
+              </select>
+              {stateFilter ? (
+                <button type="button" className="btn btn-ghost" onClick={() => setStateFilter('')}>
+                  Clear state
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
+
+      {canViewTeam && stateFilter ? (
+        <p className="stat-hint" style={{ marginTop: 0, marginBottom: '0.75rem' }}>
+          Showing BD working for state <strong>{stateFilter === 'unspecified' ? 'Unspecified' : stateFilter}</strong> only.
+        </p>
+      ) : null}
 
       {/* Section 1: What BDs did (activities) */}
       <div className="card" style={{ marginBottom: '1rem' }}>
@@ -237,6 +294,106 @@ export default function TelesalesWorkingPage() {
           />
         </div>
       </div>
+
+      {/* Working by US state */}
+      {canViewTeam && byState.length > 0 ? (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <h3 style={{ marginTop: 0 }}>Working by US state</h3>
+          <p className="stat-hint" style={{ marginTop: 0 }}>
+            Activity volume by prospect state for this period. Click a state to filter this page, or click a number to inspect records.
+          </p>
+          <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>State</th>
+                  <th>Leads touched</th>
+                  <th>Emails</th>
+                  <th>LinkedIn</th>
+                  <th>Calls</th>
+                  <th>Replies</th>
+                  <th>Activities</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byState.map((s) => (
+                  <tr
+                    key={s.key}
+                    style={{
+                      background:
+                        stateFilter === s.key
+                          ? 'color-mix(in srgb, var(--brand-primary) 12%, transparent)'
+                          : undefined,
+                    }}
+                  >
+                    <td
+                      style={{ cursor: 'pointer', fontWeight: 600 }}
+                      onClick={() => setStateFilter(s.key === stateFilter ? '' : s.key)}
+                      title="Filter page to this state"
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <StateBadge state={s.label === 'Unspecified' ? null : s.label} />
+                        <span>{s.label}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() =>
+                          openDrilldown('leads_touched', `Touched in ${s.label}`, null, { state: s.key })
+                        }
+                      >
+                        {s.leadsTouched}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() =>
+                          openDrilldown('emails_sent', `Emails to ${s.label}`, null, { state: s.key })
+                        }
+                      >
+                        {s.emails}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() =>
+                          openDrilldown('linkedin', `LinkedIn in ${s.label}`, null, { state: s.key })
+                        }
+                      >
+                        {s.linkedin}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() =>
+                          openDrilldown('calls', `Calls in ${s.label}`, null, { state: s.key })
+                        }
+                      >
+                        {s.calls}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() =>
+                          openDrilldown('email_replies', `Replies from ${s.label}`, null, { state: s.key })
+                        }
+                      >
+                        {s.replies}
+                      </span>
+                    </td>
+                    <td>{s.activities}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {/* Section 3: Per BD comparison */}
       {showTeamTable ? (
@@ -383,6 +540,7 @@ export default function TelesalesWorkingPage() {
                     <th>When</th>
                     <th>Type</th>
                     <th>Lead</th>
+                    <th>State</th>
                     <th>Summary</th>
                   </tr>
                 </thead>
@@ -406,12 +564,15 @@ export default function TelesalesWorkingPage() {
                             '—'
                           )}
                         </td>
+                        <td>
+                          {a.lead_state ? <StateBadge state={a.lead_state} /> : <span className="stat-hint">—</span>}
+                        </td>
                         <td>{a.summary}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="empty">
+                      <td colSpan={5} className="empty">
                         No logged outreach in this period.
                       </td>
                     </tr>
@@ -432,6 +593,7 @@ export default function TelesalesWorkingPage() {
                   <tr>
                     <th>When</th>
                     <th>Name</th>
+                    <th>State</th>
                     <th>Status</th>
                     <th>Method</th>
                   </tr>
@@ -452,6 +614,9 @@ export default function TelesalesWorkingPage() {
                           </span>
                         </td>
                         <td>
+                          {l.state ? <StateBadge state={l.state} /> : <span className="stat-hint">—</span>}
+                        </td>
+                        <td>
                           <StatusBadge status={l.status} />
                         </td>
                         <td>
@@ -461,7 +626,7 @@ export default function TelesalesWorkingPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="empty">
+                      <td colSpan={5} className="empty">
                         No leads added in this period.
                       </td>
                     </tr>
@@ -480,6 +645,7 @@ export default function TelesalesWorkingPage() {
           metric={drilldown.metric}
           period={drilldown.period}
           userId={drilldown.userId}
+          state={drilldown.state}
           onClose={() => setDrilldown(null)}
           onOpenLead={(id) => setActiveLeadId(id)}
         />

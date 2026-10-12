@@ -98,7 +98,7 @@ export default function AppLayout({ children }) {
   const [counts, setCounts] = useState(null);
   const [leadsOpen, setLeadsOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(true);
-  const [inboundOpen, setInboundOpen] = useState(true);
+  const [inboundOpen, setInboundOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
 
   const statusPathOpen = (() => {
@@ -309,8 +309,8 @@ export default function AppLayout({ children }) {
             >
               <Inbox size={16} />
               <span style={{ flex: 1 }}>Email replies</span>
-              {counts?.emailRepliesUnread != null ? (
-                <span className="nav-count">{counts.emailRepliesUnread}</span>
+              {counts?.emailRepliesCount != null ? (
+                <span className="nav-count">{counts.emailRepliesCount}</span>
               ) : null}
             </NavLink>
           </NavSection>

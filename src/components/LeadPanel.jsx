@@ -10,7 +10,10 @@ import {
   FUNNEL_STATUSES,
   BusinessTypeBadge,
   BUSINESS_TYPE_LABELS,
+  StateBadge,
+  US_STATES,
 } from './Badges.jsx';
+import EmailConversationModal from './EmailConversationModal.jsx';
 
 const STATUSES = FUNNEL_STATUSES;
 
@@ -86,6 +89,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [empForm, setEmpForm] = useState({ name: '', phone: '', email: '', job_title: '', notes: '' });
   const [editingEmpId, setEditingEmpId] = useState(null);
   const [expandedEmailId, setExpandedEmailId] = useState(null);
+  const [conversation, setConversation] = useState(null);
+  const [conversationLoading, setConversationLoading] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [liType, setLiType] = useState('linkedin_connection_sent');
@@ -118,6 +123,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setEmpForm({ name: '', phone: '', email: '', job_title: '', notes: '' });
     setEditingEmpId(null);
     setExpandedEmailId(null);
+    setConversation(null);
+    setConversationLoading(false);
     setShowEdit(false);
     setEditForm({});
     setLiType('linkedin_connection_sent');
@@ -500,6 +507,20 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     });
   };
 
+  const openConversation = async () => {
+    if (!leadId) return;
+    setConversationLoading(true);
+    setError('');
+    try {
+      const data = await api(`/email/leads/${leadId}/conversation`);
+      setConversation(data);
+    } catch (e) {
+      setError(e.message || 'Could not open conversation');
+    } finally {
+      setConversationLoading(false);
+    }
+  };
+
   const deleteEmployee = async (empId) => {
     if (!window.confirm('Delete this employee?')) return;
     setBusy(true);
@@ -526,6 +547,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     : templates;
 
   return (
+    <>
     <div className="lead-drawer-root" role="dialog" aria-modal="true" aria-label="Lead details">
       <button type="button" className="lead-drawer-backdrop" aria-label="Close" onClick={onClose} />
       <aside className="lead-drawer-panel">
@@ -535,6 +557,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
               <>
                 <h2 className="lead-drawer-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span>{lead.name}</span>
+                  <StateBadge state={lead.state} />
                   {lead.business_type ? <BusinessTypeBadge type={lead.business_type} /> : null}
                 </h2>
                 <div className="lead-drawer-contact">
@@ -607,6 +630,23 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     ) : (
                       <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>—</span>
                     )}
+                  </div>
+                  <div>
+                    <div className="stat-label">State (US)</div>
+                    {lead.state ? (
+                      <StateBadge state={lead.state} />
+                    ) : (
+                      <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>—</span>
+                    )}
+                    {lead.state ? (
+                      <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
+                        {US_STATES.find(
+                          (s) =>
+                            s.code === String(lead.state).trim().toUpperCase() ||
+                            s.name.toLowerCase() === String(lead.state).trim().toLowerCase(),
+                        )?.name || lead.state}
+                      </div>
+                    ) : null}
                   </div>
                   <div>
                     <div className="stat-label">Added by</div>
@@ -714,6 +754,23 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div className="field">
+                      <label className="label">State (US)</label>
+                      <input
+                        className="input"
+                        list="us-states-list"
+                        placeholder="e.g. TX or Texas"
+                        value={editForm.state || ''}
+                        onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                      />
+                      <datalist id="us-states-list">
+                        {US_STATES.map((s) => (
+                          <option key={s.code} value={s.code}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </datalist>
                     </div>
                     <div className="field">
                       <label className="label">Next follow-up date</label>
@@ -1130,17 +1187,45 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 )}
 
                 <div style={{ marginTop: '1rem' }}>
-                  <h4 className="lead-drawer-h3" style={{ fontSize: '0.92rem', marginBottom: 8 }}>
-                    Brevo email history
-                  </h4>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginBottom: 8,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <h4 className="lead-drawer-h3" style={{ fontSize: '0.92rem', margin: 0 }}>
+                      Brevo email history
+                    </h4>
+                    {(lead.emailHistory?.messages || []).length ||
+                    (lead.emailHistory?.replies || []).length ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.82rem', padding: '0.3rem 0.7rem' }}
+                        disabled={conversationLoading}
+                        onClick={openConversation}
+                      >
+                        {conversationLoading ? 'Opening…' : 'View full conversation'}
+                      </button>
+                    ) : null}
+                  </div>
                   <p className="stat-hint" style={{ marginTop: 0 }}>
-                    Expand a send to read the exact body. Opens are tracked per email step (Email 1, 2, 3…).
+                    Click an email to open the complete conversation (same as Email replies). Opens are
+                    tracked per email step (Email 1, 2, 3…).
                   </p>
                   {(lead.emailHistory?.messages || []).length ? (
                     <ul className="lead-activity-list">
                       {[...(lead.emailHistory.messages || [])]
                         .slice()
-                        .sort((a, b) => String(a.sentAt || a.sent_at || '').localeCompare(String(b.sentAt || b.sent_at || '')))
+                        .sort((a, b) =>
+                          String(a.sentAt || a.sent_at || '').localeCompare(
+                            String(b.sentAt || b.sent_at || ''),
+                          ),
+                        )
                         .map((m, idx) => {
                           const seq = m.sequence || idx + 1;
                           const openCount = m.openCount ?? m.open_count ?? 0;
@@ -1162,7 +1247,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                                   padding: '6px 0',
                                   height: 'auto',
                                 }}
-                                onClick={() => setExpandedEmailId(expanded ? null : m.id)}
+                                onClick={openConversation}
+                                title="Open full conversation"
                               >
                                 <strong>
                                   Email {seq}: {m.subject || '(no subject)'}
@@ -1175,12 +1261,25 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                                     openCount ? `${openCount} open(s)` : '0 opens',
                                     clickCount ? `${clickCount} click(s)` : null,
                                     replyCount ? `${replyCount} reply` : null,
-                                    expanded ? 'Hide body' : 'View body',
+                                    'View conversation',
                                   ]
                                     .filter(Boolean)
                                     .join(' · ')}
                                 </div>
                               </button>
+                              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  style={{ fontSize: '0.78rem', padding: '2px 0', height: 'auto' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedEmailId(expanded ? null : m.id);
+                                  }}
+                                >
+                                  {expanded ? 'Hide preview' : 'Quick preview'}
+                                </button>
+                              </div>
                               {expanded ? (
                                 <div
                                   style={{
@@ -1193,13 +1292,16 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                                 >
                                   {hasBody ? (
                                     bodyText ? (
-                                      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{bodyText}</div>
+                                      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                                        {bodyText}
+                                      </div>
                                     ) : (
                                       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
                                     )
                                   ) : (
                                     <span className="stat-hint">
-                                      Body not stored for this send (sent before body logging). Subject and open counts above still apply.
+                                      Body not stored for this send (sent before body logging). Subject
+                                      and open counts above still apply.
                                     </span>
                                   )}
                                 </div>
@@ -1232,23 +1334,38 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   {(lead.emailHistory?.replies || []).length ? (
                     <>
                       <p className="stat-hint" style={{ margin: '10px 0 6px' }}>
-                        Reply messages
+                        Reply messages — click to open full conversation
                       </p>
                       <ul className="lead-activity-list">
                         {lead.emailHistory.replies.slice(0, 8).map((r) => (
                           <li key={r.id}>
-                            <strong>{r.subject || 'Reply'}</strong>
-                            <div className="muted-line">
-                              {[r.from_email, fmtDate(r.received_at)].filter(Boolean).join(' · ')}
-                            </div>
-                            {(r.body_markdown || r.body_text) ? (
-                              <div className="muted-line" style={{ marginTop: 4 }}>
-                                {String(r.body_markdown || r.body_text)
-                                  .replace(/\s+/g, ' ')
-                                  .trim()
-                                  .slice(0, 160)}
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '6px 0',
+                                height: 'auto',
+                              }}
+                              onClick={openConversation}
+                            >
+                              <strong>{r.subject || 'Reply'}</strong>
+                              <div className="muted-line">
+                                {[r.from_email, fmtDate(r.received_at), 'View conversation']
+                                  .filter(Boolean)
+                                  .join(' · ')}
                               </div>
-                            ) : null}
+                              {r.body_markdown || r.body_text ? (
+                                <div className="muted-line" style={{ marginTop: 4 }}>
+                                  {String(r.body_markdown || r.body_text)
+                                    .replace(/\s+/g, ' ')
+                                    .trim()
+                                    .slice(0, 160)}
+                                </div>
+                              ) : null}
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -1467,5 +1584,17 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
         </div>
       </aside>
     </div>
+    {conversation ? (
+      <EmailConversationModal
+        conversation={conversation}
+        hideOpenLead
+        onClose={() => setConversation(null)}
+        onChanged={() => {
+          load();
+          notifyChanged();
+        }}
+      />
+    ) : null}
+    </>
   );
 }
