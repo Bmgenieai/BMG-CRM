@@ -97,9 +97,9 @@ export default function AppLayout({ children }) {
   const location = useLocation();
   const [counts, setCounts] = useState(null);
   const [leadsOpen, setLeadsOpen] = useState(false);
-  const [productOpen, setProductOpen] = useState(true);
+  const [productOpen, setProductOpen] = useState(false);
   const [inboundOpen, setInboundOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(true);
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const statusPathOpen = (() => {
     const m = location.pathname.match(/^\/leads\/([^/]+)/);
