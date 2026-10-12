@@ -2,7 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { SourceBadge, StatusBadge, fmtDate, FUNNEL_STATUSES } from '../components/Badges.jsx';
+import {
+  SourceBadge,
+  StatusBadge,
+  fmtDate,
+  FUNNEL_STATUSES,
+  BusinessTypeBadge,
+  BUSINESS_TYPE_LABELS,
+} from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 import CohortFilter from '../components/CohortFilter.jsx';
 
@@ -26,6 +33,9 @@ const FILTER_TITLES = {
   winback: 'Win-back · no repurchase',
   'checkout-abandoned': 'Stripe · abandoned checkout',
   revisions: 'Asked for revisions',
+  linkedin: 'LinkedIn leads',
+  facebook: 'Facebook leads',
+  instagram: 'Instagram leads',
 };
 
 const FILTER_QUERY = {
@@ -48,6 +58,9 @@ const FILTER_QUERY = {
   winback: { source: 'purchased_no_repurchase' },
   'checkout-abandoned': { source: 'checkout_abandoned' },
   revisions: { source: 'revision_requested' },
+  linkedin: { source: 'linkedin' },
+  facebook: { source: 'facebook' },
+  instagram: { source: 'instagram' },
 };
 
 const STATUS_LABELS_UI = Object.fromEntries(FUNNEL_STATUSES.map((s) => [s.key, s.label]));
@@ -61,6 +74,7 @@ const EMPTY_FORM = {
   state: '',
   job_title: '',
   industry: '',
+  business_type: '',
   notes: '',
   estimated_value: '',
   country: '',
@@ -116,6 +130,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [q, setQ] = useState('');
   const [source, setSource] = useState(preset.source || '');
   const [status, setStatus] = useState(preset.status || '');
+  const [businessType, setBusinessType] = useState('');
   const [emailStatus, setEmailStatus] = useState('');
   const [importBatchId, setImportBatchId] = useState('');
   const [dateAddedFrom, setDateAddedFrom] = useState('');
@@ -148,11 +163,19 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
   const createSources = useMemo(() => {
     const all = meta.sources || [];
-    if (user?.role === 'telesales') {
-      return all.filter((s) => s.key === 'telesales');
-    }
-    return all.filter((s) => ['telesales', 'manual', 'csv_import'].includes(s.key) || s.key === form.source);
-  }, [meta.sources, user?.role, form.source]);
+    const allowed = ['telesales', 'linkedin', 'facebook', 'instagram', 'manual', 'csv_import'];
+    return all.filter((s) => allowed.includes(s.key) || s.key === form.source);
+  }, [meta.sources, form.source]);
+
+  const handleOpenCreate = () => {
+    const defaultSource =
+      preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual');
+    setForm({
+      ...EMPTY_FORM,
+      source: defaultSource,
+    });
+    setShowCreate(true);
+  };
 
   useEffect(() => {
     setSource(preset.source || '');
@@ -164,6 +187,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     if (q) params.set('q', q);
     if (source) params.set('source', source);
     if (status) params.set('status', status);
+    if (businessType) params.set('business_type', businessType);
     if (cohort && cohort !== 'all') params.set('cohort', cohort);
     if (emailStatus) params.set('emailStatus', emailStatus);
     if (importBatchId) params.set('importBatchId', importBatchId);
@@ -195,6 +219,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     filter,
     source,
     status,
+    businessType,
     cohort,
     emailStatus,
     importBatchId,
@@ -283,16 +308,17 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         state: form.state || undefined,
         job_title: isCompany ? undefined : form.job_title || undefined,
         industry: form.industry.trim(),
+        business_type: form.business_type || undefined,
         notes: form.notes || undefined,
         estimated_value: form.estimated_value === '' ? 0 : Number(form.estimated_value),
         country: form.country || undefined,
-        source: user?.role === 'telesales' ? 'telesales' : form.source || 'manual',
+        source: form.source || preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual'),
       };
       const created = await api('/leads', { method: 'POST', body });
       setShowCreate(false);
       setForm({
         ...EMPTY_FORM,
-        source: user?.role === 'telesales' ? 'telesales' : 'manual',
+        source: preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual'),
       });
       load();
       if (created?.id) openLead(created.id);
@@ -347,6 +373,19 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             </select>
           </>
         )}
+        <select
+          className="select"
+          value={businessType}
+          onChange={(e) => setBusinessType(e.target.value)}
+          title="Filter by business type"
+        >
+          <option value="">All business types</option>
+          {Object.entries(BUSINESS_TYPE_LABELS).map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
         <select
           className="select"
           value={followUpDue}
@@ -419,7 +458,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
           </Link>
         ) : null}
         {can('leads:create') ? (
-          <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
+          <button type="button" className="btn btn-primary" onClick={handleOpenCreate}>
             New lead
           </button>
         ) : null}
@@ -497,7 +536,10 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                   />
                 </td>
                 <td>
-                  <div style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{l.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{l.name}</span>
+                    {l.business_type ? <BusinessTypeBadge type={l.business_type} /> : null}
+                  </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
                     {[
                       l.contact_format === 'employee' ? 'Employee' : l.contact_format === 'company' ? 'Company' : null,
@@ -562,7 +604,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             <p className="page-sub" style={{ marginTop: 0 }}>
               Source will show as{' '}
               <strong>
-                {user?.role === 'telesales' ? 'BD' : form.source === 'telesales' ? 'BD' : 'Manual'} ·{' '}
+                {meta.sources?.find((s) => s.key === form.source)?.label || form.source || 'BD'} ·{' '}
                 {user?.name || 'you'}
               </strong>
             </p>
@@ -606,6 +648,21 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                   value={form.industry}
                   onChange={(e) => setForm({ ...form, industry: e.target.value })}
                 />
+              </div>
+              <div className="field">
+                <label className="label">Business type</label>
+                <select
+                  className="select"
+                  value={form.business_type}
+                  onChange={(e) => setForm({ ...form, business_type: e.target.value })}
+                >
+                  <option value="">Select business type…</option>
+                  {Object.entries(BUSINESS_TYPE_LABELS).map(([k, label]) => (
+                    <option key={k} value={k}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="field">
                 <label className="label">Contact</label>
@@ -672,22 +729,20 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 />
               </div>
-              {user?.role !== 'telesales' ? (
-                <div className="field">
-                  <label className="label">Source</label>
-                  <select
-                    className="select"
-                    value={form.source}
-                    onChange={(e) => setForm({ ...form, source: e.target.value })}
-                  >
-                    {createSources.map((s) => (
-                      <option key={s.key} value={s.key}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
+              <div className="field">
+                <label className="label">Source</label>
+                <select
+                  className="select"
+                  value={form.source}
+                  onChange={(e) => setForm({ ...form, source: e.target.value })}
+                >
+                  {createSources.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="row-actions">
                 <button type="submit" className="btn btn-primary">
                   Create lead

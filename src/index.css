@@ -343,6 +343,8 @@ tr:hover td { background: #f8fafc; }
 .badge-green { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
 .badge-red { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
 .badge-grey { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.badge-purple { background: #faf5ff; color: #7e22ce; border-color: #f3e8ff; }
+.badge-pink { background: #fdf2f8; color: #be185d; border-color: #fbcfe8; }
 
 .tone-blue { background: #eff6ff; color: #1d4ed8; }
 .tone-amber { background: #fffbeb; color: #b45309; }
@@ -716,6 +718,45 @@ tr:hover td { background: #f8fafc; }
   color: var(--muted);
   margin-top: 0.2rem;
   line-height: 1.3;
+}
+.activity-stat.clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.activity-stat.clickable:hover {
+  background: #fff;
+  border-color: var(--brand-primary);
+  box-shadow: 0 4px 14px rgba(85, 115, 244, 0.15);
+  transform: translateY(-2px);
+}
+.stat-clickable {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.stat-clickable:hover {
+  background: rgba(85, 115, 244, 0.08);
+}
+.stat-clickable:hover .stat-value {
+  color: var(--brand-primary) !important;
+}
+.funnel-step.clickable {
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.funnel-step.clickable:hover {
+  background: #fff;
+  border-color: var(--brand-primary);
+  box-shadow: 0 4px 12px rgba(85, 115, 244, 0.12);
+  transform: translateY(-2px);
+}
+.funnel-step.clickable:hover .funnel-step-value {
+  color: var(--brand-primary);
 }
 
 .linkedin-metrics {

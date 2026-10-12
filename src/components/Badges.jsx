@@ -60,13 +60,23 @@ const SOURCE_LABELS = {
   chat_support: 'Chat support',
   csv_import: 'CSV / Google Sheet',
   telesales: 'BD',
+  linkedin: 'LinkedIn',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
   manual: 'Manual',
 };
 
 export function SourceBadge({ source, createdByName }) {
   const label = SOURCE_LABELS[source] || String(source || '').replace(/_/g, ' ');
   const text = createdByName ? `${label} · ${createdByName}` : label;
-  return <span className="badge badge-blue">{text}</span>;
+  const colorMap = {
+    linkedin: 'badge-blue',
+    facebook: 'badge-blue',
+    instagram: 'badge-amber',
+    telesales: 'badge-blue',
+  };
+  const cls = colorMap[source] || 'badge-blue';
+  return <span className={`badge ${cls}`}>{text}</span>;
 }
 
 export function money(n) {
@@ -99,3 +109,27 @@ export const FUNNEL_STATUSES = [
   { key: 'repeat', label: 'Repeat / expanded' },
   { key: 'nurture', label: 'Nurture / Disqualified' },
 ];
+
+export const BUSINESS_TYPE_LABELS = {
+  realtor: 'Realtor / Agent',
+  real_estate_owner: 'Real estate owner',
+  agency: 'Agency / Brokerage',
+  photographer: 'Photographer',
+  individual: 'Individual',
+  other: 'Other',
+};
+
+export function BusinessTypeBadge({ type }) {
+  if (!type) return null;
+  const label = BUSINESS_TYPE_LABELS[type] || String(type).replace(/_/g, ' ');
+  const colorMap = {
+    realtor: 'badge-blue',
+    real_estate_owner: 'badge-purple',
+    agency: 'badge-amber',
+    photographer: 'badge-pink',
+    individual: 'badge-green',
+    other: 'badge-grey',
+  };
+  return <span className={`badge ${colorMap[type] || 'badge-grey'}`}>{label}</span>;
+}
+

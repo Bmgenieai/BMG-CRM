@@ -3,12 +3,15 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { fmtDate, StatusBadge } from '../components/Badges.jsx';
+import DrilldownModal from '../components/DrilldownModal.jsx';
+import LeadPanel from '../components/LeadPanel.jsx';
 
 const PERIODS = [
   { key: 'today', label: 'Today' },
   { key: 'yesterday', label: 'Yesterday' },
   { key: 'week', label: 'This week' },
   { key: 'month', label: 'This month' },
+  { key: 'overall', label: 'Overall' },
 ];
 
 const ACTIVITY_LABELS = {
@@ -31,14 +34,22 @@ const ACTIVITY_LABELS = {
   status_change: 'Stage change',
 };
 
-function StatCard({ label, value, hint }) {
+function StatCard({ label, value, hint, onClick }) {
   return (
-    <div className="card">
+    <div
+      className={`card ${onClick ? 'clickable' : ''}`}
+      onClick={onClick}
+      style={{
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'all 0.15s ease',
+      }}
+      title={onClick ? `Click to inspect ${label}` : undefined}
+    >
       <p className="stat-label">{label}</p>
-      <p className="stat-value" style={{ color: 'var(--brand-primary)' }}>
+      <p className="stat-value" style={{ color: 'var(--brand-primary)', margin: '0.2rem 0' }}>
         {value ?? 0}
       </p>
-      {hint ? <p className="stat-hint">{hint}</p> : null}
+      {hint ? <p className="stat-hint" style={{ margin: 0 }}>{hint}</p> : null}
     </div>
   );
 }
@@ -67,6 +78,8 @@ export default function TelesalesWorkingPage() {
   const userId = searchParams.get('userId') || '';
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [drilldown, setDrilldown] = useState(null);
+  const [activeLeadId, setActiveLeadId] = useState(null);
 
   const setPeriod = (next) => {
     const p = new URLSearchParams(searchParams);
@@ -90,6 +103,15 @@ export default function TelesalesWorkingPage() {
       .then(setData)
       .catch((e) => setError(e.message));
   }, [period, userId]);
+
+  const openDrilldown = (metric, title, repId = null) => {
+    setDrilldown({
+      metric,
+      title: title || String(metric).replace(/_/g, ' '),
+      period,
+      userId: repId || userId || undefined,
+    });
+  };
 
   if (error) return <div className="card">{error}</div>;
   if (!data) return <div className="card">Loading BD working…</div>;
@@ -121,72 +143,109 @@ export default function TelesalesWorkingPage() {
           </p>
           {canViewTeam ? (
             <p className="stat-hint" style={{ margin: '0.35rem 0 0' }}>
-              Left side = activity volume (emails, LinkedIn, calls). Right side = unique leads that moved stages.
+              Left side = activity volume (emails, LinkedIn, calls). Right side = unique leads that moved stages. Click any number to inspect in a modal.
             </p>
           ) : null}
         </div>
         <PeriodChips value={period} onChange={setPeriod} />
       </div>
 
+      {/* Section 1: What BDs did (activities) */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>1. What BDs did (activities)</h3>
         <p className="stat-hint" style={{ marginTop: 0 }}>
-          Raw work counts — one lead can have many emails / LinkedIn touches.
+          Raw work counts — one lead can have many emails / LinkedIn touches. Click any card to see items.
         </p>
         <div className="grid grid-4">
           <StatCard
             label="Leads added"
             value={totals.leadsAdded}
             hint={`${totals.leadsManual} manual · ${totals.leadsCsv} CSV`}
+            onClick={() => openDrilldown('leads_added', 'Leads added')}
           />
           <StatCard
             label="Emails sent"
             value={(totals.emails || 0) + (totals.emailFollowups || 0)}
             hint={`${totals.emails || 0} first · ${totals.emailFollowups || 0} follow-ups`}
+            onClick={() => openDrilldown('emails_sent', 'Emails sent')}
           />
           <StatCard
             label="LinkedIn actions"
             value={totals.linkedin}
             hint={`${totals.linkedinConnectionSent || 0} requests · ${totals.linkedinMessages || 0} msgs`}
+            onClick={() => openDrilldown('linkedin', 'LinkedIn actions')}
           />
           <StatCard
             label="Calls"
             value={totals.calls}
             hint={`${totals.callsConnected || 0} connected · ${totals.messages || 0} WhatsApp`}
+            onClick={() => openDrilldown('calls', 'Calls')}
           />
         </div>
       </div>
 
+      {/* Section 2: What moved in the funnel */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>2. What moved in the funnel (unique leads)</h3>
         <p className="stat-hint" style={{ marginTop: 0 }}>
-          Stage changes — each number is a prospect, not an email.
+          Stage changes — each number is a prospect, not an email. Click any card to inspect prospects.
         </p>
         <div className="grid grid-4">
-          <StatCard label="Leads touched" value={totals.leadsTouched} hint="Unique prospects worked" />
-          <StatCard label="Replies received" value={totals.replies} />
+          <StatCard
+            label="Leads touched"
+            value={totals.leadsTouched}
+            hint="Unique prospects worked"
+            onClick={() => openDrilldown('leads_touched', 'Unique leads touched')}
+          />
+          <StatCard
+            label="Replies received"
+            value={totals.replies}
+            onClick={() => openDrilldown('email_replies', 'Replies received')}
+          />
           <StatCard
             label="→ Engaged"
             value={totals.toEngaged ?? totals.toConversation}
             hint="Prospects who replied / engaged"
+            onClick={() => openDrilldown('to_engaged', 'Moved to Engaged')}
           />
-          <StatCard label="→ Demo booked" value={totals.toDemo} />
+          <StatCard
+            label="→ Demo booked"
+            value={totals.toDemo}
+            onClick={() => openDrilldown('to_demo', 'Demos booked')}
+          />
         </div>
         <div className="grid grid-4" style={{ marginTop: '0.75rem' }}>
-          <StatCard label="→ Trial / test" value={totals.toTrial} />
-          <StatCard label="Paid" value={totals.paid} />
-          <StatCard label="Follow-ups completed" value={totals.followupsCompleted} />
-          <StatCard label="Meetings logged" value={totals.meetings} />
+          <StatCard
+            label="→ Trial / test"
+            value={totals.toTrial}
+            onClick={() => openDrilldown('to_trial', 'Trial / test leads')}
+          />
+          <StatCard
+            label="Paid"
+            value={totals.paid}
+            onClick={() => openDrilldown('paid', 'Paid leads')}
+          />
+          <StatCard
+            label="Follow-ups completed"
+            value={totals.followupsCompleted}
+            onClick={() => openDrilldown('followups_completed', 'Follow-ups completed')}
+          />
+          <StatCard
+            label="Meetings logged"
+            value={totals.meetings}
+            onClick={() => openDrilldown('meetings', 'Meetings logged')}
+          />
         </div>
       </div>
 
+      {/* Section 3: Per BD comparison */}
       {showTeamTable ? (
         <div className="card" style={{ marginBottom: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div>
               <h3 style={{ margin: 0 }}>3. Per BD comparison</h3>
               <p className="stat-hint" style={{ margin: '0.25rem 0 0' }}>
-                Click a name to see their activity feed. Sort is by total outreach.
+                Click any cell count to view exact working for that rep. Click name to filter activity feed below.
               </p>
             </div>
             {focusUserId ? (
@@ -216,26 +275,92 @@ export default function TelesalesWorkingPage() {
                   <tr
                     key={r.id}
                     style={{
-                      cursor: 'pointer',
                       background:
                         focusUserId === r.id
                           ? 'color-mix(in srgb, var(--brand-primary) 12%, transparent)'
                           : undefined,
                     }}
-                    onClick={() => setFocusUser(r.id)}
                   >
-                    <td>
-                      <strong>{r.name}</strong>
+                    <td
+                      style={{ cursor: 'pointer', fontWeight: 600 }}
+                      onClick={() => setFocusUser(r.id)}
+                      title="Filter feed below"
+                    >
+                      {r.name}
                     </td>
-                    <td>{r.leadsAdded}</td>
-                    <td>{(r.emails || 0) + (r.emailFollowups || 0)}</td>
-                    <td>{r.linkedin}</td>
-                    <td>{r.calls}</td>
-                    <td>{r.leadsTouched}</td>
-                    <td>{r.toEngaged ?? r.toConversation}</td>
-                    <td>{r.toDemo}</td>
-                    <td>{r.paid}</td>
-                    <td>{r.overdueFollowups}</td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('leads_added', `${r.name}: Leads added`, r.id)}
+                      >
+                        {r.leadsAdded}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('emails_sent', `${r.name}: Emails sent`, r.id)}
+                      >
+                        {(r.emails || 0) + (r.emailFollowups || 0)}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('linkedin', `${r.name}: LinkedIn actions`, r.id)}
+                      >
+                        {r.linkedin}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('calls', `${r.name}: Calls`, r.id)}
+                      >
+                        {r.calls}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('leads_touched', `${r.name}: Leads touched`, r.id)}
+                      >
+                        {r.leadsTouched}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('to_engaged', `${r.name}: Engaged`, r.id)}
+                      >
+                        {r.toEngaged ?? r.toConversation}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('to_demo', `${r.name}: Demos booked`, r.id)}
+                      >
+                        {r.toDemo}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('paid', `${r.name}: Paid`, r.id)}
+                      >
+                        {r.paid}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        style={{ color: r.overdueFollowups > 0 ? 'var(--danger)' : undefined }}
+                        onClick={() => openDrilldown('followups_overdue', `${r.name}: Overdue follow-ups`, r.id)}
+                      >
+                        {r.overdueFollowups}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -264,25 +389,24 @@ export default function TelesalesWorkingPage() {
                 <tbody>
                   {(feed || []).length ? (
                     feed.map((a) => (
-                      <tr key={a.id}>
+                      <tr
+                        key={a.id}
+                        className="clickable-row"
+                        style={{ cursor: a.lead_id ? 'pointer' : 'default' }}
+                        onClick={() => a.lead_id && setActiveLeadId(a.lead_id)}
+                      >
                         <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(a.created_at)}</td>
                         <td>{ACTIVITY_LABELS[a.type] || a.type}</td>
                         <td>
                           {a.lead_id ? (
-                            <Link
-                              to={`/leads?id=${a.lead_id}`}
-                              style={{ color: 'var(--brand-primary)', fontWeight: 600 }}
-                            >
-                              {a.lead_name || 'Lead'}
-                            </Link>
+                            <span style={{ color: 'var(--brand-primary)', fontWeight: 500 }}>
+                              {a.lead_name || a.lead_email || a.lead_id}
+                            </span>
                           ) : (
                             '—'
                           )}
                         </td>
-                        <td>
-                          {a.summary}
-                          {a.outcome ? <span className="stat-hint"> · {a.outcome}</span> : null}
-                        </td>
+                        <td>{a.summary}</td>
                       </tr>
                     ))
                   ) : (
@@ -298,33 +422,40 @@ export default function TelesalesWorkingPage() {
           </div>
 
           <div className="card">
-            <h3 style={{ marginTop: 0 }}>Leads added</h3>
+            <h3 style={{ marginTop: 0 }}>
+              Leads added
+              {focusRep ? ` · ${focusRep.name}` : ''}
+            </h3>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
                     <th>When</th>
                     <th>Name</th>
-                    <th>How</th>
                     <th>Status</th>
+                    <th>Method</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(leadsCreated || []).length ? (
                     leadsCreated.map((l) => (
-                      <tr key={l.id}>
+                      <tr
+                        key={l.id}
+                        className="clickable-row"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setActiveLeadId(l.id)}
+                      >
                         <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(l.created_at)}</td>
                         <td>
-                          <Link
-                            to={`/leads?id=${l.id}`}
-                            style={{ color: 'var(--brand-primary)', fontWeight: 600 }}
-                          >
+                          <span style={{ color: 'var(--brand-primary)', fontWeight: 500 }}>
                             {l.name}
-                          </Link>
+                          </span>
                         </td>
-                        <td>{l.addMethod === 'csv' ? 'CSV' : 'Manual'}</td>
                         <td>
                           <StatusBadge status={l.status} />
+                        </td>
+                        <td>
+                          <span className="badge badge-grey">{l.addMethod}</span>
                         </td>
                       </tr>
                     ))
@@ -340,21 +471,28 @@ export default function TelesalesWorkingPage() {
             </div>
           </div>
         </div>
-      ) : (
-        <div className="card">
-          <p className="page-sub" style={{ margin: 0 }}>
-            Select a BD above to see their call comments, notes, and leads added.
-          </p>
-        </div>
+      ) : null}
+
+      {/* Drilldown Modal */}
+      {drilldown && (
+        <DrilldownModal
+          title={drilldown.title}
+          metric={drilldown.metric}
+          period={drilldown.period}
+          userId={drilldown.userId}
+          onClose={() => setDrilldown(null)}
+          onOpenLead={(id) => setActiveLeadId(id)}
+        />
       )}
 
-      {user?.role === 'telesales' && !totals.totalOutreach && !totals.leadsAdded ? (
-        <div className="card" style={{ marginTop: '1rem' }}>
-          <p style={{ margin: 0 }}>
-            Tip: log every call, LinkedIn touch, and email from the lead panel so your working shows here.
-          </p>
-        </div>
-      ) : null}
+      {/* Lead Detail Drawer */}
+      {activeLeadId && (
+        <LeadPanel
+          leadId={activeLeadId}
+          onClose={() => setActiveLeadId(null)}
+          onChanged={() => {}}
+        />
+      )}
     </div>
   );
 }

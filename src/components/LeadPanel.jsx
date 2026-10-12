@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Phone, MessageSquare, CalendarPlus, X, Mail, Linkedin } from 'lucide-react';
+import { Phone, MessageSquare, CalendarPlus, X, Mail, Linkedin, Facebook, Instagram, Trash2 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { fmtDate, money, SourceBadge, StatusBadge, FUNNEL_STATUSES } from './Badges.jsx';
+import {
+  fmtDate,
+  money,
+  SourceBadge,
+  StatusBadge,
+  FUNNEL_STATUSES,
+  BusinessTypeBadge,
+  BUSINESS_TYPE_LABELS,
+} from './Badges.jsx';
 
 const STATUSES = FUNNEL_STATUSES;
 
@@ -24,6 +32,8 @@ const ACTIVITY_TYPES = [
   { value: 'email', label: 'Email' },
   { value: 'email_followup', label: 'Email follow-up' },
   { value: 'linkedin', label: 'LinkedIn touch' },
+  { value: 'facebook', label: 'Facebook message / DM' },
+  { value: 'instagram', label: 'Instagram DM' },
   { value: 'reply', label: 'Reply' },
   { value: 'demo_shown', label: 'Demo shown' },
   { value: 'note', label: 'Comment / note' },
@@ -225,8 +235,10 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
       phone: lead.phone || '',
       company: lead.company || '',
       industry: lead.industry || '',
+      business_type: lead.business_type || '',
       state: lead.state || '',
       job_title: lead.job_title || '',
+      source: lead.source || 'telesales',
       notes: lead.notes || '',
       estimated_value: lead.estimated_value ?? '',
       next_follow_up_at: lead.next_follow_up_at
@@ -249,8 +261,10 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
           phone: editForm.phone || null,
           company: editForm.company || null,
           industry: editForm.industry,
+          business_type: editForm.business_type || null,
           state: editForm.state || null,
           job_title: editForm.job_title || null,
+          source: editForm.source || undefined,
           notes: editForm.notes || null,
           estimated_value: editForm.estimated_value === '' ? 0 : Number(editForm.estimated_value),
           next_follow_up_at: editForm.next_follow_up_at
@@ -259,6 +273,42 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
         },
       });
       setShowEdit(false);
+      await load();
+      notifyChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetLinkedIn = async () => {
+    if (
+      !window.confirm(
+        'Clear all LinkedIn outreach counters and remove accidental LinkedIn activity logs for this lead?',
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/leads/${leadId}/reset-linkedin`, { method: 'POST' });
+      await load();
+      notifyChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteActivity = async (activityId) => {
+    if (!window.confirm('Delete this activity entry?')) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/leads/${leadId}/activities/${activityId}`, { method: 'DELETE' });
       await load();
       notifyChanged();
     } catch (err) {
@@ -483,7 +533,10 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
           <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
             {lead ? (
               <>
-                <h2 className="lead-drawer-title">{lead.name}</h2>
+                <h2 className="lead-drawer-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span>{lead.name}</span>
+                  {lead.business_type ? <BusinessTypeBadge type={lead.business_type} /> : null}
+                </h2>
                 <div className="lead-drawer-contact">
                   {lead.phone ? (
                     <a href={`tel:${lead.phone}`} className="lead-drawer-phone">
@@ -546,6 +599,14 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                         BMGenie product signal: used free credit, no purchase (not from Brevo).
                       </div>
                     ) : null}
+                  </div>
+                  <div>
+                    <div className="stat-label">Business type</div>
+                    {lead.business_type ? (
+                      <BusinessTypeBadge type={lead.business_type} />
+                    ) : (
+                      <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>—</span>
+                    )}
                   </div>
                   <div>
                     <div className="stat-label">Added by</div>
@@ -640,6 +701,21 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       />
                     </div>
                     <div className="field">
+                      <label className="label">Business type</label>
+                      <select
+                        className="select"
+                        value={editForm.business_type || ''}
+                        onChange={(e) => setEditForm({ ...editForm, business_type: e.target.value })}
+                      >
+                        <option value="">Select business type…</option>
+                        {Object.entries(BUSINESS_TYPE_LABELS).map(([k, label]) => (
+                          <option key={k} value={k}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
                       <label className="label">Next follow-up date</label>
                       <input
                         className="input"
@@ -647,6 +723,21 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                         value={editForm.next_follow_up_at || ''}
                         onChange={(e) => setEditForm({ ...editForm, next_follow_up_at: e.target.value })}
                       />
+                    </div>
+                    <div className="field">
+                      <label className="label">Source</label>
+                      <select
+                        className="select"
+                        value={editForm.source || 'telesales'}
+                        onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                      >
+                        <option value="telesales">BD</option>
+                        <option value="linkedin">LinkedIn</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="manual">Manual</option>
+                        <option value="csv_import">CSV / Google Sheet</option>
+                      </select>
                     </div>
                     <div className="field">
                       <label className="label">Notes</label>
@@ -670,9 +761,28 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
               </section>
 
               <section className="lead-drawer-section">
-                <h3 className="lead-drawer-h3">
-                  <Linkedin size={16} /> LinkedIn outreach
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <h3 className="lead-drawer-h3" style={{ margin: 0 }}>
+                    <Linkedin size={16} /> LinkedIn outreach
+                  </h3>
+                  {canEditLead &&
+                  (lead.linkedin_connection_sent > 0 ||
+                    lead.linkedin_connection_accepted > 0 ||
+                    lead.linkedin_messages_sent > 0 ||
+                    lead.linkedin_replies > 0 ||
+                    lead.linkedin_followups_sent > 0 ||
+                    lead.linkedin_meetings > 0) ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+                      disabled={busy}
+                      onClick={resetLinkedIn}
+                    >
+                      Clear metrics
+                    </button>
+                  ) : null}
+                </div>
                 <div className="linkedin-metrics">
                   <div>
                     <strong>{lead.linkedin_connection_sent || 0}</strong>
@@ -1276,11 +1386,30 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 <h3 className="lead-drawer-h3">Activity history</h3>
                 <ul className="lead-activity-list">
                   {(lead.activities || []).map((a) => (
-                    <li key={a.id}>
-                      <strong style={{ textTransform: 'capitalize' }}>{a.type}</strong> — {a.summary}
-                      <div className="muted-line">
-                        {a.user_name || 'System'} · {fmtDate(a.created_at)}
+                    <li
+                      key={a.id}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <strong style={{ textTransform: 'capitalize' }}>
+                          {String(a.type || '').replace(/_/g, ' ')}
+                        </strong>{' '}
+                        — {a.summary}
+                        <div className="muted-line">
+                          {a.user_name || 'System'} · {fmtDate(a.created_at)}
+                        </div>
                       </div>
+                      {canEditLead && !busy ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ padding: '0.2rem 0.4rem', color: '#e11d48' }}
+                          title="Delete activity log"
+                          onClick={() => deleteActivity(a.id)}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      ) : null}
                     </li>
                   ))}
                   {!lead.activities?.length ? <li className="empty">No activity yet</li> : null}

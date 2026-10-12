@@ -224,7 +224,6 @@ export default function EmailRepliesPage() {
                 {canSeeAll ? <th>BD / sent by</th> : null}
                 <th>Subject</th>
                 <th>Preview</th>
-                <th />
               </tr>
             </thead>
             <tbody>
@@ -234,41 +233,41 @@ export default function EmailRepliesPage() {
                   className="clickable-row"
                   style={{ fontWeight: r.read_at ? 400 : 600, cursor: 'pointer' }}
                   onClick={() => openReply(r)}
+                  title="Click to open conversation thread"
                 >
-                  <td>{fmtDate(r.received_at)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.received_at)}</td>
                   <td>
-                    {r.from_name ? `${r.from_name} ` : null}
+                    {r.from_name ? <span>{r.from_name} </span> : null}
                     {r.from_email ? (
-                      <a
-                        href={`mailto:${r.from_email}`}
-                        style={{ color: 'var(--brand-primary)' }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
+                      <span style={{ color: 'var(--brand-primary)' }}>
                         {r.from_email}
-                      </a>
+                      </span>
                     ) : (
                       '—'
                     )}
+                    {r.thread_count > 1 ? (
+                      <span className="badge badge-blue" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
+                        {r.thread_count} msgs
+                      </span>
+                    ) : null}
                   </td>
-                  <td>{r.lead_name || r.lead_email || '—'}</td>
+                  <td>
+                    <span style={{ fontWeight: 500 }}>{r.lead_name || r.lead_email || '—'}</span>
+                  </td>
                   {canSeeAll ? (
                     <td>{r.sent_by_name || r.assigned_to_name || '—'}</td>
                   ) : null}
-                  <td style={{ maxWidth: 200 }}>{r.subject || r.original_subject || '—'}</td>
-                  <td style={{ maxWidth: 280 }}>
-                    {r.hasBody ? r.preview || '—' : (
-                      <span className="stat-hint">Reply notified (body pending inbound)</span>
-                    )}
+                  <td style={{ maxWidth: 220 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.subject || r.original_subject || '—'}
+                    </div>
                   </td>
-                  <td style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="btn btn-ghost" onClick={() => openReply(r)}>
-                      View thread
-                    </button>
-                    {r.lead_id ? (
-                      <Link className="btn btn-ghost" to={`/leads?id=${r.lead_id}`}>
-                        Lead
-                      </Link>
-                    ) : null}
+                  <td style={{ maxWidth: 300 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.hasBody ? r.preview || '—' : (
+                        <span className="stat-hint">Reply notified (body pending inbound)</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -308,75 +307,110 @@ export default function EmailRepliesPage() {
               </p>
             )}
 
-            <ThreadBlock
-              title="We sent"
-              tone="sent"
-              meta={
-                original
-                  ? [
-                      original.subject || '(no subject)',
-                      original.sentByName ? `by ${original.sentByName}` : null,
-                      original.sentAt ? fmtDate(original.sentAt) : null,
-                      original.toEmail ? `to ${original.toEmail}` : null,
+            {selected.thread && selected.thread.length > 0 ? (
+              selected.thread.map((msg, idx) => (
+                <ThreadBlock
+                  key={msg.id || idx}
+                  title={
+                    msg.direction === 'sent'
+                      ? `We sent · ${msg.senderName}`
+                      : `They replied · ${msg.senderName}`
+                  }
+                  tone={msg.direction === 'sent' ? 'sent' : 'reply'}
+                  meta={[
+                    msg.subject || null,
+                    msg.date ? fmtDate(msg.date) : null,
+                    msg.toEmail ? `to ${msg.toEmail}` : null,
+                    msg.fromEmail ? `from ${msg.fromEmail}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                >
+                  <MessageBody
+                    html={msg.htmlContent}
+                    text={msg.textContent}
+                    markdown={msg.markdownContent}
+                    emptyHint={
+                      msg.direction === 'sent'
+                        ? 'Body not stored for this send.'
+                        : 'No reply body stored yet. Enable Brevo Inbound Parsing so the full message is captured.'
+                    }
+                  />
+                </ThreadBlock>
+              ))
+            ) : (
+              <>
+                <ThreadBlock
+                  title="We sent"
+                  tone="sent"
+                  meta={
+                    original
+                      ? [
+                          original.subject || '(no subject)',
+                          original.sentByName ? `by ${original.sentByName}` : null,
+                          original.sentAt ? fmtDate(original.sentAt) : null,
+                          original.toEmail ? `to ${original.toEmail}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                      : null
+                  }
+                >
+                  {original ? (
+                    <MessageBody
+                      html={original.htmlContent}
+                      text={original.textContent}
+                      emptyHint="Original email body was not stored (sent before body logging). Subject and sender are still available above."
+                    />
+                  ) : (
+                    <span className="stat-hint">
+                      No linked outbound email found for this reply yet.
+                    </span>
+                  )}
+                </ThreadBlock>
+
+                <ThreadBlock
+                  title="They replied"
+                  tone="reply"
+                  meta={[
+                    selected.from_name || selected.from_email || 'unknown',
+                    selected.from_email ? `<${selected.from_email}>` : null,
+                    fmtDate(selected.received_at),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                >
+                  <MessageBody
+                    html={selected.body_html}
+                    text={selected.body_text}
+                    markdown={selected.body_markdown}
+                    emptyHint="No reply body stored yet. Enable Brevo Inbound Parsing so the full message is captured."
+                  />
+                </ThreadBlock>
+
+                {crmReplies.map((cr, idx) => (
+                  <ThreadBlock
+                    key={cr.id}
+                    title={idx === 0 ? 'We replied from CRM' : 'CRM follow-up'}
+                    tone="sent"
+                    meta={[
+                      cr.subject || null,
+                      cr.sentByName ? `by ${cr.sentByName}` : null,
+                      cr.sentAt ? fmtDate(cr.sentAt) : null,
+                      cr.toEmail ? `to ${cr.toEmail}` : null,
                     ]
                       .filter(Boolean)
-                      .join(' · ')
-                  : null
-              }
-            >
-              {original ? (
-                <MessageBody
-                  html={original.htmlContent}
-                  text={original.textContent}
-                  emptyHint="Original email body was not stored (sent before body logging). Subject and sender are still available above."
-                />
-              ) : (
-                <span className="stat-hint">
-                  No linked outbound email found for this reply yet.
-                </span>
-              )}
-            </ThreadBlock>
-
-            <ThreadBlock
-              title="They replied"
-              tone="reply"
-              meta={[
-                selected.from_name || selected.from_email || 'unknown',
-                selected.from_email ? `<${selected.from_email}>` : null,
-                fmtDate(selected.received_at),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            >
-              <MessageBody
-                html={selected.body_html}
-                text={selected.body_text}
-                markdown={selected.body_markdown}
-                emptyHint="No reply body stored yet. Enable Brevo Inbound Parsing so the full message is captured."
-              />
-            </ThreadBlock>
-
-            {crmReplies.map((cr, idx) => (
-              <ThreadBlock
-                key={cr.id}
-                title={idx === 0 ? 'We replied from CRM' : 'CRM follow-up'}
-                tone="sent"
-                meta={[
-                  cr.subject || null,
-                  cr.sentByName ? `by ${cr.sentByName}` : null,
-                  cr.sentAt ? fmtDate(cr.sentAt) : null,
-                  cr.toEmail ? `to ${cr.toEmail}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              >
-                <MessageBody
-                  html={cr.htmlContent}
-                  text={cr.textContent}
-                  emptyHint="Body not stored for this send."
-                />
-              </ThreadBlock>
-            ))}
+                      .join(' · ')}
+                  >
+                    <MessageBody
+                      html={cr.htmlContent}
+                      text={cr.textContent}
+                      emptyHint="Body not stored for this send."
+                    />
+                  </ThreadBlock>
+                ))}
+              </>
+            )}
 
             {canReply && selected.lead_id && recipient ? (
               <div style={{ marginTop: '1.25rem' }}>

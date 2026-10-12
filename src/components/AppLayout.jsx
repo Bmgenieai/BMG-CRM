@@ -16,6 +16,9 @@ import {
   ClipboardList,
   ChevronDown,
   ChevronRight,
+  Linkedin,
+  Facebook,
+  Instagram,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -44,6 +47,7 @@ const STATUS_TABS = [
 ];
 
 const STATUS_SLUGS = new Set(STATUS_TABS.map((t) => t.slug));
+const SOCIAL_SLUGS = new Set(['linkedin', 'facebook', 'instagram']);
 
 const PRODUCT_TABS = [
   { slug: 'signup', label: 'Signup · no purchase' },
@@ -225,6 +229,39 @@ export default function AppLayout({ children }) {
               </div>
             ) : null}
           </div>
+
+          <NavLink
+            to="/leads/linkedin"
+            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+          >
+            <Linkedin size={16} />
+            <span style={{ flex: 1 }}>LinkedIn leads</span>
+            {counts?.socialCounts?.linkedin != null ? (
+              <span className="nav-count">{counts.socialCounts.linkedin}</span>
+            ) : null}
+          </NavLink>
+
+          <NavLink
+            to="/leads/facebook"
+            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+          >
+            <Facebook size={16} />
+            <span style={{ flex: 1 }}>Facebook leads</span>
+            {counts?.socialCounts?.facebook != null ? (
+              <span className="nav-count">{counts.socialCounts.facebook}</span>
+            ) : null}
+          </NavLink>
+
+          <NavLink
+            to="/leads/instagram"
+            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+          >
+            <Instagram size={16} />
+            <span style={{ flex: 1 }}>Instagram leads</span>
+            {counts?.socialCounts?.instagram != null ? (
+              <span className="nav-count">{counts.socialCounts.instagram}</span>
+            ) : null}
+          </NavLink>
 
           <NavSection
             label="From bmgenie.ai"
