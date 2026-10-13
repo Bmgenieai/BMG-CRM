@@ -71,6 +71,7 @@ const EMPTY_FORM = {
   contact_format: 'company',
   name: '',
   email: '',
+  linkedin_url: '',
   phone: '',
   company: '',
   state: '',
@@ -304,10 +305,13 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     }
     try {
       const isCompany = form.contact_format === 'company';
+      const source =
+        form.source || preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual');
       const body = {
         contact_format: form.contact_format,
         name: form.name,
         email: form.email || undefined,
+        linkedin_url: form.linkedin_url || undefined,
         phone: form.phone || undefined,
         company: isCompany ? form.name : form.company || undefined,
         state: form.state || undefined,
@@ -317,7 +321,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         notes: form.notes || undefined,
         estimated_value: form.estimated_value === '' ? 0 : Number(form.estimated_value),
         country: form.country || undefined,
-        source: form.source || preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual'),
+        source,
       };
       const created = await api('/leads', { method: 'POST', body });
       setShowCreate(false);
@@ -734,11 +738,25 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                   ))}
                 </datalist>
               </div>
+              {form.source === 'linkedin' ? (
+                <div className="field">
+                  <label className="label">LinkedIn profile URL</label>
+                  <input
+                    className="input"
+                    type="text"
+                    inputMode="url"
+                    placeholder="https://www.linkedin.com/in/…"
+                    value={form.linkedin_url}
+                    onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })}
+                  />
+                </div>
+              ) : null}
               <div className="field">
                 <label className="label">Email</label>
                 <input
                   className="input"
                   type="email"
+                  placeholder={form.source === 'linkedin' ? 'Optional — add when you find it' : undefined}
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                 />

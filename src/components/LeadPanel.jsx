@@ -239,6 +239,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setEditForm({
       name: lead.name || '',
       email: lead.email || '',
+      linkedin_url: lead.linkedin_url || '',
       phone: lead.phone || '',
       company: lead.company || '',
       industry: lead.industry || '',
@@ -265,6 +266,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
         body: {
           name: editForm.name,
           email: editForm.email || null,
+          linkedin_url: editForm.linkedin_url || null,
           phone: editForm.phone || null,
           company: editForm.company || null,
           industry: editForm.industry,
@@ -571,6 +573,16 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       <Mail size={14} /> {lead.email}
                     </a>
                   ) : null}
+                  {lead.linkedin_url ? (
+                    <a
+                      href={lead.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="lead-drawer-phone"
+                    >
+                      <Linkedin size={14} /> LinkedIn profile
+                    </a>
+                  ) : null}
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: '0.82rem', marginTop: 4 }}>
                   {[
@@ -721,6 +733,17 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                         type="email"
                         value={editForm.email || ''}
                         onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="label">LinkedIn profile URL</label>
+                      <input
+                        className="input"
+                        type="text"
+                        inputMode="url"
+                        placeholder="https://www.linkedin.com/in/…"
+                        value={editForm.linkedin_url || ''}
+                        onChange={(e) => setEditForm({ ...editForm, linkedin_url: e.target.value })}
                       />
                     </div>
                     <div className="field">
