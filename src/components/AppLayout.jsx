@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -19,6 +19,7 @@ import {
   Linkedin,
   Facebook,
   Instagram,
+  User,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -100,6 +101,8 @@ export default function AppLayout({ children }) {
   const [productOpen, setProductOpen] = useState(false);
   const [inboundOpen, setInboundOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   const statusPathOpen = (() => {
     const m = location.pathname.match(/^\/leads\/([^/]+)/);
@@ -135,6 +138,24 @@ export default function AppLayout({ children }) {
       .then(setCounts)
       .catch(() => setCounts(null));
   }, []);
+
+  useEffect(() => {
+    if (!profileOpen) return undefined;
+    const onPointerDown = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setProfileOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [profileOpen]);
 
   const refreshCounts = () => {
     api('/leads/counts')
@@ -335,21 +356,37 @@ export default function AppLayout({ children }) {
       </aside>
       <div className="content-area">
         <header className="app-topbar">
-          <div className="user-chip">
-            <div className="user-chip-meta">
-              <strong>{user?.name}</strong>
-              <span>{roleDisplay}</span>
-            </div>
+          <div className="profile-menu" ref={profileRef}>
             <button
               type="button"
-              className="btn btn-ghost"
-              onClick={() => {
-                logout();
-                navigate('/login');
-              }}
+              className="profile-menu-trigger"
+              aria-haspopup="menu"
+              aria-expanded={profileOpen}
+              aria-label="Account menu"
+              onClick={() => setProfileOpen((o) => !o)}
             >
-              <LogOut size={16} /> Sign out
+              <User size={18} />
             </button>
+            {profileOpen ? (
+              <div className="profile-menu-dropdown" role="menu">
+                <div className="profile-menu-meta">
+                  <strong>{user?.name || '—'}</strong>
+                  <span>{roleDisplay}</span>
+                </div>
+                <button
+                  type="button"
+                  className="profile-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    logout();
+                    navigate('/login');
+                  }}
+                >
+                  <LogOut size={16} /> Sign out
+                </button>
+              </div>
+            ) : null}
           </div>
         </header>
         <main className="main">
