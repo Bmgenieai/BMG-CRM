@@ -154,6 +154,16 @@ export default function ImportPage() {
                   <td>Also <code>State</code></td>
                 </tr>
                 <tr>
+                  <td><code>business_type</code></td>
+                  <td>No</td>
+                  <td>
+                    Also <code>Business Type</code>, <code>Type</code>, <code>Segment</code>.
+                    Values: <code>realtor</code>, <code>real_estate_owner</code>, <code>agency</code>,{' '}
+                    <code>photographer</code>, <code>individual</code>, <code>other</code>
+                    — or free text like “Realtor”, “Agency” (auto-mapped)
+                  </td>
+                </tr>
+                <tr>
                   <td><code>job_title</code></td>
                   <td>No</td>
                   <td>Also <code>Job Title</code>, <code>title</code></td>
@@ -193,8 +203,8 @@ export default function ImportPage() {
             fontSize: '0.82rem',
             overflow: 'auto',
           }}
-        >{`name,contact,company,state,job_title,industry,contact_format,follow_up_notes,email,estimated_revenue
-Sunset Realty Photos,+1-602-555-0144,Sunset Realty Photos,Arizona,,Real estate photography,company,Called Mon — interested,info@sunset.com,450`}</pre>
+        >{`name,contact,company,state,job_title,industry,business_type,contact_format,follow_up_notes,email,estimated_revenue
+Sunset Realty Photos,+1-602-555-0144,Sunset Realty Photos,Arizona,,Real estate photography,photographer,company,Called Mon — interested,info@sunset.com,450`}</pre>
         <p style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: 0 }}>
           Template: <code>backend/sample-leads.csv</code>
         </p>
