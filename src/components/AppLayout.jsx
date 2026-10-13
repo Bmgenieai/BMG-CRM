@@ -332,28 +332,32 @@ export default function AppLayout({ children }) {
             ))}
           </NavSection>
         </nav>
-
-        <div className="user-chip">
-          <strong>{user?.name}</strong>
-          <span>{roleDisplay}</span>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ justifyContent: 'flex-start', paddingLeft: 0 }}
-            onClick={() => {
-              logout();
-              navigate('/login');
-            }}
-          >
-            <LogOut size={16} /> Sign out
-          </button>
-        </div>
       </aside>
-      <main className="main">
-        {React.isValidElement(children)
-          ? React.cloneElement(children, { refreshSidebarCounts: refreshCounts })
-          : children}
-      </main>
+      <div className="content-area">
+        <header className="app-topbar">
+          <div className="user-chip">
+            <div className="user-chip-meta">
+              <strong>{user?.name}</strong>
+              <span>{roleDisplay}</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                logout();
+                navigate('/login');
+              }}
+            >
+              <LogOut size={16} /> Sign out
+            </button>
+          </div>
+        </header>
+        <main className="main">
+          {React.isValidElement(children)
+            ? React.cloneElement(children, { refreshSidebarCounts: refreshCounts })
+            : children}
+        </main>
+      </div>
     </div>
   );
 }
