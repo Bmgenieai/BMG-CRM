@@ -100,7 +100,7 @@ export default function DashboardPage() {
       >
         <div>
           <h1 className="page-title" style={{ margin: 0 }}>
-            {user.role === 'ceo' ? 'CEO command center' : user.role === 'manager' ? 'Manager overview' : 'My dashboard'}
+            {user.role === 'ceo' ? 'Command center' : user.role === 'manager' ? 'Manager overview' : 'My dashboard'}
           </h1>
           <p className="page-sub" style={{ margin: '0.25rem 0 0' }}>
             Activities = work volume. Funnel = unique leads (one prospect, one stage). Click any number to see exact leads/working.
