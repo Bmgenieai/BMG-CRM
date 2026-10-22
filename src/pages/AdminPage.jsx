@@ -19,6 +19,11 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [revenueAmount, setRevenueAmount] = useState('');
   const [revenueLabel, setRevenueLabel] = useState('Manual revenue entry');
+  const [pwUser, setPwUser] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
 
   if (!can('admin:employees')) return <Navigate to="/" replace />;
 
@@ -49,6 +54,46 @@ export default function AdminPage() {
       body: { is_active: !u.is_active },
     });
     load();
+  };
+
+  const openSetPassword = (u) => {
+    setPwUser(u);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPwError('');
+  };
+
+  const closeSetPassword = () => {
+    setPwUser(null);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPwError('');
+  };
+
+  const savePassword = async (e) => {
+    e.preventDefault();
+    if (!pwUser) return;
+    setPwError('');
+    if (String(newPassword).length < 8) {
+      setPwError('Password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('Passwords do not match');
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await api(`/users/${pwUser.id}`, {
+        method: 'PATCH',
+        body: { password: newPassword },
+      });
+      closeSetPassword();
+    } catch (err) {
+      setPwError(err.message);
+    } finally {
+      setPwSaving(false);
+    }
   };
 
   const recordRevenue = async (e) => {
@@ -153,7 +198,10 @@ export default function AdminPage() {
                 <td>{u.role === 'telesales' ? 'BD' : u.role === 'ceo' ? 'CEO' : u.role === 'manager' ? 'Manager' : u.role}</td>
                 <td>{u.is_active ? 'Active' : 'Inactive'}</td>
                 <td>{fmtDate(u.created_at)}</td>
-                <td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button type="button" className="btn btn-ghost" onClick={() => openSetPassword(u)}>
+                    Set password
+                  </button>
                   <button type="button" className="btn btn-ghost" onClick={() => toggleActive(u)}>
                     {u.is_active ? 'Deactivate' : 'Activate'}
                   </button>
@@ -163,6 +211,69 @@ export default function AdminPage() {
           </tbody>
         </table>
       </div>
+
+      {pwUser ? (
+        <div className="modal-backdrop" onClick={closeSetPassword} role="presentation">
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="set-password-title"
+          >
+            <h3 id="set-password-title" style={{ marginTop: 0 }}>
+              Set password
+            </h3>
+            <p className="page-sub" style={{ marginTop: 0 }}>
+              {pwUser.name} · {pwUser.email}
+            </p>
+            <p className="page-sub" style={{ marginTop: 0 }}>
+              No current password needed. Share the new password with the employee securely.
+            </p>
+            <form onSubmit={savePassword}>
+              <div className="field">
+                <label className="label" htmlFor="admin-new-password">
+                  New password
+                </label>
+                <input
+                  id="admin-new-password"
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="admin-confirm-password">
+                  Confirm password
+                </label>
+                <input
+                  id="admin-confirm-password"
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </div>
+              {pwError ? <div className="login-error">{pwError}</div> : null}
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                <button className="btn btn-primary" type="submit" disabled={pwSaving}>
+                  {pwSaving ? 'Saving…' : 'Save password'}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={closeSetPassword}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
