@@ -52,6 +52,49 @@ const LINKEDIN_LOG_TYPES = [
   { value: 'meeting_scheduled', label: 'Meeting scheduled' },
 ];
 
+const FACEBOOK_LOG_TYPES = [
+  { value: 'facebook_message', label: 'Facebook message / DM sent' },
+  { value: 'facebook_reply', label: 'Facebook reply received' },
+  { value: 'facebook', label: 'Facebook touch' },
+];
+
+const INSTAGRAM_LOG_TYPES = [
+  { value: 'instagram_message', label: 'Instagram DM sent' },
+  { value: 'instagram_reply', label: 'Instagram reply received' },
+  { value: 'instagram', label: 'Instagram touch' },
+];
+
+function platformOutreachConfig(source) {
+  if (source === 'facebook') {
+    return {
+      key: 'facebook',
+      title: 'Facebook outreach',
+      Icon: Facebook,
+      logTypes: FACEBOOK_LOG_TYPES,
+      defaultType: 'facebook_message',
+      showLinkedInMetrics: false,
+    };
+  }
+  if (source === 'instagram') {
+    return {
+      key: 'instagram',
+      title: 'Instagram outreach',
+      Icon: Instagram,
+      logTypes: INSTAGRAM_LOG_TYPES,
+      defaultType: 'instagram_message',
+      showLinkedInMetrics: false,
+    };
+  }
+  return {
+    key: 'linkedin',
+    title: 'LinkedIn outreach',
+    Icon: Linkedin,
+    logTypes: LINKEDIN_LOG_TYPES,
+    defaultType: 'linkedin_connection_sent',
+    showLinkedInMetrics: true,
+  };
+}
+
 const REPLY_OUTCOMES = [
   { value: 'positive', label: 'Positive' },
   { value: 'negative', label: 'Negative' },
@@ -96,6 +139,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [liType, setLiType] = useState('linkedin_connection_sent');
   const [liNote, setLiNote] = useState('');
   const [fuDateField, setFuDateField] = useState('');
+  const outreachCfg = platformOutreachConfig(lead?.source);
+  const OutreachIcon = outreachCfg.Icon;
 
   const load = async () => {
     if (!leadId) return;
@@ -103,6 +148,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     try {
       const data = await api(`/leads/${leadId}`);
       setLead(data);
+      setLiType(platformOutreachConfig(data?.source).defaultType);
     } catch (e) {
       setLead(null);
       setError(e.message || 'Could not load lead');
@@ -127,7 +173,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setConversationLoading(false);
     setShowEdit(false);
     setEditForm({});
-    setLiType('linkedin_connection_sent');
+    setLiType(platformOutreachConfig(null).defaultType);
     setLiNote('');
     setFuDateField('');
     load();
@@ -327,12 +373,13 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     }
   };
 
-  const logLinkedIn = async (e) => {
+  const logPlatformOutreach = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError('');
     try {
-      const label = LINKEDIN_LOG_TYPES.find((t) => t.value === liType)?.label || liType;
+      const cfg = platformOutreachConfig(lead?.source);
+      const label = cfg.logTypes.find((t) => t.value === liType)?.label || liType;
       await api(`/leads/${leadId}/activities`, {
         method: 'POST',
         body: {
@@ -628,7 +675,14 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 <div className="lead-drawer-meta-grid">
                   <div>
                     <div className="stat-label">Source</div>
-                    <SourceBadge source={lead.source} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <SourceBadge source={lead.source} />
+                      {Number(lead.times_added) > 1 ? (
+                        <span className="badge badge-amber" title="How many times this lead was added">
+                          Added {lead.times_added}×
+                        </span>
+                      ) : null}
+                    </div>
                     {lead.source === 'free_credit_no_purchase' ? (
                       <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 4 }}>
                         BMGenie product signal: used free credit, no purchase (not from Brevo).
@@ -843,9 +897,10 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
               <section className="lead-drawer-section">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <h3 className="lead-drawer-h3" style={{ margin: 0 }}>
-                    <Linkedin size={16} /> LinkedIn outreach
+                    <OutreachIcon size={16} /> {outreachCfg.title}
                   </h3>
                   {canEditLead &&
+                  outreachCfg.showLinkedInMetrics &&
                   (lead.linkedin_connection_sent > 0 ||
                     lead.linkedin_connection_accepted > 0 ||
                     lead.linkedin_messages_sent > 0 ||
@@ -863,42 +918,50 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     </button>
                   ) : null}
                 </div>
-                <div className="linkedin-metrics">
-                  <div>
-                    <strong>{lead.linkedin_connection_sent || 0}</strong>
-                    <span>Requests sent</span>
+                {outreachCfg.showLinkedInMetrics ? (
+                  <div className="linkedin-metrics">
+                    <div>
+                      <strong>{lead.linkedin_connection_sent || 0}</strong>
+                      <span>Requests sent</span>
+                    </div>
+                    <div>
+                      <strong>{lead.linkedin_connection_accepted || 0}</strong>
+                      <span>Accepted</span>
+                    </div>
+                    <div>
+                      <strong>{lead.linkedin_messages_sent || 0}</strong>
+                      <span>InMails / DMs</span>
+                    </div>
+                    <div>
+                      <strong>{lead.linkedin_replies || 0}</strong>
+                      <span>Replies</span>
+                    </div>
+                    <div>
+                      <strong>{lead.linkedin_followups_sent || 0}</strong>
+                      <span>Follow-ups</span>
+                    </div>
+                    <div>
+                      <strong>{lead.linkedin_meetings || 0}</strong>
+                      <span>Meetings</span>
+                    </div>
                   </div>
-                  <div>
-                    <strong>{lead.linkedin_connection_accepted || 0}</strong>
-                    <span>Accepted</span>
-                  </div>
-                  <div>
-                    <strong>{lead.linkedin_messages_sent || 0}</strong>
-                    <span>InMails / DMs</span>
-                  </div>
-                  <div>
-                    <strong>{lead.linkedin_replies || 0}</strong>
-                    <span>Replies</span>
-                  </div>
-                  <div>
-                    <strong>{lead.linkedin_followups_sent || 0}</strong>
-                    <span>Follow-ups</span>
-                  </div>
-                  <div>
-                    <strong>{lead.linkedin_meetings || 0}</strong>
-                    <span>Meetings</span>
-                  </div>
-                </div>
+                ) : (
+                  <p className="stat-hint" style={{ marginTop: 0 }}>
+                    Log {outreachCfg.key === 'facebook' ? 'Facebook' : 'Instagram'} DMs and replies
+                    here — they count under {outreachCfg.key === 'facebook' ? 'Facebook' : 'Instagram'},
+                    not LinkedIn actions.
+                  </p>
+                )}
                 {canEditLead ? (
-                  <form onSubmit={logLinkedIn} style={{ marginTop: 12 }}>
+                  <form onSubmit={logPlatformOutreach} style={{ marginTop: 12 }}>
                     <div className="field">
-                      <label className="label">Log LinkedIn activity</label>
+                      <label className="label">Log {outreachCfg.title.replace(' outreach', '')} activity</label>
                       <select
                         className="select"
                         value={liType}
                         onChange={(e) => setLiType(e.target.value)}
                       >
-                        {LINKEDIN_LOG_TYPES.map((t) => (
+                        {outreachCfg.logTypes.map((t) => (
                           <option key={t.value} value={t.value}>
                             {t.label}
                           </option>
@@ -923,11 +986,11 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       />
                     </div>
                     <button type="submit" className="btn btn-primary" disabled={busy}>
-                      Log LinkedIn activity
+                      Log {outreachCfg.title.replace(' outreach', '')} activity
                     </button>
                   </form>
                 ) : (
-                  <p className="stat-hint">View only — BDs log LinkedIn from their account</p>
+                  <p className="stat-hint">View only — BDs log outreach from their account</p>
                 )}
               </section>
 
@@ -1410,7 +1473,12 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   <div className="field">
                     <label className="label">Type</label>
                     <select className="select" value={callType} onChange={(e) => setCallType(e.target.value)}>
-                      {ACTIVITY_TYPES.map((t) => (
+                      {ACTIVITY_TYPES.filter((t) => {
+                        if (lead.source === 'facebook') return t.value !== 'linkedin' && t.value !== 'instagram';
+                        if (lead.source === 'instagram') return t.value !== 'linkedin' && t.value !== 'facebook';
+                        if (lead.source === 'linkedin') return t.value !== 'facebook' && t.value !== 'instagram';
+                        return true;
+                      }).map((t) => (
                         <option key={t.value} value={t.value}>
                           {t.label}
                         </option>

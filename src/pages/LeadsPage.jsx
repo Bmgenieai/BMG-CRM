@@ -152,6 +152,8 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     source: user?.role === 'telesales' ? 'telesales' : 'manual',
   }));
   const [error, setError] = useState('');
+  const [dupWarning, setDupWarning] = useState(null);
+  const [createBusy, setCreateBusy] = useState(false);
 
   const setCohort = (next) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -178,7 +180,42 @@ export default function LeadsPage({ refreshSidebarCounts }) {
       ...EMPTY_FORM,
       source: defaultSource,
     });
+    setDupWarning(null);
     setShowCreate(true);
+  };
+
+  const buildCreateBody = (forceDuplicate = false) => {
+    const isCompany = form.contact_format === 'company';
+    const source =
+      form.source || preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual');
+    return {
+      contact_format: form.contact_format,
+      name: form.name,
+      email: form.email || undefined,
+      linkedin_url: form.linkedin_url || undefined,
+      phone: form.phone || undefined,
+      company: isCompany ? form.name : form.company || undefined,
+      state: form.state || undefined,
+      job_title: isCompany ? undefined : form.job_title || undefined,
+      industry: form.industry.trim(),
+      business_type: form.business_type || undefined,
+      notes: form.notes || undefined,
+      estimated_value: form.estimated_value === '' ? 0 : Number(form.estimated_value),
+      country: form.country || undefined,
+      source,
+      forceDuplicate: forceDuplicate || undefined,
+    };
+  };
+
+  const finishCreate = (created) => {
+    setShowCreate(false);
+    setDupWarning(null);
+    setForm({
+      ...EMPTY_FORM,
+      source: preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual'),
+    });
+    load();
+    if (created?.id) openLead(created.id);
   };
 
   useEffect(() => {
@@ -297,42 +334,28 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     setSearchParams(next);
   };
 
-  const createLead = async (e) => {
-    e.preventDefault();
+  const createLead = async (e, { forceDuplicate = false } = {}) => {
+    e?.preventDefault?.();
     if (!form.industry.trim()) {
       setError('Industry is required');
       return;
     }
+    setCreateBusy(true);
+    setError('');
     try {
-      const isCompany = form.contact_format === 'company';
-      const source =
-        form.source || preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual');
-      const body = {
-        contact_format: form.contact_format,
-        name: form.name,
-        email: form.email || undefined,
-        linkedin_url: form.linkedin_url || undefined,
-        phone: form.phone || undefined,
-        company: isCompany ? form.name : form.company || undefined,
-        state: form.state || undefined,
-        job_title: isCompany ? undefined : form.job_title || undefined,
-        industry: form.industry.trim(),
-        business_type: form.business_type || undefined,
-        notes: form.notes || undefined,
-        estimated_value: form.estimated_value === '' ? 0 : Number(form.estimated_value),
-        country: form.country || undefined,
-        source,
-      };
-      const created = await api('/leads', { method: 'POST', body });
-      setShowCreate(false);
-      setForm({
-        ...EMPTY_FORM,
-        source: preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual'),
+      const created = await api('/leads', {
+        method: 'POST',
+        body: buildCreateBody(forceDuplicate),
       });
-      load();
-      if (created?.id) openLead(created.id);
+      finishCreate(created);
     } catch (err) {
-      setError(err.message);
+      if (err.status === 409 && err.data?.duplicate) {
+        setDupWarning(err.data);
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setCreateBusy(false);
     }
   };
 
@@ -566,6 +589,11 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                     <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{l.name}</span>
                     <StateBadge state={l.state} />
                     {l.business_type ? <BusinessTypeBadge type={l.business_type} /> : null}
+                    {Number(l.times_added) > 1 ? (
+                      <span className="badge badge-amber" title="Times this lead was added">
+                        {l.times_added}×
+                      </span>
+                    ) : null}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
                     {[
@@ -795,11 +823,81 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                   ))}
                 </select>
               </div>
+              {dupWarning ? (
+                <div
+                  className="login-error"
+                  style={{
+                    marginBottom: '0.85rem',
+                    background: 'var(--brand-soft, #fff7ed)',
+                    border: '1px solid #f59e0b',
+                    color: 'inherit',
+                  }}
+                >
+                  <strong>Possible duplicate</strong>
+                  <p style={{ margin: '0.35rem 0 0.6rem', fontSize: '0.88rem' }}>
+                    {dupWarning.message ||
+                      `A similar lead already exists (added ${dupWarning.timesAdded || 1} time${
+                        (dupWarning.timesAdded || 1) === 1 ? '' : 's'
+                      }).`}
+                  </p>
+                  <ul style={{ margin: '0 0 0.75rem', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                    {(dupWarning.matches || []).slice(0, 5).map((m) => (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ padding: 0, fontWeight: 600 }}
+                          onClick={() => {
+                            setShowCreate(false);
+                            setDupWarning(null);
+                            openLead(m.id);
+                          }}
+                        >
+                          {m.name}
+                        </button>
+                        {m.email ? ` · ${m.email}` : ''}
+                        {m.phone ? ` · ${m.phone}` : ''}
+                        {` · added ${m.times_added || 1}×`}
+                      </li>
+                    ))}
+                  </ul>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={createBusy}
+                      onClick={() => {
+                        const first = dupWarning.matches?.[0];
+                        setShowCreate(false);
+                        setDupWarning(null);
+                        if (first?.id) openLead(first.id);
+                      }}
+                    >
+                      Open existing
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={createBusy}
+                      onClick={() => createLead(null, { forceDuplicate: true })}
+                    >
+                      Add anyway
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <div className="row-actions">
-                <button type="submit" className="btn btn-primary">
-                  Create lead
+                <button type="submit" className="btn btn-primary" disabled={createBusy}>
+                  {createBusy ? 'Saving…' : 'Create lead'}
                 </button>
-                <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setShowCreate(false);
+                    setDupWarning(null);
+                  }}
+                >
                   Cancel
                 </button>
               </div>

@@ -102,7 +102,8 @@ export default function ImportPage() {
           {result ? (
             <div style={{ marginTop: '1rem', fontSize: '0.92rem' }}>
               Imported <strong>{result.imported}</strong> / {result.rowCount} rows
-              {result.skipped ? ` · skipped ${result.skipped}` : ''}. Batch {result.batchId}
+              {result.skipped ? ` · skipped ${result.skipped}` : ''}
+              {result.duplicates ? ` · duplicates ${result.duplicates}` : ''}. Batch {result.batchId}
               {result.dateAdded ? ` · Date added ${String(result.dateAdded).slice(0, 10)}` : ''}.
             </div>
           ) : null}
