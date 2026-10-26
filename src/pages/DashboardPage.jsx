@@ -151,7 +151,7 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div className="grid grid-4" style={{ marginTop: '0.75rem' }}>
+          <div className="grid grid-6" style={{ marginTop: '0.75rem' }}>
             <div
               className="stat-clickable"
               onClick={() => openDrilldown('leads_added', `Leads added (${periodObj.label})`)}
@@ -191,6 +191,34 @@ export default function DashboardPage() {
               </p>
               <span className="stat-hint" style={{ fontSize: '0.72rem' }}>
                 {bdWork.totals.linkedinConnectionSent ?? 0} requests · {bdWork.totals.linkedinMessages ?? 0} msgs
+              </span>
+            </div>
+
+            <div
+              className="stat-clickable"
+              onClick={() => openDrilldown('facebook', `Facebook actions (${periodObj.label})`)}
+              title="Click to view Facebook working"
+            >
+              <p className="stat-label">Facebook actions</p>
+              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                {bdWork.totals.facebook ?? 0}
+              </p>
+              <span className="stat-hint" style={{ fontSize: '0.72rem' }}>
+                {bdWork.totals.facebookMessages ?? 0} msgs · {bdWork.totals.facebookReplies ?? 0} replies
+              </span>
+            </div>
+
+            <div
+              className="stat-clickable"
+              onClick={() => openDrilldown('instagram', `Instagram actions (${periodObj.label})`)}
+              title="Click to view Instagram working"
+            >
+              <p className="stat-label">Instagram actions</p>
+              <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                {bdWork.totals.instagram ?? 0}
+              </p>
+              <span className="stat-hint" style={{ fontSize: '0.72rem' }}>
+                {bdWork.totals.instagramMessages ?? 0} msgs · {bdWork.totals.instagramReplies ?? 0} replies
               </span>
             </div>
 
@@ -334,6 +362,16 @@ export default function DashboardPage() {
             label="LinkedIn replies"
             value={act.linkedinReplies}
             onClick={() => openDrilldown('linkedin_replies', 'LinkedIn replies')}
+          />
+          <ActivityStat
+            label="Facebook actions"
+            value={act.facebookTouches}
+            onClick={() => openDrilldown('facebook', 'Facebook actions')}
+          />
+          <ActivityStat
+            label="Instagram actions"
+            value={act.instagramTouches}
+            onClick={() => openDrilldown('instagram', 'Instagram actions')}
           />
           <ActivityStat
             label="Calls attempted"

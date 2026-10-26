@@ -211,9 +211,10 @@ export default function TelesalesWorkingPage() {
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>1. What BDs did (activities)</h3>
         <p className="stat-hint" style={{ marginTop: 0 }}>
-          Raw work counts — one lead can have many emails / LinkedIn touches. Click any card to see items.
+          Raw work counts — one lead can have many emails / LinkedIn / Facebook / Instagram touches.
+          Click any card to see items.
         </p>
-        <div className="grid grid-4">
+        <div className="grid grid-6">
           <StatCard
             label="Leads added"
             value={totals.leadsAdded}
@@ -231,6 +232,18 @@ export default function TelesalesWorkingPage() {
             value={totals.linkedin}
             hint={`${totals.linkedinConnectionSent || 0} requests · ${totals.linkedinMessages || 0} msgs`}
             onClick={() => openDrilldown('linkedin', 'LinkedIn actions')}
+          />
+          <StatCard
+            label="Facebook actions"
+            value={totals.facebook || 0}
+            hint={`${totals.facebookMessages || 0} msgs · ${totals.facebookReplies || 0} replies`}
+            onClick={() => openDrilldown('facebook', 'Facebook actions')}
+          />
+          <StatCard
+            label="Instagram actions"
+            value={totals.instagram || 0}
+            hint={`${totals.instagramMessages || 0} msgs · ${totals.instagramReplies || 0} replies`}
+            onClick={() => openDrilldown('instagram', 'Instagram actions')}
           />
           <StatCard
             label="Calls"
@@ -419,6 +432,8 @@ export default function TelesalesWorkingPage() {
                   <th>Leads added</th>
                   <th>Emails</th>
                   <th>LinkedIn</th>
+                  <th>Facebook</th>
+                  <th>Instagram</th>
                   <th>Calls</th>
                   <th>Touched</th>
                   <th>→ Engaged</th>
@@ -467,6 +482,22 @@ export default function TelesalesWorkingPage() {
                         onClick={() => openDrilldown('linkedin', `${r.name}: LinkedIn actions`, r.id)}
                       >
                         {r.linkedin}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('facebook', `${r.name}: Facebook actions`, r.id)}
+                      >
+                        {r.facebook || 0}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="stat-clickable"
+                        onClick={() => openDrilldown('instagram', `${r.name}: Instagram actions`, r.id)}
+                      >
+                        {r.instagram || 0}
                       </span>
                     </td>
                     <td>
