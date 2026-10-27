@@ -5,6 +5,15 @@ import { useAuth } from '../auth.jsx';
 import { fmtDate } from '../components/Badges.jsx';
 import CohortFilter from '../components/CohortFilter.jsx';
 
+function roleLabel(m) {
+  const role = m.role || m.t;
+  if (role === 'ai' || m.n === 'AI') return 'AI';
+  if (role === 'agent' || m.fromCrm) return m.n || m.agentName || 'Human';
+  if (role === 'visitor') return 'Visitor';
+  if (role === 'system') return 'System';
+  return m.n || m.t || 'msg';
+}
+
 export default function ChatsPage() {
   const { can } = useAuth();
   const canReply = can('leads:update_any') || can('leads:update_own');
@@ -46,8 +55,20 @@ export default function ChatsPage() {
 
   useEffect(() => {
     load();
+    const timer = setInterval(load, 8000);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cohort, status]);
+
+  useEffect(() => {
+    if (!selected?.id) return undefined;
+    const timer = setInterval(() => {
+      api(`/chats/${selected.id}`)
+        .then((full) => setSelected(full))
+        .catch(() => {});
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [selected?.id]);
 
   const openChat = async (row) => {
     setNotice('');
@@ -71,13 +92,10 @@ export default function ChatsPage() {
       });
       setSelected(updated);
       setReply('');
-      setNotice(
-        updated.deliveryNote ||
-          'Reply saved in CRM. Open Tawk to deliver it to the visitor.',
-      );
+      setNotice(updated.deliveryNote || 'Reply sent.');
       load();
     } catch (e) {
-      setNotice(e.message || 'Failed to save reply');
+      setNotice(e.message || 'Failed to send reply');
     } finally {
       setSending(false);
     }
@@ -94,8 +112,8 @@ export default function ChatsPage() {
     <div>
       <h1 className="page-title">Chat support</h1>
       <p className="page-sub">
-        Homepage Tawk chats for BDs. View queries here, write a reply in CRM, then send the same
-        message in Tawk so the visitor sees it (Tawk cannot receive CRM replies automatically).
+        Website AI chats and human handoffs. AI answers first; when a visitor asks for a human,
+        reply here and they see it in the same chat on bmgenie.ai.
       </p>
 
       <div style={{ marginBottom: '1rem' }}>
@@ -108,8 +126,8 @@ export default function ChatsPage() {
           <p className="stat-value">{counts?.total ?? 0}</p>
         </div>
         <div className="card">
-          <p className="stat-label">Open</p>
-          <p className="stat-value">{counts?.open ?? 0}</p>
+          <p className="stat-label">Needs human</p>
+          <p className="stat-value">{counts?.waitingHuman ?? 0}</p>
         </div>
         <div className="card">
           <p className="stat-label">Today</p>
@@ -121,7 +139,7 @@ export default function ChatsPage() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input
             className="input"
-            placeholder="Search visitor, email, message…"
+            placeholder="Search visitor, email, city, message…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && load()}
@@ -133,36 +151,28 @@ export default function ChatsPage() {
             onChange={(e) => setStatus(e.target.value)}
           >
             <option value="">All statuses</option>
-            <option value="open">Open</option>
+            <option value="open">AI open</option>
+            <option value="waiting_human">Needs human</option>
+            <option value="human_active">Human active</option>
             <option value="closed">Closed</option>
           </select>
           <button type="button" className="btn btn-primary" onClick={load}>
             Search
           </button>
-          <a
-            className="btn btn-ghost"
-            href="https://dashboard.tawk.to/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open Tawk dashboard
-          </a>
         </div>
       </div>
 
       <div className="card">
         {rows.length === 0 ? (
-          <p>
-            No chats for this filter. Confirm Tawk webhooks point to{' '}
-            <code>/api/ingest/tawk</code> on crm-api.
-          </p>
+          <p>No chats for this filter yet.</p>
         ) : (
           <table className="table">
             <thead>
               <tr>
                 <th>Started</th>
                 <th>Visitor</th>
-                <th>Email</th>
+                <th>Location</th>
+                <th>Mode</th>
                 <th>Preview</th>
                 <th>Status</th>
                 <th />
@@ -172,21 +182,19 @@ export default function ChatsPage() {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td>{fmtDate(r.started_at || r.created_at)}</td>
-                  <td>{r.visitor_name || r.lead_name || '—'}</td>
                   <td>
-                    {r.visitor_email ? (
-                      <a href={`mailto:${r.visitor_email}`} style={{ color: 'var(--brand-primary)' }}>
-                        {r.visitor_email}
-                      </a>
-                    ) : (
-                      '—'
-                    )}
+                    <div>{r.visitor_name || r.lead_name || '—'}</div>
+                    <div className="stat-hint">{r.visitor_email || '—'}</div>
                   </td>
-                  <td style={{ maxWidth: 280 }}>{r.preview || '—'}</td>
+                  <td className="stat-hint">
+                    {[r.visitor_city, r.visitor_country].filter(Boolean).join(', ') || '—'}
+                  </td>
+                  <td>{r.mode === 'human' ? 'Human' : 'AI'}</td>
+                  <td style={{ maxWidth: 240 }}>{r.preview || '—'}</td>
                   <td>{r.status}</td>
                   <td style={{ display: 'flex', gap: 6 }}>
                     <button type="button" className="btn btn-ghost" onClick={() => openChat(r)}>
-                      View / reply
+                      Open
                     </button>
                     {r.lead_id ? (
                       <Link className="btn btn-ghost" to={`/leads?id=${r.lead_id}`}>
@@ -216,82 +224,82 @@ export default function ChatsPage() {
               </button>
             </div>
             <p className="stat-hint">
-              {selected.visitor_email || 'No email'} · {selected.status} ·{' '}
+              {selected.visitor_email || 'No email'}
+              {selected.visitor_city || selected.visitor_country
+                ? ` · ${[selected.visitor_city, selected.visitor_country].filter(Boolean).join(', ')}`
+                : ''}
+              {' · '}
+              {selected.mode === 'human' ? 'Human' : 'AI'} · {selected.status} ·{' '}
               {fmtDate(selected.started_at || selected.created_at)}
             </p>
-            <p style={{ marginTop: '0.75rem' }}>{selected.preview}</p>
 
             {messages.length > 0 ? (
               <div style={{ marginTop: '1rem' }}>
                 <h4 style={{ marginBottom: '0.5rem' }}>Conversation</h4>
-                <ul style={{ paddingLeft: '1.1rem', margin: 0 }}>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   {messages.map((m, i) => (
-                    <li key={m.id || i} style={{ marginBottom: 6 }}>
-                      <strong>{m.n || m.t || (m.fromCrm ? 'CRM agent' : 'msg')}:</strong>{' '}
-                      {m.msg || m.message || m.text || JSON.stringify(m)}
-                      {m.fromCrm ? (
-                        <span className="stat-hint"> · saved in CRM</span>
-                      ) : null}
+                    <li
+                      key={m.id || i}
+                      style={{
+                        marginBottom: 10,
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        background:
+                          m.role === 'agent' || m.fromCrm
+                            ? 'rgba(37,99,235,0.08)'
+                            : m.role === 'ai'
+                              ? 'rgba(16,185,129,0.08)'
+                              : 'rgba(0,0,0,0.04)',
+                      }}
+                    >
+                      <strong>{roleLabel(m)}</strong>
+                      <span className="stat-hint">
+                        {m.at ? ` · ${fmtDate(m.at)}` : ''}
+                      </span>
+                      <div style={{ marginTop: 4 }}>{m.msg || m.message || m.text || '—'}</div>
                     </li>
                   ))}
                 </ul>
               </div>
             ) : (
               <p className="stat-hint" style={{ marginTop: '1rem' }}>
-                No transcript yet — reply below once the visitor has messaged, or open Tawk.
+                No messages yet.
               </p>
             )}
 
             <div style={{ marginTop: '1.25rem' }}>
               {canReply ? (
                 <>
-              <label className="stat-label" htmlFor="crm-chat-reply">
-                Reply from CRM
-              </label>
-              <textarea
-                id="crm-chat-reply"
-                className="input"
-                rows={4}
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                placeholder="Type your answer for this visitor…"
-                style={{ width: '100%', marginTop: 6 }}
-              />
-              {notice ? (
-                <p className="stat-hint" style={{ marginTop: 8 }}>
-                  {notice}
-                </p>
-              ) : null}
-              <div style={{ marginTop: '0.75rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={sending || !reply.trim()}
-                  onClick={sendReply}
-                >
-                  {sending ? 'Saving…' : 'Save reply in CRM'}
-                </button>
-                <a
-                  className="btn btn-ghost"
-                  href={selected.tawkDashboardUrl || 'https://dashboard.tawk.to/'}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Send live in Tawk
-                </a>
-              </div>
+                  <label className="stat-label" htmlFor="crm-chat-reply">
+                    Reply to visitor (same website chat)
+                  </label>
+                  <textarea
+                    id="crm-chat-reply"
+                    className="input"
+                    rows={4}
+                    value={reply}
+                    onChange={(e) => setReply(e.target.value)}
+                    placeholder="Type your answer — visitor sees it live on bmgenie.ai…"
+                    style={{ width: '100%', marginTop: 6 }}
+                  />
+                  {notice ? (
+                    <p className="stat-hint" style={{ marginTop: 8 }}>
+                      {notice}
+                    </p>
+                  ) : null}
+                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={sending || !reply.trim()}
+                      onClick={sendReply}
+                    >
+                      {sending ? 'Sending…' : 'Send to visitor'}
+                    </button>
+                  </div>
                 </>
               ) : (
-                <p className="stat-hint">
-                  View only — BDs save chat replies from their account.{' '}
-                  <a
-                    href={selected.tawkDashboardUrl || 'https://dashboard.tawk.to/'}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open Tawk
-                  </a>
-                </p>
+                <p className="stat-hint">View only — ask a CEO or BD account to reply.</p>
               )}
             </div>
           </div>
