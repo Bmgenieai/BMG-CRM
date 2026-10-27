@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -12,6 +12,13 @@ function roleLabel(m) {
   if (role === 'visitor') return 'Visitor';
   if (role === 'system') return 'System';
   return m.n || m.t || 'msg';
+}
+
+function statusPriority(status) {
+  if (status === 'waiting_human') return 0;
+  if (status === 'human_active') return 1;
+  if (status === 'open') return 2;
+  return 3;
 }
 
 export default function ChatsPage() {
@@ -28,6 +35,7 @@ export default function ChatsPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const prevWaitingRef = useRef(null);
 
   const setCohort = (next) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -46,16 +54,46 @@ export default function ChatsPage() {
       cohort && cohort !== 'all' ? `?cohort=${encodeURIComponent(cohort)}` : '';
     Promise.all([api(`/chats${qs}`), api(`/chats/counts${countQs}`)])
       .then(([list, c]) => {
-        setRows(list);
+        const sorted = Array.isArray(list)
+          ? [...list].sort((a, b) => {
+              const p = statusPriority(a.status) - statusPriority(b.status);
+              if (p !== 0) return p;
+              return String(b.started_at || b.created_at || '').localeCompare(
+                String(a.started_at || a.created_at || ''),
+              );
+            })
+          : list;
+        setRows(sorted);
         setCounts(c);
         setError('');
+
+        const waiting = Number(c?.waitingHuman || 0);
+        const prev = prevWaitingRef.current;
+        if (prev != null && waiting > prev) {
+          try {
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              new Notification('BMGenie chat — human requested', {
+                body: `${waiting} visitor(s) waiting for a reply in Chat support.`,
+              });
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        prevWaitingRef.current = waiting;
       })
       .catch((e) => setError(e.message));
   };
 
   useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
     load();
-    const timer = setInterval(load, 8000);
+    const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cohort, status]);
@@ -116,6 +154,33 @@ export default function ChatsPage() {
         reply here and they see it in the same chat on bmgenie.ai.
       </p>
 
+      {Number(counts?.waitingHuman || 0) > 0 ? (
+        <div
+          className="card"
+          style={{
+            marginBottom: '1rem',
+            border: '2px solid #dc2626',
+            background: 'rgba(220,38,38,0.08)',
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700, color: '#991b1b' }}>
+            {counts.waitingHuman} visitor{counts.waitingHuman === 1 ? '' : 's'} waiting for a human
+          </p>
+          <p className="stat-hint" style={{ margin: '6px 0 0' }}>
+            Open the row with status <strong>waiting_human</strong>, type your reply, click{' '}
+            <strong>Send to visitor</strong>. They see it in the same website chat.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 10 }}
+            onClick={() => setStatus('waiting_human')}
+          >
+            Show needs-human only
+          </button>
+        </div>
+      ) : null}
+
       <div style={{ marginBottom: '1rem' }}>
         <CohortFilter value={cohort} onChange={setCohort} />
       </div>
@@ -125,9 +190,18 @@ export default function ChatsPage() {
           <p className="stat-label">Total</p>
           <p className="stat-value">{counts?.total ?? 0}</p>
         </div>
-        <div className="card">
+        <div
+          className="card"
+          style={
+            Number(counts?.waitingHuman || 0) > 0
+              ? { border: '2px solid #dc2626', background: 'rgba(220,38,38,0.06)' }
+              : undefined
+          }
+        >
           <p className="stat-label">Needs human</p>
-          <p className="stat-value">{counts?.waitingHuman ?? 0}</p>
+          <p className="stat-value" style={{ color: Number(counts?.waitingHuman || 0) > 0 ? '#dc2626' : undefined }}>
+            {counts?.waitingHuman ?? 0}
+          </p>
         </div>
         <div className="card">
           <p className="stat-label">Today</p>
@@ -180,7 +254,14 @@ export default function ChatsPage() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  style={
+                    r.status === 'waiting_human'
+                      ? { background: 'rgba(220,38,38,0.08)' }
+                      : undefined
+                  }
+                >
                   <td>{fmtDate(r.started_at || r.created_at)}</td>
                   <td>
                     <div>{r.visitor_name || r.lead_name || '—'}</div>
@@ -191,10 +272,20 @@ export default function ChatsPage() {
                   </td>
                   <td>{r.mode === 'human' ? 'Human' : 'AI'}</td>
                   <td style={{ maxWidth: 240 }}>{r.preview || '—'}</td>
-                  <td>{r.status}</td>
+                  <td>
+                    {r.status === 'waiting_human' ? (
+                      <strong style={{ color: '#dc2626' }}>Needs human</strong>
+                    ) : (
+                      r.status
+                    )}
+                  </td>
                   <td style={{ display: 'flex', gap: 6 }}>
-                    <button type="button" className="btn btn-ghost" onClick={() => openChat(r)}>
-                      Open
+                    <button
+                      type="button"
+                      className={r.status === 'waiting_human' ? 'btn btn-primary' : 'btn btn-ghost'}
+                      onClick={() => openChat(r)}
+                    >
+                      {r.status === 'waiting_human' ? 'Reply now' : 'Open'}
                     </button>
                     {r.lead_id ? (
                       <Link className="btn btn-ghost" to={`/leads?id=${r.lead_id}`}>

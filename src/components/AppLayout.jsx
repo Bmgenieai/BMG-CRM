@@ -134,10 +134,27 @@ export default function AppLayout({ children }) {
   }, [toolsPathOpen]);
 
   useEffect(() => {
-    api('/leads/counts')
-      .then(setCounts)
-      .catch(() => setCounts(null));
+    const loadCounts = () => {
+      api('/leads/counts')
+        .then(setCounts)
+        .catch(() => setCounts(null));
+    };
+    loadCounts();
+    // Poll so CEO/BD see new “Talk to a human” requests without refreshing.
+    const timer = setInterval(loadCounts, 10000);
+    return () => clearInterval(timer);
   }, []);
+
+  // Tab title alert when someone is waiting for a human.
+  useEffect(() => {
+    const waiting = Number(counts?.chatsWaitingHuman || 0);
+    const base = 'BMGenie CRM';
+    if (waiting > 0) {
+      document.title = `(${waiting}) Human chat waiting — ${base}`;
+    } else if (document.title.includes('Human chat waiting')) {
+      document.title = base;
+    }
+  }, [counts?.chatsWaitingHuman]);
 
   useEffect(() => {
     if (!profileOpen) return undefined;
@@ -320,7 +337,15 @@ export default function AppLayout({ children }) {
             >
               <MessageCircle size={16} />
               <span style={{ flex: 1 }}>Chat support</span>
-              {counts?.chatsOpen != null ? (
+              {Number(counts?.chatsWaitingHuman || 0) > 0 ? (
+                <span
+                  className="nav-count"
+                  title="Visitors waiting for a human"
+                  style={{ background: '#dc2626', color: '#fff' }}
+                >
+                  {counts.chatsWaitingHuman} need you
+                </span>
+              ) : counts?.chatsOpen != null ? (
                 <span className="nav-count">{counts.chatsOpen}</span>
               ) : null}
             </NavLink>
