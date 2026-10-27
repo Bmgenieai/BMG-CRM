@@ -38,6 +38,8 @@ export default function EmailRepliesPage() {
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [inboundReady, setInboundReady] = useState(null);
+  const [mailboxSync, setMailboxSync] = useState(null);
+  const [mailboxBusy, setMailboxBusy] = useState(false);
   const [replyDraft, setReplyDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
@@ -58,9 +60,29 @@ export default function EmailRepliesPage() {
         setRows(list);
         setCounts(c);
         setInboundReady(st?.inboundRepliesEnabled ?? null);
+        setMailboxSync(st?.senderMailbox || null);
         setError('');
       })
       .catch((e) => setError(e.message));
+  };
+
+  const runMailboxSync = async () => {
+    setMailboxBusy(true);
+    setError('');
+    try {
+      const result = await api('/email/mailbox-sync', { method: 'POST', body: {} });
+      if (result?.error) throw new Error(result.error);
+      await load();
+      if (result?.ingested) {
+        setSendOk(`Mailbox sync: ${result.ingested} new reply(ies) imported`);
+      } else {
+        setSendOk('Mailbox sync complete — no new matched replies');
+      }
+    } catch (e) {
+      setError(e.message || 'Mailbox sync failed');
+    } finally {
+      setMailboxBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -157,7 +179,7 @@ export default function EmailRepliesPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-3" style={{ marginBottom: '1rem' }}>
+      <div className="grid grid-4" style={{ marginBottom: '1rem' }}>
         <div className="card">
           <p className="stat-label">Total</p>
           <p className="stat-value">{counts?.total ?? 0}</p>
@@ -171,6 +193,34 @@ export default function EmailRepliesPage() {
           <p className="stat-value" style={{ fontSize: '1.1rem' }}>
             {inboundReady ? 'On' : inboundReady === false ? 'Off' : '—'}
           </p>
+          <p className="stat-hint" style={{ margin: '0.35rem 0 0', fontSize: '0.72rem' }}>
+            reply.bmgenie.ai Reply-To
+          </p>
+        </div>
+        <div className="card">
+          <p className="stat-label">From-mailbox sync</p>
+          <p className="stat-value" style={{ fontSize: '1.1rem' }}>
+            {mailboxSync?.enabled ? 'On' : mailboxSync?.configured === false ? 'Needs setup' : 'Off'}
+          </p>
+          <p className="stat-hint" style={{ margin: '0.35rem 0 0', fontSize: '0.72rem' }}>
+            {mailboxSync?.user || 'magic.retouching@…'}
+          </p>
+          {canSeeAll ? (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ marginTop: 8, fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+              disabled={mailboxBusy || !mailboxSync?.enabled}
+              onClick={runMailboxSync}
+              title={
+                mailboxSync?.enabled
+                  ? 'Pull new replies from the From mailbox now'
+                  : 'Enable SENDER_MAILBOX_SYNC + App Password on the API server'
+              }
+            >
+              {mailboxBusy ? 'Syncing…' : 'Sync now'}
+            </button>
+          ) : null}
         </div>
       </div>
 
