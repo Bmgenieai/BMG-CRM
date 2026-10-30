@@ -93,6 +93,26 @@ function fmtDay(iso) {
   }
 }
 
+const COUNTRY_LABELS = {
+  US: 'United States',
+  USA: 'United States',
+  GB: 'United Kingdom',
+  UK: 'United Kingdom',
+  CA: 'Canada',
+  AU: 'Australia',
+  NZ: 'New Zealand',
+  AE: 'United Arab Emirates',
+  PK: 'Pakistan',
+  IN: 'India',
+};
+
+function formatCountry(raw) {
+  if (!raw || !String(raw).trim()) return '—';
+  const value = String(raw).trim();
+  const upper = value.toUpperCase();
+  return COUNTRY_LABELS[upper] || value;
+}
+
 function EmailStatusCell({ lead }) {
   if (!lead.last_emailed_at) {
     return <span className="badge badge-grey">Not emailed</span>;
@@ -564,6 +584,8 @@ export default function LeadsPage({ refreshSidebarCounts }) {
               <th>Status</th>
               <th>Email</th>
               <th>Date added</th>
+              <th>Country</th>
+              <th>City</th>
               <th>State</th>
               <th>Owner</th>
               <th>Next FU</th>
@@ -630,8 +652,10 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                     </div>
                   ) : null}
                 </td>
+                <td style={{ fontSize: '0.82rem' }}>{formatCountry(l.country)}</td>
+                <td style={{ fontSize: '0.82rem' }}>{l.city || '—'}</td>
                 <td>
-                  {l.state ? <StateBadge state={l.state} /> : <span className="stat-hint">{l.country || '—'}</span>}
+                  {l.state ? <StateBadge state={l.state} /> : <span className="stat-hint">—</span>}
                 </td>
                 <td>{l.assigned_name || 'Unassigned'}</td>
                 <td style={{ fontSize: '0.82rem' }}>
@@ -641,7 +665,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             ))}
             {!leads.length ? (
               <tr>
-                <td colSpan={9} className="empty">
+                <td colSpan={11} className="empty">
                   No leads match this view
                 </td>
               </tr>

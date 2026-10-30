@@ -641,7 +641,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                     lead.industry,
                     lead.company && lead.company !== lead.name ? lead.company : null,
                     lead.job_title,
-                    lead.state || lead.country,
+                    [lead.city, lead.state || lead.country].filter(Boolean).join(', ') || null,
                   ]
                     .filter(Boolean)
                     .join(' · ') || '—'}
