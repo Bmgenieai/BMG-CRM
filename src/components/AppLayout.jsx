@@ -103,6 +103,7 @@ export default function AppLayout({ children }) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
+  const isChatSupport = user?.role === 'chat_support';
 
   const statusPathOpen = (() => {
     const m = location.pathname.match(/^\/leads\/([^/]+)/);
@@ -135,15 +136,27 @@ export default function AppLayout({ children }) {
 
   useEffect(() => {
     const loadCounts = () => {
+      if (isChatSupport) {
+        api('/chats/counts')
+          .then((c) =>
+            setCounts({
+              chatsWaitingHuman: c.waitingHuman,
+              chatsOpen: c.open,
+              chatsMine: c.mine,
+            }),
+          )
+          .catch(() => setCounts(null));
+        return;
+      }
       api('/leads/counts')
         .then(setCounts)
         .catch(() => setCounts(null));
     };
     loadCounts();
-    // Poll so CEO/BD see new “Talk to a human” requests without refreshing.
+    // Poll so agents see new “Talk to a human” requests without refreshing.
     const timer = setInterval(loadCounts, 10000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isChatSupport]);
 
   // Tab title alert when someone is waiting for a human.
   useEffect(() => {
@@ -175,6 +188,18 @@ export default function AppLayout({ children }) {
   }, [profileOpen]);
 
   const refreshCounts = () => {
+    if (isChatSupport) {
+      api('/chats/counts')
+        .then((c) =>
+          setCounts({
+            chatsWaitingHuman: c.waitingHuman,
+            chatsOpen: c.open,
+            chatsMine: c.mine,
+          }),
+        )
+        .catch(() => {});
+      return;
+    }
     api('/leads/counts')
       .then(setCounts)
       .catch(() => {});
@@ -187,7 +212,9 @@ export default function AppLayout({ children }) {
         ? 'CEO'
         : user?.role === 'manager'
           ? 'Manager'
-          : user?.role;
+          : user?.role === 'chat_support'
+            ? 'Chat Support'
+            : user?.role;
 
   return (
     <div className="app-shell">
@@ -208,135 +235,13 @@ export default function AppLayout({ children }) {
             Dashboard
           </NavLink>
 
-          {can('analytics:view_team') ? (
-            <NavLink
-              to="/product-analytics"
-              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-            >
-              <BarChart3 size={18} />
-              Product analytics
-            </NavLink>
-          ) : null}
-
-          <NavLink
-            to="/telesales-working"
-            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-          >
-            <ClipboardList size={18} />
-            BD working
-          </NavLink>
-
-          <div className="nav-section-label">Leads</div>
-          <div className="nav-dropdown">
-            <div className="nav-dropdown-row">
-              <NavLink
-                to="/leads"
-                end
-                className={({ isActive }) =>
-                  `nav-link nav-link-sub nav-dropdown-link${isActive && !statusPathOpen ? ' active' : ''}`
-                }
-                onClick={() => setLeadsOpen(true)}
-              >
-                <span style={{ flex: 1 }}>All leads</span>
-                {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
-              </NavLink>
-              <button
-                type="button"
-                className="nav-dropdown-toggle"
-                aria-expanded={leadsOpen}
-                aria-label={leadsOpen ? 'Hide lead statuses' : 'Show lead statuses'}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setLeadsOpen((o) => !o);
-                }}
-              >
-                {leadsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </button>
-            </div>
-            {leadsOpen ? (
-              <div className="nav-dropdown-children">
-                {STATUS_TABS.map((t) => (
-                  <TabLink
-                    key={t.slug}
-                    to={`/leads/${t.slug}`}
-                    label={t.label}
-                    count={counts?.statusCounts?.[t.slug]}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          <NavLink
-            to="/leads/linkedin"
-            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-          >
-            <Linkedin size={16} />
-            <span style={{ flex: 1 }}>LinkedIn leads</span>
-            {counts?.socialCounts?.linkedin != null ? (
-              <span className="nav-count">{counts.socialCounts.linkedin}</span>
-            ) : null}
-          </NavLink>
-
-          <NavLink
-            to="/leads/facebook"
-            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-          >
-            <Facebook size={16} />
-            <span style={{ flex: 1 }}>Facebook leads</span>
-            {counts?.socialCounts?.facebook != null ? (
-              <span className="nav-count">{counts.socialCounts.facebook}</span>
-            ) : null}
-          </NavLink>
-
-          <NavLink
-            to="/leads/instagram"
-            className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-          >
-            <Instagram size={16} />
-            <span style={{ flex: 1 }}>Instagram leads</span>
-            {counts?.socialCounts?.instagram != null ? (
-              <span className="nav-count">{counts.socialCounts.instagram}</span>
-            ) : null}
-          </NavLink>
-
-          <NavSection
-            label="From bmgenie.ai"
-            open={productOpen}
-            onToggle={() => setProductOpen((o) => !o)}
-          >
-            {PRODUCT_TABS.map((t) => (
-              <TabLink
-                key={t.slug}
-                to={`/leads/${t.slug}`}
-                label={t.label}
-                count={counts?.productCounts?.[t.slug]}
-              />
-            ))}
-          </NavSection>
-
-          <NavSection
-            label="Inbound"
-            open={inboundOpen}
-            onToggle={() => setInboundOpen((o) => !o)}
-          >
-            <NavLink
-              to="/demos"
-              className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-            >
-              <CalendarDays size={16} />
-              <span style={{ flex: 1 }}>Book a demo</span>
-              {counts?.demosCount != null ? (
-                <span className="nav-count">{counts.demosCount}</span>
-              ) : null}
-            </NavLink>
+          {isChatSupport ? (
             <NavLink
               to="/chats"
-              className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
             >
-              <MessageCircle size={16} />
-              <span style={{ flex: 1 }}>Chat support</span>
+              <MessageCircle size={18} />
+              <span style={{ flex: 1 }}>Chats</span>
               {Number(counts?.chatsWaitingHuman || 0) > 0 ? (
                 <span
                   className="nav-count"
@@ -349,34 +254,179 @@ export default function AppLayout({ children }) {
                 <span className="nav-count">{counts.chatsOpen}</span>
               ) : null}
             </NavLink>
-            <NavLink
-              to="/email-replies"
-              className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-            >
-              <Inbox size={16} />
-              <span style={{ flex: 1 }}>Email replies</span>
-              {counts?.emailRepliesCount != null ? (
-                <span className="nav-count">{counts.emailRepliesCount}</span>
+          ) : (
+            <>
+              {can('analytics:view_team') ? (
+                <NavLink
+                  to="/product-analytics"
+                  className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                >
+                  <BarChart3 size={18} />
+                  Product analytics
+                </NavLink>
               ) : null}
-            </NavLink>
-          </NavSection>
 
-          <NavSection
-            label="Tools"
-            open={toolsOpen}
-            onToggle={() => setToolsOpen((o) => !o)}
-          >
-            {TOOL_LINKS.filter((l) => !l.perm || can(l.perm)).map((l) => (
               <NavLink
-                key={l.to}
-                to={l.to}
+                to="/telesales-working"
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
-                <l.icon size={18} />
-                {l.label}
+                <ClipboardList size={18} />
+                BD working
               </NavLink>
-            ))}
-          </NavSection>
+
+              <div className="nav-section-label">Leads</div>
+              <div className="nav-dropdown">
+                <div className="nav-dropdown-row">
+                  <NavLink
+                    to="/leads"
+                    end
+                    className={({ isActive }) =>
+                      `nav-link nav-link-sub nav-dropdown-link${isActive && !statusPathOpen ? ' active' : ''}`
+                    }
+                    onClick={() => setLeadsOpen(true)}
+                  >
+                    <span style={{ flex: 1 }}>All leads</span>
+                    {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
+                  </NavLink>
+                  <button
+                    type="button"
+                    className="nav-dropdown-toggle"
+                    aria-expanded={leadsOpen}
+                    aria-label={leadsOpen ? 'Hide lead statuses' : 'Show lead statuses'}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setLeadsOpen((o) => !o);
+                    }}
+                  >
+                    {leadsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </button>
+                </div>
+                {leadsOpen ? (
+                  <div className="nav-dropdown-children">
+                    {STATUS_TABS.map((t) => (
+                      <TabLink
+                        key={t.slug}
+                        to={`/leads/${t.slug}`}
+                        label={t.label}
+                        count={counts?.statusCounts?.[t.slug]}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <NavLink
+                to="/leads/linkedin"
+                className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+              >
+                <Linkedin size={16} />
+                <span style={{ flex: 1 }}>LinkedIn leads</span>
+                {counts?.socialCounts?.linkedin != null ? (
+                  <span className="nav-count">{counts.socialCounts.linkedin}</span>
+                ) : null}
+              </NavLink>
+
+              <NavLink
+                to="/leads/facebook"
+                className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+              >
+                <Facebook size={16} />
+                <span style={{ flex: 1 }}>Facebook leads</span>
+                {counts?.socialCounts?.facebook != null ? (
+                  <span className="nav-count">{counts.socialCounts.facebook}</span>
+                ) : null}
+              </NavLink>
+
+              <NavLink
+                to="/leads/instagram"
+                className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+              >
+                <Instagram size={16} />
+                <span style={{ flex: 1 }}>Instagram leads</span>
+                {counts?.socialCounts?.instagram != null ? (
+                  <span className="nav-count">{counts.socialCounts.instagram}</span>
+                ) : null}
+              </NavLink>
+
+              <NavSection
+                label="From bmgenie.ai"
+                open={productOpen}
+                onToggle={() => setProductOpen((o) => !o)}
+              >
+                {PRODUCT_TABS.map((t) => (
+                  <TabLink
+                    key={t.slug}
+                    to={`/leads/${t.slug}`}
+                    label={t.label}
+                    count={counts?.productCounts?.[t.slug]}
+                  />
+                ))}
+              </NavSection>
+
+              <NavSection
+                label="Inbound"
+                open={inboundOpen}
+                onToggle={() => setInboundOpen((o) => !o)}
+              >
+                <NavLink
+                  to="/demos"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <CalendarDays size={16} />
+                  <span style={{ flex: 1 }}>Book a demo</span>
+                  {counts?.demosCount != null ? (
+                    <span className="nav-count">{counts.demosCount}</span>
+                  ) : null}
+                </NavLink>
+                <NavLink
+                  to="/chats"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <MessageCircle size={16} />
+                  <span style={{ flex: 1 }}>Chat support</span>
+                  {Number(counts?.chatsWaitingHuman || 0) > 0 ? (
+                    <span
+                      className="nav-count"
+                      title="Visitors waiting for a human"
+                      style={{ background: '#dc2626', color: '#fff' }}
+                    >
+                      {counts.chatsWaitingHuman} need you
+                    </span>
+                  ) : counts?.chatsOpen != null ? (
+                    <span className="nav-count">{counts.chatsOpen}</span>
+                  ) : null}
+                </NavLink>
+                <NavLink
+                  to="/email-replies"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <Inbox size={16} />
+                  <span style={{ flex: 1 }}>Email replies</span>
+                  {counts?.emailRepliesCount != null ? (
+                    <span className="nav-count">{counts.emailRepliesCount}</span>
+                  ) : null}
+                </NavLink>
+              </NavSection>
+
+              <NavSection
+                label="Tools"
+                open={toolsOpen}
+                onToggle={() => setToolsOpen((o) => !o)}
+              >
+                {TOOL_LINKS.filter((l) => !l.perm || can(l.perm)).map((l) => (
+                  <NavLink
+                    key={l.to}
+                    to={l.to}
+                    className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                  >
+                    <l.icon size={18} />
+                    {l.label}
+                  </NavLink>
+                ))}
+              </NavSection>
+            </>
+          )}
         </nav>
       </aside>
       <div className="content-area">

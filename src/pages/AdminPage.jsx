@@ -139,6 +139,7 @@ export default function AdminPage() {
                 <option value="ceo">CEO</option>
                 <option value="manager">Manager (view team performance)</option>
                 <option value="telesales">BD</option>
+                <option value="chat_support">Chat Support (AI / human chat only)</option>
               </select>
             </div>
             <button className="btn btn-primary" type="submit">
@@ -195,7 +196,17 @@ export default function AdminPage() {
               <tr key={u.id}>
                 <td>{u.name}</td>
                 <td>{u.email}</td>
-                <td>{u.role === 'telesales' ? 'BD' : u.role === 'ceo' ? 'CEO' : u.role === 'manager' ? 'Manager' : u.role}</td>
+                <td>
+                  {u.role === 'telesales'
+                    ? 'BD'
+                    : u.role === 'ceo'
+                      ? 'CEO'
+                      : u.role === 'manager'
+                        ? 'Manager'
+                        : u.role === 'chat_support'
+                          ? 'Chat Support'
+                          : u.role}
+                </td>
                 <td>{u.is_active ? 'Active' : 'Inactive'}</td>
                 <td>{fmtDate(u.created_at)}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>

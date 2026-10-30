@@ -8,7 +8,10 @@ import CohortFilter from '../components/CohortFilter.jsx';
 function roleLabel(m) {
   const role = m.role || m.t;
   if (role === 'ai' || m.n === 'AI') return 'AI';
-  if (role === 'agent' || m.fromCrm) return m.n || m.agentName || 'Human';
+  if (role === 'agent' || m.fromCrm) {
+    const who = m.agentName || m.n || 'Human';
+    return who;
+  }
   if (role === 'visitor') return 'Visitor';
   if (role === 'system') return 'System';
   return m.n || m.t || 'msg';
@@ -22,20 +25,25 @@ function statusPriority(status) {
 }
 
 export default function ChatsPage() {
-  const { can } = useAuth();
-  const canReply = can('leads:update_any') || can('leads:update_own');
+  const { user, can } = useAuth();
+  const hasReplyPerm = can('chats:reply');
+  const isCeo = user?.role === 'ceo';
+  const isChatSupport = user?.role === 'chat_support';
   const [searchParams, setSearchParams] = useSearchParams();
   const cohort = searchParams.get('cohort') || 'all';
   const [rows, setRows] = useState(null);
   const [counts, setCounts] = useState(null);
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(searchParams.get('status') || '');
+  const [assignee, setAssignee] = useState(searchParams.get('assignee') || '');
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const prevWaitingRef = useRef(null);
+  const openIdHandled = useRef(null);
 
   const setCohort = (next) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -44,10 +52,20 @@ export default function ChatsPage() {
     setSearchParams(nextParams, { replace: true });
   };
 
+  const syncFilterParams = (nextStatus, nextAssignee) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextStatus) nextParams.set('status', nextStatus);
+    else nextParams.delete('status');
+    if (nextAssignee) nextParams.set('assignee', nextAssignee);
+    else nextParams.delete('assignee');
+    setSearchParams(nextParams, { replace: true });
+  };
+
   const load = () => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (status) params.set('status', status);
+    if (assignee) params.set('assignee', assignee);
     if (cohort && cohort !== 'all') params.set('cohort', cohort);
     const qs = params.toString() ? `?${params}` : '';
     const countQs =
@@ -96,7 +114,7 @@ export default function ChatsPage() {
     const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cohort, status]);
+  }, [cohort, status, assignee]);
 
   useEffect(() => {
     if (!selected?.id) return undefined;
@@ -108,6 +126,21 @@ export default function ChatsPage() {
     return () => clearInterval(timer);
   }, [selected?.id]);
 
+  // Deep-link from dashboard: /chats?open=<id>
+  useEffect(() => {
+    const openId = searchParams.get('open');
+    if (!openId || openIdHandled.current === openId) return;
+    openIdHandled.current = openId;
+    api(`/chats/${openId}`)
+      .then((full) => {
+        setSelected(full);
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('open');
+        setSearchParams(nextParams, { replace: true });
+      })
+      .catch(() => {});
+  }, [searchParams, setSearchParams]);
+
   const openChat = async (row) => {
     setNotice('');
     setReply('');
@@ -116,6 +149,44 @@ export default function ChatsPage() {
       setSelected(full);
     } catch {
       setSelected(row);
+    }
+  };
+
+  const claimChat = async (chatId) => {
+    setClaiming(true);
+    setNotice('');
+    try {
+      const updated = await api(`/chats/${chatId}/claim`, { method: 'POST', body: {} });
+      setSelected(updated);
+      setNotice(`You took this chat${updated.assignedTo ? ` (${updated.assignedTo.name})` : ''}.`);
+      load();
+    } catch (e) {
+      setNotice(e.message || 'Could not take chat');
+      if (selected?.id === chatId) {
+        try {
+          setSelected(await api(`/chats/${chatId}`));
+        } catch {
+          /* ignore */
+        }
+      }
+      load();
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  const releaseChat = async (chatId) => {
+    setClaiming(true);
+    setNotice('');
+    try {
+      const updated = await api(`/chats/${chatId}/release`, { method: 'POST', body: {} });
+      setSelected(updated);
+      setNotice('Chat released — another agent can take it.');
+      load();
+    } catch (e) {
+      setNotice(e.message || 'Could not release chat');
+    } finally {
+      setClaiming(false);
     }
   };
 
@@ -146,12 +217,23 @@ export default function ChatsPage() {
     ? selected.combinedMessages
     : selected?.transcript || [];
 
+  const canReplySelected = Boolean(selected?.canReplyInCrm);
+  const needsClaim =
+    hasReplyPerm &&
+    selected &&
+    !selected.assignedTo &&
+    !isCeo;
+  const showRelease =
+    hasReplyPerm &&
+    selected?.assignedTo &&
+    (selected.isMine || isCeo);
+
   return (
     <div>
       <h1 className="page-title">Chat support</h1>
       <p className="page-sub">
-        Website AI chats and human handoffs. AI answers first; when a visitor asks for a human,
-        reply here and they see it in the same chat on bmgenie.ai.
+        Website AI chats and human handoffs. Take a waiting chat so only one agent replies; CEO can
+        always join and see who handled each conversation.
       </p>
 
       {Number(counts?.waitingHuman || 0) > 0 ? (
@@ -167,23 +249,28 @@ export default function ChatsPage() {
             {counts.waitingHuman} visitor{counts.waitingHuman === 1 ? '' : 's'} waiting for a human
           </p>
           <p className="stat-hint" style={{ margin: '6px 0 0' }}>
-            Open the row with status <strong>waiting_human</strong>, type your reply, click{' '}
-            <strong>Send to visitor</strong>. They see it in the same website chat.
+            Open the row, click <strong>Take chat</strong>, then <strong>Send to visitor</strong>.
           </p>
           <button
             type="button"
             className="btn btn-primary"
             style={{ marginTop: 10 }}
-            onClick={() => setStatus('waiting_human')}
+            onClick={() => {
+              setStatus('waiting_human');
+              setAssignee('');
+              syncFilterParams('waiting_human', '');
+            }}
           >
             Show needs-human only
           </button>
         </div>
       ) : null}
 
-      <div style={{ marginBottom: '1rem' }}>
-        <CohortFilter value={cohort} onChange={setCohort} />
-      </div>
+      {!isChatSupport ? (
+        <div style={{ marginBottom: '1rem' }}>
+          <CohortFilter value={cohort} onChange={setCohort} />
+        </div>
+      ) : null}
 
       <div className="grid grid-3" style={{ marginBottom: '1rem' }}>
         <div className="card">
@@ -204,8 +291,10 @@ export default function ChatsPage() {
           </p>
         </div>
         <div className="card">
-          <p className="stat-label">Today</p>
-          <p className="stat-value">{counts?.today ?? 0}</p>
+          <p className="stat-label">{isChatSupport || isCeo ? 'My chats' : 'Today'}</p>
+          <p className="stat-value">
+            {isChatSupport || isCeo ? (counts?.mine ?? 0) : (counts?.today ?? 0)}
+          </p>
         </div>
       </div>
 
@@ -222,13 +311,31 @@ export default function ChatsPage() {
           <select
             className="select"
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setStatus(v);
+              syncFilterParams(v, assignee);
+            }}
           >
             <option value="">All statuses</option>
             <option value="open">AI open</option>
             <option value="waiting_human">Needs human</option>
             <option value="human_active">Human active</option>
             <option value="closed">Closed</option>
+          </select>
+          <select
+            className="select"
+            value={assignee}
+            onChange={(e) => {
+              const v = e.target.value;
+              setAssignee(v);
+              syncFilterParams(status, v);
+            }}
+          >
+            <option value="">All agents</option>
+            <option value="unassigned">Unclaimed</option>
+            <option value="me">Mine</option>
+            <option value="others">Others</option>
           </select>
           <button type="button" className="btn btn-primary" onClick={load}>
             Search
@@ -246,7 +353,7 @@ export default function ChatsPage() {
                 <th>Started</th>
                 <th>Visitor</th>
                 <th>Location</th>
-                <th>Mode</th>
+                <th>Taken by</th>
                 <th>Preview</th>
                 <th>Status</th>
                 <th />
@@ -270,7 +377,15 @@ export default function ChatsPage() {
                   <td className="stat-hint">
                     {[r.visitor_city, r.visitor_country].filter(Boolean).join(', ') || '—'}
                   </td>
-                  <td>{r.mode === 'human' ? 'Human' : 'AI'}</td>
+                  <td>
+                    {r.assignedTo ? (
+                      <span style={{ fontWeight: r.isMine ? 600 : 400 }}>
+                        {r.isMine ? 'You' : r.assignedTo.name}
+                      </span>
+                    ) : (
+                      <span className="stat-hint">—</span>
+                    )}
+                  </td>
                   <td style={{ maxWidth: 240 }}>{r.preview || '—'}</td>
                   <td>
                     {r.status === 'waiting_human' ? (
@@ -285,9 +400,9 @@ export default function ChatsPage() {
                       className={r.status === 'waiting_human' ? 'btn btn-primary' : 'btn btn-ghost'}
                       onClick={() => openChat(r)}
                     >
-                      {r.status === 'waiting_human' ? 'Reply now' : 'Open'}
+                      {r.status === 'waiting_human' && !r.assignedTo ? 'Take / reply' : 'Open'}
                     </button>
-                    {r.lead_id ? (
+                    {r.lead_id && !isChatSupport ? (
                       <Link className="btn btn-ghost" to={`/leads?id=${r.lead_id}`}>
                         Lead
                       </Link>
@@ -323,6 +438,13 @@ export default function ChatsPage() {
               {selected.mode === 'human' ? 'Human' : 'AI'} · {selected.status} ·{' '}
               {fmtDate(selected.started_at || selected.created_at)}
             </p>
+            <p style={{ margin: '6px 0 0', fontWeight: 600 }}>
+              {selected.assignedTo
+                ? `Taken by ${selected.isMine ? 'you' : selected.assignedTo.name}${
+                    selected.assignedTo.at ? ` · ${fmtDate(selected.assignedTo.at)}` : ''
+                  }`
+                : 'Unclaimed'}
+            </p>
 
             {messages.length > 0 ? (
               <div style={{ marginTop: '1rem' }}>
@@ -344,6 +466,9 @@ export default function ChatsPage() {
                       }}
                     >
                       <strong>{roleLabel(m)}</strong>
+                      {(m.role === 'agent' || m.fromCrm) && (m.agentName || m.n) ? (
+                        <span className="stat-hint"> · agent reply</span>
+                      ) : null}
                       <span className="stat-hint">
                         {m.at ? ` · ${fmtDate(m.at)}` : ''}
                       </span>
@@ -359,38 +484,89 @@ export default function ChatsPage() {
             )}
 
             <div style={{ marginTop: '1.25rem' }}>
-              {canReply ? (
+              {hasReplyPerm ? (
                 <>
-                  <label className="stat-label" htmlFor="crm-chat-reply">
-                    Reply to visitor (same website chat)
-                  </label>
-                  <textarea
-                    id="crm-chat-reply"
-                    className="input"
-                    rows={4}
-                    value={reply}
-                    onChange={(e) => setReply(e.target.value)}
-                    placeholder="Type your answer — visitor sees it live on bmgenie.ai…"
-                    style={{ width: '100%', marginTop: 6 }}
-                  />
-                  {notice ? (
-                    <p className="stat-hint" style={{ marginTop: 8 }}>
-                      {notice}
-                    </p>
+                  {needsClaim || selected.isClaimedByOther ? (
+                    <div style={{ marginBottom: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {needsClaim ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={claiming}
+                          onClick={() => claimChat(selected.id)}
+                        >
+                          {claiming ? 'Taking…' : 'Take chat'}
+                        </button>
+                      ) : null}
+                      {selected.isClaimedByOther && !isCeo ? (
+                        <p className="stat-hint" style={{ margin: 0 }}>
+                          {selected.replyHint}
+                        </p>
+                      ) : null}
+                      {showRelease ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={claiming}
+                          onClick={() => releaseChat(selected.id)}
+                        >
+                          Release chat
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : showRelease ? (
+                    <div style={{ marginBottom: 10 }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={claiming}
+                        onClick={() => releaseChat(selected.id)}
+                      >
+                        Release chat
+                      </button>
+                    </div>
                   ) : null}
-                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={sending || !reply.trim()}
-                      onClick={sendReply}
-                    >
-                      {sending ? 'Sending…' : 'Send to visitor'}
-                    </button>
-                  </div>
+
+                  {canReplySelected || (isCeo && hasReplyPerm) ? (
+                    <>
+                      <label className="stat-label" htmlFor="crm-chat-reply">
+                        Reply to visitor (same website chat)
+                      </label>
+                      <textarea
+                        id="crm-chat-reply"
+                        className="input"
+                        rows={4}
+                        value={reply}
+                        onChange={(e) => setReply(e.target.value)}
+                        placeholder="Type your answer — visitor sees it live on bmgenie.ai…"
+                        style={{ width: '100%', marginTop: 6 }}
+                        disabled={needsClaim && !isCeo}
+                      />
+                      {notice ? (
+                        <p className="stat-hint" style={{ marginTop: 8 }}>
+                          {notice}
+                        </p>
+                      ) : null}
+                      <div style={{ marginTop: '0.75rem', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={sending || !reply.trim() || (needsClaim && !isCeo)}
+                          onClick={sendReply}
+                        >
+                          {sending ? 'Sending…' : 'Send to visitor'}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="stat-hint">{selected.replyHint || 'You cannot reply to this chat.'}</p>
+                  )}
                 </>
               ) : (
-                <p className="stat-hint">View only — ask a CEO or BD account to reply.</p>
+                <p className="stat-hint">
+                  View only — ask a Chat Support or CEO account to reply.
+                  {selected.assignedTo ? ` Taken by ${selected.assignedTo.name}.` : ''}
+                </p>
               )}
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -31,29 +31,42 @@ function Protected({ children }) {
   return children;
 }
 
+/** Chat Support accounts only use Dashboard + Chats. */
+function ChatSupportGate({ children }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (user?.role === 'chat_support') {
+    const ok = location.pathname === '/' || location.pathname.startsWith('/chats');
+    if (!ok) return <Navigate to="/" replace />;
+  }
+  return children;
+}
+
 function ProtectedLayout() {
   return (
     <Protected>
-      <AppLayout>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/product-analytics" element={<ProductAnalyticsPage />} />
-          <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
-          <Route path="/demos" element={<DemosPage />} />
-          <Route path="/chats" element={<ChatsPage />} />
-          <Route path="/email-replies" element={<EmailRepliesPage />} />
-          <Route path="/leads" element={<LeadsPage />} />
-          <Route path="/leads/:filter" element={<LeadsPage />} />
-          <Route path="/leads/:id" element={<LeadDetailPage />} />
-          <Route path="/distribution" element={<DistributionPage />} />
-          <Route path="/follow-ups" element={<FollowUpsPage />} />
-          <Route path="/email" element={<EmailPage />} />
-          <Route path="/working-tree" element={<WorkingTreePage />} />
-          <Route path="/import" element={<ImportPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AppLayout>
+      <ChatSupportGate>
+        <AppLayout>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/product-analytics" element={<ProductAnalyticsPage />} />
+            <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
+            <Route path="/demos" element={<DemosPage />} />
+            <Route path="/chats" element={<ChatsPage />} />
+            <Route path="/email-replies" element={<EmailRepliesPage />} />
+            <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/leads/:filter" element={<LeadsPage />} />
+            <Route path="/leads/:id" element={<LeadDetailPage />} />
+            <Route path="/distribution" element={<DistributionPage />} />
+            <Route path="/follow-ups" element={<FollowUpsPage />} />
+            <Route path="/email" element={<EmailPage />} />
+            <Route path="/working-tree" element={<WorkingTreePage />} />
+            <Route path="/import" element={<ImportPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AppLayout>
+      </ChatSupportGate>
     </Protected>
   );
 }

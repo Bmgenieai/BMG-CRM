@@ -5,6 +5,7 @@ import { useAuth } from '../auth.jsx';
 import { money, BusinessTypeBadge, StateBadge, SourceBadge, StatusBadge } from '../components/Badges.jsx';
 import DrilldownModal from '../components/DrilldownModal.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
+import ChatSupportDashboard from './ChatSupportDashboard.jsx';
 
 const DASHBOARD_PERIODS = [
   { key: 'today', label: 'Today' },
@@ -53,7 +54,10 @@ export default function DashboardPage() {
   const [drilldown, setDrilldown] = useState(null);
   const [activeLeadId, setActiveLeadId] = useState(null);
 
+  const isChatSupport = user?.role === 'chat_support';
+
   useEffect(() => {
+    if (isChatSupport) return undefined;
     Promise.all([
       api('/analytics/overview'),
       api(`/analytics/funnel?period=${period}`),
@@ -65,7 +69,10 @@ export default function DashboardPage() {
         setBdWork(working);
       })
       .catch((e) => setError(e.message));
-  }, [period]);
+    return undefined;
+  }, [period, isChatSupport]);
+
+  if (isChatSupport) return <ChatSupportDashboard />;
 
   const openDrilldown = (metric, title, extra = {}) => {
     setDrilldown({
