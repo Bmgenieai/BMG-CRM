@@ -79,33 +79,21 @@ export default function EmailPerformancePage() {
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 16,
-          flexWrap: 'wrap',
-          marginBottom: '1rem',
-          alignItems: 'flex-start',
-        }}
-      >
-        <div>
-          <h1 className="page-title">Email stats</h1>
-          {data?.account ? (
-            <p className="page-sub" style={{ margin: 0 }}>
-              {data.account.name} &lt;{data.account.email}&gt;
-            </p>
-          ) : null}
-        </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <h1 className="page-title">Email stats</h1>
+        {data?.account ? (
+          <p className="page-sub" style={{ margin: '0 0 0.75rem' }}>
+            {data.account.name} &lt;{data.account.email}&gt;
+          </p>
+        ) : (
+          <div style={{ marginBottom: '0.75rem' }} />
+        )}
         <div
           style={{
-            display: 'flex',
-            flexDirection: 'row',
-            flexWrap: 'nowrap',
-            alignItems: 'center',
+            display: 'grid',
+            gridTemplateColumns: canTeam && (data?.team || []).length ? '1.4fr 1fr 1fr' : '1.4fr 1fr',
             gap: 8,
-            overflowX: 'auto',
-            maxWidth: '100%',
+            width: '100%',
           }}
         >
           <select
@@ -115,7 +103,7 @@ export default function EmailPerformancePage() {
               setAccountId(e.target.value);
               setFocusUserId('');
             }}
-            style={{ minWidth: 200, flex: '0 0 auto' }}
+            style={{ width: '100%', minWidth: 0 }}
           >
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -136,7 +124,7 @@ export default function EmailPerformancePage() {
                 setFocusUserId('');
               }
             }}
-            style={{ minWidth: 160, flex: '0 0 auto' }}
+            style={{ width: '100%', minWidth: 0 }}
           >
             <option value="account">All from this sender</option>
             <option value="me">My sends only</option>
@@ -146,7 +134,7 @@ export default function EmailPerformancePage() {
               className="select"
               value={focusUserId}
               onChange={(e) => setFocusUserId(e.target.value)}
-              style={{ minWidth: 140, flex: '0 0 auto' }}
+              style={{ width: '100%', minWidth: 0 }}
             >
               <option value="">All BDs</option>
               {data.team.map((t) => (
