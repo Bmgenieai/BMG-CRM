@@ -97,7 +97,17 @@ export default function EmailPerformancePage() {
             </p>
           ) : null}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'nowrap',
+            alignItems: 'center',
+            gap: 8,
+            overflowX: 'auto',
+            maxWidth: '100%',
+          }}
+        >
           <select
             className="select"
             value={activeAccountId}
@@ -105,7 +115,7 @@ export default function EmailPerformancePage() {
               setAccountId(e.target.value);
               setFocusUserId('');
             }}
-            style={{ minWidth: 220 }}
+            style={{ minWidth: 200, flex: '0 0 auto' }}
           >
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -126,7 +136,7 @@ export default function EmailPerformancePage() {
                 setFocusUserId('');
               }
             }}
-            style={{ minWidth: 140 }}
+            style={{ minWidth: 160, flex: '0 0 auto' }}
           >
             <option value="account">All from this sender</option>
             <option value="me">My sends only</option>
@@ -136,7 +146,7 @@ export default function EmailPerformancePage() {
               className="select"
               value={focusUserId}
               onChange={(e) => setFocusUserId(e.target.value)}
-              style={{ minWidth: 160 }}
+              style={{ minWidth: 140, flex: '0 0 auto' }}
             >
               <option value="">All BDs</option>
               {data.team.map((t) => (
