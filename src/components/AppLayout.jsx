@@ -20,9 +20,14 @@ import {
   Facebook,
   Instagram,
   User,
+  PanelLeftClose,
+  PanelLeft,
+  List,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
+
+const SIDEBAR_COLLAPSED_KEY = 'bmg-crm-sidebar-collapsed';
 
 const TOOL_LINKS = [
   { to: '/distribution', label: 'Distribution', icon: Share2, perm: 'leads:assign' },
@@ -67,27 +72,29 @@ function TabLink({ to, label, count, end = false }) {
     <NavLink
       to={to}
       end={end}
+      title={label}
       className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
     >
-      <span style={{ flex: 1 }}>{label}</span>
+      <span className="nav-label" style={{ flex: 1 }}>{label}</span>
       {count != null ? <span className="nav-count">{count}</span> : null}
     </NavLink>
   );
 }
 
-function NavSection({ label, open, onToggle, children }) {
+function NavSection({ label, open, onToggle, children, forceOpen = false }) {
+  const showBody = open || forceOpen;
   return (
     <div className="nav-section">
       <button
         type="button"
         className="nav-section-toggle"
-        aria-expanded={open}
+        aria-expanded={showBody}
         onClick={onToggle}
       >
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {showBody ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span>{label}</span>
       </button>
-      {open ? <div className="nav-section-body">{children}</div> : null}
+      {showBody ? <div className="nav-section-body">{children}</div> : null}
     </div>
   );
 }
@@ -102,8 +109,27 @@ export default function AppLayout({ children }) {
   const [inboundOpen, setInboundOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const profileRef = useRef(null);
   const isChatSupport = user?.role === 'chat_support';
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   const statusPathOpen = (() => {
     const m = location.pathname.match(/^\/leads\/([^/]+)/);
@@ -216,32 +242,52 @@ export default function AppLayout({ children }) {
             ? 'Chat Support'
             : user?.role;
 
+  const sidebarToggleBtn = (
+    <button
+      type="button"
+      className="sidebar-toggle"
+      aria-label={sidebarCollapsed ? 'Open sidebar' : 'Minimize sidebar'}
+      title={sidebarCollapsed ? 'Open sidebar' : 'Minimize sidebar'}
+      onClick={toggleSidebar}
+    >
+      {sidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+    </button>
+  );
+
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <img
-            className="brand-logo"
-            src="/bmgenie-logo.png"
-            alt="bmgenie.ai"
-          />
-          <span className="brand-ai">.ai</span>
-          <span className="brand-crm">CRM</span>
+    <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+      <aside className="sidebar" aria-label="Main navigation">
+        <div className="brand-row">
+          <div className="brand">
+            <img
+              className="brand-logo"
+              src="/bmgenie-logo.png"
+              alt="bmgenie.ai"
+            />
+            <span className="brand-ai">.ai</span>
+            <span className="brand-crm">CRM</span>
+          </div>
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto' }}>
-          <NavLink to="/" end className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+          <NavLink
+            to="/"
+            end
+            title="Dashboard"
+            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+          >
             <LayoutDashboard size={18} />
-            Dashboard
+            <span className="nav-label">Dashboard</span>
           </NavLink>
 
           {isChatSupport ? (
             <NavLink
               to="/chats"
+              title="Chats"
               className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
             >
               <MessageCircle size={18} />
-              <span style={{ flex: 1 }}>Chats</span>
+              <span className="nav-label" style={{ flex: 1 }}>Chats</span>
               {Number(counts?.chatsWaitingHuman || 0) > 0 ? (
                 <span
                   className="nav-count"
@@ -259,19 +305,21 @@ export default function AppLayout({ children }) {
               {can('analytics:view_team') ? (
                 <NavLink
                   to="/product-analytics"
+                  title="Product analytics"
                   className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
                 >
                   <BarChart3 size={18} />
-                  Product analytics
+                  <span className="nav-label">Product analytics</span>
                 </NavLink>
               ) : null}
 
               <NavLink
                 to="/telesales-working"
+                title="BD working"
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
                 <ClipboardList size={18} />
-                BD working
+                <span className="nav-label">BD working</span>
               </NavLink>
 
               <div className="nav-section-label">Leads</div>
@@ -280,12 +328,14 @@ export default function AppLayout({ children }) {
                   <NavLink
                     to="/leads"
                     end
+                    title="All leads"
                     className={({ isActive }) =>
                       `nav-link nav-link-sub nav-dropdown-link${isActive && !statusPathOpen ? ' active' : ''}`
                     }
                     onClick={() => setLeadsOpen(true)}
                   >
-                    <span style={{ flex: 1 }}>All leads</span>
+                    {sidebarCollapsed ? <List size={18} /> : null}
+                    <span className="nav-label" style={{ flex: 1 }}>All leads</span>
                     {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
                   </NavLink>
                   <button
@@ -318,10 +368,11 @@ export default function AppLayout({ children }) {
 
               <NavLink
                 to="/leads/linkedin"
+                title="LinkedIn leads"
                 className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
               >
                 <Linkedin size={16} />
-                <span style={{ flex: 1 }}>LinkedIn leads</span>
+                <span className="nav-label" style={{ flex: 1 }}>LinkedIn leads</span>
                 {counts?.socialCounts?.linkedin != null ? (
                   <span className="nav-count">{counts.socialCounts.linkedin}</span>
                 ) : null}
@@ -329,10 +380,11 @@ export default function AppLayout({ children }) {
 
               <NavLink
                 to="/leads/facebook"
+                title="Facebook leads"
                 className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
               >
                 <Facebook size={16} />
-                <span style={{ flex: 1 }}>Facebook leads</span>
+                <span className="nav-label" style={{ flex: 1 }}>Facebook leads</span>
                 {counts?.socialCounts?.facebook != null ? (
                   <span className="nav-count">{counts.socialCounts.facebook}</span>
                 ) : null}
@@ -340,51 +392,57 @@ export default function AppLayout({ children }) {
 
               <NavLink
                 to="/leads/instagram"
+                title="Instagram leads"
                 className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
               >
                 <Instagram size={16} />
-                <span style={{ flex: 1 }}>Instagram leads</span>
+                <span className="nav-label" style={{ flex: 1 }}>Instagram leads</span>
                 {counts?.socialCounts?.instagram != null ? (
                   <span className="nav-count">{counts.socialCounts.instagram}</span>
                 ) : null}
               </NavLink>
 
-              <NavSection
-                label="From bmgenie.ai"
-                open={productOpen}
-                onToggle={() => setProductOpen((o) => !o)}
-              >
-                {PRODUCT_TABS.map((t) => (
-                  <TabLink
-                    key={t.slug}
-                    to={`/leads/${t.slug}`}
-                    label={t.label}
-                    count={counts?.productCounts?.[t.slug]}
-                  />
-                ))}
-              </NavSection>
+              {!sidebarCollapsed ? (
+                <NavSection
+                  label="From bmgenie.ai"
+                  open={productOpen}
+                  onToggle={() => setProductOpen((o) => !o)}
+                >
+                  {PRODUCT_TABS.map((t) => (
+                    <TabLink
+                      key={t.slug}
+                      to={`/leads/${t.slug}`}
+                      label={t.label}
+                      count={counts?.productCounts?.[t.slug]}
+                    />
+                  ))}
+                </NavSection>
+              ) : null}
 
               <NavSection
                 label="Inbound"
                 open={inboundOpen}
                 onToggle={() => setInboundOpen((o) => !o)}
+                forceOpen={sidebarCollapsed}
               >
                 <NavLink
                   to="/demos"
+                  title="Book a demo"
                   className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
                 >
                   <CalendarDays size={16} />
-                  <span style={{ flex: 1 }}>Book a demo</span>
+                  <span className="nav-label" style={{ flex: 1 }}>Book a demo</span>
                   {counts?.demosCount != null ? (
                     <span className="nav-count">{counts.demosCount}</span>
                   ) : null}
                 </NavLink>
                 <NavLink
                   to="/chats"
+                  title="Chat support"
                   className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
                 >
                   <MessageCircle size={16} />
-                  <span style={{ flex: 1 }}>Chat support</span>
+                  <span className="nav-label" style={{ flex: 1 }}>Chat support</span>
                   {Number(counts?.chatsWaitingHuman || 0) > 0 ? (
                     <span
                       className="nav-count"
@@ -399,10 +457,11 @@ export default function AppLayout({ children }) {
                 </NavLink>
                 <NavLink
                   to="/email-replies"
+                  title="Email replies"
                   className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
                 >
                   <Inbox size={16} />
-                  <span style={{ flex: 1 }}>Email replies</span>
+                  <span className="nav-label" style={{ flex: 1 }}>Email replies</span>
                   {counts?.emailRepliesCount != null ? (
                     <span className="nav-count">{counts.emailRepliesCount}</span>
                   ) : null}
@@ -413,24 +472,41 @@ export default function AppLayout({ children }) {
                 label="Tools"
                 open={toolsOpen}
                 onToggle={() => setToolsOpen((o) => !o)}
+                forceOpen={sidebarCollapsed}
               >
                 {TOOL_LINKS.filter((l) => !l.perm || can(l.perm)).map((l) => (
                   <NavLink
                     key={l.to}
                     to={l.to}
+                    title={l.label}
                     className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
                   >
                     <l.icon size={18} />
-                    {l.label}
+                    <span className="nav-label">{l.label}</span>
                   </NavLink>
                 ))}
               </NavSection>
             </>
           )}
         </nav>
+
+        <button
+          type="button"
+          className="sidebar-collapse-footer"
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
+          onClick={toggleSidebar}
+        >
+          {sidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+          <span className="nav-label">{sidebarCollapsed ? 'Expand' : 'Minimize'}</span>
+        </button>
       </aside>
       <div className="content-area">
         <header className="app-topbar">
+          <div className="app-topbar-left">
+            {/* Re-open control when sidebar is hidden on small screens */}
+            {sidebarCollapsed ? sidebarToggleBtn : null}
+          </div>
           <div className="profile-menu" ref={profileRef}>
             <button
               type="button"
