@@ -24,6 +24,8 @@ export default function CampaignsPage() {
   const [steps, setSteps] = useState([emptyStep()]);
   const [pickLeads, setPickLeads] = useState([]);
   const [leadFilter, setLeadFilter] = useState('');
+  const [leadStatus, setLeadStatus] = useState('');
+  const [leadSource, setLeadSource] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -73,16 +75,23 @@ export default function CampaignsPage() {
 
   const filteredLeads = useMemo(() => {
     const q = leadFilter.trim().toLowerCase();
-    if (!q) return leads.slice(0, 200);
-    return leads
-      .filter(
-        (l) =>
-          (l.name || '').toLowerCase().includes(q) ||
-          (l.email || '').toLowerCase().includes(q) ||
-          (l.company || '').toLowerCase().includes(q),
-      )
-      .slice(0, 200);
-  }, [leads, leadFilter]);
+    return leads.filter((l) => {
+      if (leadStatus && l.status !== leadStatus) return false;
+      if (leadSource && l.source !== leadSource) return false;
+      if (!q) return true;
+      return (
+        (l.name || '').toLowerCase().includes(q) ||
+        (l.email || '').toLowerCase().includes(q) ||
+        (l.company || '').toLowerCase().includes(q)
+      );
+    });
+  }, [leads, leadFilter, leadStatus, leadSource]);
+
+  const selectFiltered = () => {
+    setPickLeads((prev) => [...new Set([...prev, ...filteredLeads.map((l) => l.id)])]);
+  };
+
+  const clearPick = () => setPickLeads([]);
 
   const applyTemplate = (idx, templateId) => {
     const tpl = templates.find((t) => t.id === templateId);
@@ -385,36 +394,89 @@ export default function CampaignsPage() {
             </button>
 
             <div className="field">
-              <label className="label">Leads ({pickLeads.length} selected)</label>
-              <input
-                className="input"
-                placeholder="Search"
-                value={leadFilter}
-                onChange={(e) => setLeadFilter(e.target.value)}
-                style={{ marginBottom: 8 }}
-              />
-              <div style={{ maxHeight: 180, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
-                {filteredLeads.map((l) => (
-                  <label
-                    key={l.id}
-                    style={{
-                      display: 'flex',
-                      gap: 8,
-                      padding: '6px 8px',
-                      borderBottom: '1px solid var(--border)',
-                      fontSize: '0.85rem',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={pickLeads.includes(l.id)}
-                      onChange={() => toggleLead(l.id)}
-                    />
-                    <span>
-                      {l.name} · {l.email}
-                    </span>
-                  </label>
-                ))}
+              <label className="label">
+                Leads ({pickLeads.length} selected · {filteredLeads.length} shown · {leads.length} with email)
+              </label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                <input
+                  className="input"
+                  placeholder="Search name, email, company"
+                  value={leadFilter}
+                  onChange={(e) => setLeadFilter(e.target.value)}
+                  style={{ flex: '1 1 160px', minWidth: 0 }}
+                />
+                <select
+                  className="select"
+                  value={leadStatus}
+                  onChange={(e) => setLeadStatus(e.target.value)}
+                  style={{ flex: '1 1 120px', minWidth: 0 }}
+                >
+                  <option value="">All statuses</option>
+                  <option value="uncontacted">Uncontacted</option>
+                  <option value="contacted">Contacted</option>
+                  <option value="qualified">Qualified</option>
+                  <option value="engaged">Engaged</option>
+                  <option value="nurture">Nurture</option>
+                </select>
+                <select
+                  className="select"
+                  value={leadSource}
+                  onChange={(e) => setLeadSource(e.target.value)}
+                  style={{ flex: '1 1 120px', minWidth: 0 }}
+                >
+                  <option value="">All sources</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="csv_import">CSV / Meta</option>
+                  <option value="telesales">BD</option>
+                  <option value="signup_no_listing">Signup</option>
+                  <option value="free_credit_no_purchase">Free credit</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <button type="button" className="btn btn-secondary" onClick={selectFiltered}>
+                  Select all shown
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={clearPick}>
+                  Clear
+                </button>
+              </div>
+              <div
+                style={{
+                  maxHeight: 360,
+                  overflow: 'auto',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                }}
+              >
+                {filteredLeads.length === 0 ? (
+                  <p className="empty" style={{ padding: 12, margin: 0 }}>
+                    No leads match. Try search or clear filters.
+                  </p>
+                ) : (
+                  filteredLeads.map((l) => (
+                    <label
+                      key={l.id}
+                      style={{
+                        display: 'flex',
+                        gap: 8,
+                        padding: '6px 8px',
+                        borderBottom: '1px solid var(--border)',
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={pickLeads.includes(l.id)}
+                        onChange={() => toggleLead(l.id)}
+                      />
+                      <span>
+                        {l.name} · {l.email}
+                      </span>
+                    </label>
+                  ))
+                )}
               </div>
             </div>
 
