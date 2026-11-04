@@ -28,12 +28,17 @@ function StatCard({ label, value, hint, onClick }) {
 }
 
 export default function EmailPerformancePage() {
-  const { user, can } = useAuth();
+  const { can } = useAuth();
   const canUse =
-    can('email:bulk_send') || can('analytics:view_own') || can('analytics:view_team') || can('analytics:view_all');
+    can('email:bulk_send') ||
+    can('analytics:view_own') ||
+    can('analytics:view_team') ||
+    can('analytics:view_all');
   const canTeam = can('analytics:view_team') || can('analytics:view_all');
 
   const [data, setData] = useState(null);
+  const [accountId, setAccountId] = useState('');
+  const [scope, setScope] = useState('account');
   const [focusUserId, setFocusUserId] = useState('');
   const [error, setError] = useState('');
   const [drilldown, setDrilldown] = useState(null);
@@ -43,21 +48,33 @@ export default function EmailPerformancePage() {
 
   const load = () => {
     setError('');
-    const qs = focusUserId ? `?userId=${encodeURIComponent(focusUserId)}` : '';
-    api(`/email/performance${qs}`)
-      .then(setData)
+    const params = new URLSearchParams();
+    if (accountId) params.set('emailAccountId', accountId);
+    params.set('scope', focusUserId ? 'me' : scope);
+    if (focusUserId) params.set('userId', focusUserId);
+    api(`/email/performance?${params}`)
+      .then((res) => {
+        setData(res);
+        if (!accountId && res.account?.id) setAccountId(res.account.id);
+      })
       .catch((e) => setError(e.message));
   };
 
   useEffect(() => {
     load();
-  }, [focusUserId]);
+  }, [accountId, scope, focusUserId]);
 
   const stats = data?.stats || {};
-  const viewUserId = focusUserId || data?.user?.id || user?.id;
+  const accounts = data?.accounts || [];
+  const activeAccountId = accountId || data?.account?.id || '';
 
   const openMetric = (metric, title) => {
-    setDrilldown({ metric, title, userId: viewUserId });
+    setDrilldown({
+      metric,
+      title,
+      emailAccountId: activeAccountId || undefined,
+      userId: focusUserId || (scope === 'me' ? data?.user?.id : undefined),
+    });
   };
 
   return (
@@ -73,28 +90,63 @@ export default function EmailPerformancePage() {
         }}
       >
         <div>
-          <h1 className="page-title">My email stats</h1>
-          {data?.user ? (
+          <h1 className="page-title">Email stats</h1>
+          {data?.account ? (
             <p className="page-sub" style={{ margin: 0 }}>
-              {data.user.name}
+              {data.account.name} &lt;{data.account.email}&gt;
             </p>
           ) : null}
         </div>
-        {canTeam && (data?.team || []).length ? (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <select
             className="select"
-            value={focusUserId}
-            onChange={(e) => setFocusUserId(e.target.value)}
-            style={{ minWidth: 180 }}
+            value={activeAccountId}
+            onChange={(e) => {
+              setAccountId(e.target.value);
+              setFocusUserId('');
+            }}
+            style={{ minWidth: 220 }}
           >
-            <option value="">Me</option>
-            {data.team.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label} · {a.email}
               </option>
             ))}
           </select>
-        ) : null}
+          <select
+            className="select"
+            value={focusUserId ? 'user' : scope}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === 'me') {
+                setScope('me');
+                setFocusUserId('');
+              } else if (v === 'account') {
+                setScope('account');
+                setFocusUserId('');
+              }
+            }}
+            style={{ minWidth: 140 }}
+          >
+            <option value="account">All from this sender</option>
+            <option value="me">My sends only</option>
+          </select>
+          {canTeam && (data?.team || []).length ? (
+            <select
+              className="select"
+              value={focusUserId}
+              onChange={(e) => setFocusUserId(e.target.value)}
+              style={{ minWidth: 160 }}
+            >
+              <option value="">All BDs</option>
+              {data.team.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
       </div>
 
       {error ? <div className="login-error">{error}</div> : null}
@@ -127,7 +179,7 @@ export default function EmailPerformancePage() {
 
       {canTeam && (data?.team || []).length ? (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>BD comparison</h3>
+          <h3 style={{ marginTop: 0 }}>By BD</h3>
           <div className="table-wrap">
             <table>
               <thead>
@@ -163,6 +215,7 @@ export default function EmailPerformancePage() {
           metric={drilldown.metric}
           period="overall"
           userId={drilldown.userId}
+          emailAccountId={drilldown.emailAccountId}
           onClose={() => setDrilldown(null)}
           onOpenLead={(id) => {
             setDrilldown(null);
@@ -172,11 +225,7 @@ export default function EmailPerformancePage() {
       ) : null}
 
       {leadId ? (
-        <LeadPanel
-          leadId={leadId}
-          onClose={() => setLeadId(null)}
-          onChanged={() => load()}
-        />
+        <LeadPanel leadId={leadId} onClose={() => setLeadId(null)} onChanged={() => load()} />
       ) : null}
     </div>
   );
