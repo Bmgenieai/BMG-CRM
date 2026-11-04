@@ -103,10 +103,6 @@ export default function ProductAnalyticsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h1 className="page-title">Product analytics</h1>
-          <p className="page-sub">
-            BMGenie site user tracking for CEO / managers. Click a number to see emails.
-            New users = signed up on the selected date only; after that day they are old users.
-          </p>
         </div>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.85rem' }}>
           Date

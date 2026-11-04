@@ -6,14 +6,9 @@ const OPTIONS = [
   { key: 'old', label: 'Old users' },
 ];
 
-/**
- * New = first signup on the selected/reference calendar day only.
- * From the next day they count as old.
- */
 export default function CohortFilter({
   value = 'all',
   onChange,
-  hint = true,
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -29,11 +24,6 @@ export default function CohortFilter({
           </button>
         ))}
       </div>
-      {hint ? (
-        <p className="stat-hint" style={{ margin: 0 }}>
-          New = signed up that calendar day only. Next day they become old users.
-        </p>
-      ) : null}
     </div>
   );
 }

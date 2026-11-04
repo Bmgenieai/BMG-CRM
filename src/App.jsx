@@ -15,6 +15,9 @@ import AdminPage from './pages/AdminPage.jsx';
 import ImportPage from './pages/ImportPage.jsx';
 import EmailPage from './pages/EmailPage.jsx';
 import EmailRepliesPage from './pages/EmailRepliesPage.jsx';
+import EmailAccountsPage from './pages/EmailAccountsPage.jsx';
+import CampaignsPage from './pages/CampaignsPage.jsx';
+import EmailPerformancePage from './pages/EmailPerformancePage.jsx';
 import DemosPage from './pages/DemosPage.jsx';
 import ChatsPage from './pages/ChatsPage.jsx';
 
@@ -60,6 +63,9 @@ function ProtectedLayout() {
             <Route path="/distribution" element={<DistributionPage />} />
             <Route path="/follow-ups" element={<FollowUpsPage />} />
             <Route path="/email" element={<EmailPage />} />
+            <Route path="/email-performance" element={<EmailPerformancePage />} />
+            <Route path="/campaigns" element={<CampaignsPage />} />
+            <Route path="/email-accounts" element={<EmailAccountsPage />} />
             <Route path="/working-tree" element={<WorkingTreePage />} />
             <Route path="/import" element={<ImportPage />} />
             <Route path="/admin" element={<AdminPage />} />

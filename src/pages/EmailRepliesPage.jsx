@@ -161,12 +161,6 @@ export default function EmailRepliesPage() {
   return (
     <div>
       <h1 className="page-title">Email replies</h1>
-      <p className="page-sub">
-        {canSeeAll
-          ? 'All BD cold-email replies. Open a row to see what we sent and what the prospect replied.'
-          : 'Replies to your cold emails. Open a row to see what you sent and what they replied.'}
-        {canReply ? ' Reply from CRM through your Brevo mailbox.' : ''}
-      </p>
 
       {inboundReady === false ? (
         <div className="card" style={{ marginBottom: '1rem', borderColor: 'var(--warn, #c9a227)' }}>

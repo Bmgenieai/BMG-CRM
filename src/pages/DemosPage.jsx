@@ -45,10 +45,6 @@ export default function DemosPage() {
   return (
     <div>
       <h1 className="page-title">Book a demo</h1>
-      <p className="page-sub">
-        Calendly bookings from bmgenie.ai — name, email, and scheduled time. Point Calendly webhooks to{' '}
-        <code>/api/ingest/calendly</code>.
-      </p>
 
       <div style={{ marginBottom: '1rem' }}>
         <CohortFilter value={cohort} onChange={setCohort} />
@@ -87,7 +83,7 @@ export default function DemosPage() {
 
       <div className="card">
         {rows.length === 0 ? (
-          <p>No demo bookings yet. After Calendly webhook is connected, bookings appear here.</p>
+          <p>No demo bookings yet.</p>
         ) : (
           <table className="table">
             <thead>

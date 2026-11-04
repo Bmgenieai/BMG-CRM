@@ -33,6 +33,9 @@ const TOOL_LINKS = [
   { to: '/distribution', label: 'Distribution', icon: Share2, perm: 'leads:assign' },
   { to: '/follow-ups', label: 'Follow-ups', icon: CalendarClock, perm: null },
   { to: '/email', label: 'Cold email', icon: Mail, perm: 'email:bulk_send' },
+  { to: '/email-performance', label: 'My email stats', icon: BarChart3, perm: 'email:bulk_send' },
+  { to: '/campaigns', label: 'Campaigns', icon: ClipboardList, perm: 'email:manage_campaigns' },
+  { to: '/email-accounts', label: 'Email accounts', icon: Mail, perm: 'email:manage_accounts' },
   { to: '/working-tree', label: 'Working tree', icon: GitBranch, perm: null },
   { to: '/import', label: 'CSV / Sheet import', icon: Upload, perm: 'leads:import' },
   { to: '/admin', label: 'Admin', icon: Shield, perm: 'admin:employees' },
@@ -498,7 +501,6 @@ export default function AppLayout({ children }) {
           onClick={toggleSidebar}
         >
           {sidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
-          <span className="nav-label">{sidebarCollapsed ? 'Expand' : 'Minimize'}</span>
         </button>
       </aside>
       <div className="content-area">

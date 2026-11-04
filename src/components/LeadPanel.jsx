@@ -129,6 +129,8 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [emailHtml, setEmailHtml] = useState('');
   const [emailText, setEmailText] = useState('');
   const [emailMsg, setEmailMsg] = useState('');
+  const [emailAccounts, setEmailAccounts] = useState([]);
+  const [emailAccountId, setEmailAccountId] = useState('');
   const [empForm, setEmpForm] = useState({ name: '', phone: '', email: '', job_title: '', notes: '' });
   const [editingEmpId, setEditingEmpId] = useState(null);
   const [expandedEmailId, setExpandedEmailId] = useState(null);
@@ -184,6 +186,14 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
       .then((s) => setBrevoOk(s.enabled))
       .catch(() => setBrevoOk(false));
     api('/email/templates').then((d) => setTemplates(d.templates || [])).catch(() => {});
+    api('/email/accounts')
+      .then((d) => {
+        const rows = (d.accounts || []).filter((a) => a.is_active);
+        setEmailAccounts(rows);
+        const def = rows.find((a) => a.is_default) || rows[0];
+        if (def) setEmailAccountId(def.id);
+      })
+      .catch(() => setEmailAccounts([]));
   }, []);
 
   useEffect(() => {
@@ -492,9 +502,10 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
           htmlContent: emailHtml,
           textContent: emailText,
           syncToBrevo: true,
+          emailAccountId: emailAccountId || undefined,
         },
       });
-      setEmailMsg('Email sent via Brevo');
+      setEmailMsg('Email sent');
       setEmailOpen(false);
       await load();
       notifyChanged();
@@ -1219,6 +1230,22 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       </div>
                     ) : (
                       <form onSubmit={sendColdEmail}>
+                        {emailAccounts.length ? (
+                          <div className="field">
+                            <label className="label">From</label>
+                            <select
+                              className="select"
+                              value={emailAccountId}
+                              onChange={(e) => setEmailAccountId(e.target.value)}
+                            >
+                              {emailAccounts.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.label} · {a.email}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
                         <div className="field">
                           <label className="label">Template</label>
                           <select

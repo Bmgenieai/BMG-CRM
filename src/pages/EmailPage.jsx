@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { CalendarClock, Mail, RefreshCw, Send, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -44,18 +43,27 @@ export default function EmailPage() {
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleAt, setScheduleAt] = useState(() => toLocalInputValue());
   const [scheduledBatches, setScheduledBatches] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [emailAccountId, setEmailAccountId] = useState('');
 
   const load = async () => {
     setError('');
     try {
-      const [st, tpl, leadRows] = await Promise.all([
+      const [st, tpl, leadRows, acc] = await Promise.all([
         api('/email/status'),
         api('/email/templates'),
         api('/leads'),
+        api('/email/accounts').catch(() => ({ accounts: [] })),
       ]);
       setStatus(st);
       setTemplates(tpl.templates || []);
       setLeads(leadRows || []);
+      const activeAccounts = (acc.accounts || []).filter((a) => a.is_active);
+      setAccounts(activeAccounts);
+      if (!emailAccountId) {
+        const def = activeAccounts.find((a) => a.is_default) || activeAccounts[0];
+        if (def) setEmailAccountId(def.id);
+      }
       if (canBulk) {
         try {
           const listData = await api('/email/lists');
@@ -147,6 +155,7 @@ export default function EmailPage() {
           htmlContent,
           textContent,
           syncToBrevo: true,
+          emailAccountId: emailAccountId || undefined,
         },
       });
       setMessage(`Sent ${data.sent} email(s)${data.failed ? ` · ${data.failed} failed` : ''}`);
@@ -208,6 +217,7 @@ export default function EmailPage() {
           textContent,
           syncToBrevo: true,
           scheduledAt: when.toISOString(),
+          emailAccountId: emailAccountId || undefined,
         },
       });
       setMessage(
@@ -240,14 +250,7 @@ export default function EmailPage() {
 
   return (
     <div>
-      <h1 className="page-title">Cold email (Brevo)</h1>
-      <p className="page-sub">
-        Send personalized outreach from {status?.sender || 'your verified Brevo sender'}. Templates use merge tags like{' '}
-        <code>{'{{first_name}}'}</code>, <code>{'{{company}}'}</code>. Default list filter shows{' '}
-        <strong>not emailed yet</strong> so you can work the outbox. Opens/replies appear after Brevo webhooks are pointed at{' '}
-        <code>/api/email/webhooks/brevo</code>. View reply messages under{' '}
-        <Link to="/email-replies">Email replies</Link>.
-      </p>
+      <h1 className="page-title">Cold email</h1>
 
       {error ? <div className="login-error">{error}</div> : null}
       {message ? <div className="card" style={{ borderColor: 'var(--success)', color: 'var(--success)', marginBottom: '1rem' }}>{message}</div> : null}
@@ -283,6 +286,25 @@ export default function EmailPage() {
           <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Mail size={18} /> Compose
           </h3>
+
+          <div className="field">
+            <label className="label">From</label>
+            <select
+              className="select"
+              value={emailAccountId}
+              onChange={(e) => setEmailAccountId(e.target.value)}
+            >
+              {accounts.length ? (
+                accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label} · {a.email}
+                  </option>
+                ))
+              ) : (
+                <option value="">{status?.sender || 'Default sender'}</option>
+              )}
+            </select>
+          </div>
 
           <div className="field">
             <label className="label">Template</label>

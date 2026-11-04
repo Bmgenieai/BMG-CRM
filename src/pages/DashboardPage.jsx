@@ -147,7 +147,7 @@ export default function DashboardPage() {
                   : `${periodObj.label}'s BD work`}
               </h3>
               <p className="stat-hint" style={{ margin: '0.25rem 0 0' }}>
-                {bdWork.timezone} · team outreach in <strong>{periodObj.label.toLowerCase()}</strong> (click any count to view)
+                Team outreach in <strong>{periodObj.label.toLowerCase()}</strong>
               </p>
             </div>
             <Link to={`/telesales-working?period=${period}`} className="btn btn-secondary">
@@ -410,9 +410,6 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
           <div>
             <h3 style={{ margin: 0 }}>Outreach by business type</h3>
-            <p className="stat-hint" style={{ margin: '0.2rem 0 0' }}>
-              CEO breakdown across prospect segments (Realtors, Owners, Agencies, Individuals, Photographers). Click any number to see records.
-            </p>
           </div>
         </div>
 
@@ -473,9 +470,6 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <div>
               <h3 style={{ margin: 0 }}>Outreach by US state</h3>
-              <p className="stat-hint" style={{ margin: '0.2rem 0 0' }}>
-                See where BDs are working geographically. Click leads / emails / replies for that state.
-              </p>
             </div>
             <Link to="/telesales-working" className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
               BD working by state →

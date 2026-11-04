@@ -138,7 +138,6 @@ export default function TelesalesWorkingPage() {
     label,
     fromYmd,
     toYmd,
-    timezone,
   } = data;
   const focusRep = focusUserId ? reps.find((r) => r.id === focusUserId) : null;
   const showTeamTable = canViewTeam && reps.length > 0;
@@ -160,14 +159,8 @@ export default function TelesalesWorkingPage() {
           <p className="page-sub">
             {label}
             {fromYmd === toYmd ? ` · ${fromYmd}` : ` · ${fromYmd} → ${toYmd}`}
-            {` · ${timezone}`}
             {focusRep ? ` · ${focusRep.name}` : ''}
           </p>
-          {canViewTeam ? (
-            <p className="stat-hint" style={{ margin: '0.35rem 0 0' }}>
-              Left side = activity volume (emails, LinkedIn, calls). Right side = unique leads that moved stages. Click any number to inspect in a modal.
-            </p>
-          ) : null}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
           <PeriodChips value={period} onChange={setPeriod} />
@@ -210,10 +203,6 @@ export default function TelesalesWorkingPage() {
       {/* Section 1: What BDs did (activities) */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>1. What BDs did (activities)</h3>
-        <p className="stat-hint" style={{ marginTop: 0 }}>
-          Raw work counts — one lead can have many emails / LinkedIn / Facebook / Instagram touches.
-          Click any card to see items.
-        </p>
         <div className="grid grid-6">
           <StatCard
             label="Leads added"
@@ -257,9 +246,6 @@ export default function TelesalesWorkingPage() {
       {/* Section 2: What moved in the funnel */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>2. What moved in the funnel (unique leads)</h3>
-        <p className="stat-hint" style={{ marginTop: 0 }}>
-          Stage changes — each number is a prospect, not an email. Click any card to inspect prospects.
-        </p>
         <div className="grid grid-4">
           <StatCard
             label="Leads touched"
@@ -312,9 +298,6 @@ export default function TelesalesWorkingPage() {
       {canViewTeam && byState.length > 0 ? (
         <div className="card" style={{ marginBottom: '1rem' }}>
           <h3 style={{ marginTop: 0 }}>Working by US state</h3>
-          <p className="stat-hint" style={{ marginTop: 0 }}>
-            Activity volume by prospect state for this period. Click a state to filter this page, or click a number to inspect records.
-          </p>
           <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
             <table>
               <thead>
@@ -414,9 +397,6 @@ export default function TelesalesWorkingPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div>
               <h3 style={{ margin: 0 }}>3. Per BD comparison</h3>
-              <p className="stat-hint" style={{ margin: '0.25rem 0 0' }}>
-                Click any cell count to view exact working for that rep. Click name to filter activity feed below.
-              </p>
             </div>
             {focusUserId ? (
               <button type="button" className="btn btn-ghost" onClick={() => setFocusUser('')}>
