@@ -65,9 +65,6 @@ export default function FollowUpsPage() {
   return (
     <div>
       <h1 className="page-title">Follow-ups</h1>
-      <p className="page-sub">
-        Click a lead to open the side panel — complete from the table or inside the drawer.
-      </p>
 
       {error ? <div className="login-error">{error}</div> : null}
 

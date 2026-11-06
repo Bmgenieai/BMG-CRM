@@ -367,137 +367,139 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   return (
     <div>
       <h1 className="page-title">{pageTitle}</h1>
-      <p className="page-sub">
-        {filter === 'signup' && 'Auto-created when users sign up on bmgenie.ai without buying a package.'}
-        {filter === 'free-credit' &&
-          'Product source from BMGenie: prospect used free trial credit and has not purchased. This is not a Brevo tag. “Added by” is who created the CRM lead.'}
-        {filter === 'winback' && 'Bought a package, used all credits, has not repurchased.'}
-        {!filter && 'Click a row to open the side panel — list stays visible.'}
-        {filter && !['signup', 'free-credit', 'winback'].includes(filter) && 'Filter by sales funnel stage.'}
-      </p>
+      {(filter === 'signup' || filter === 'free-credit' || filter === 'winback') ? (
+        <p className="page-sub">
+          {filter === 'signup' && 'Auto-created when users sign up on bmgenie.ai without buying a package.'}
+          {filter === 'free-credit' &&
+            'Product source from BMGenie: prospect used free trial credit and has not purchased. This is not a Brevo tag. “Added by” is who created the CRM lead.'}
+          {filter === 'winback' && 'Bought a package, used all credits, has not repurchased.'}
+        </p>
+      ) : null}
 
       {error ? <div className="login-error">{error}</div> : null}
 
-      <div className="toolbar">
-        <input
-          className="input"
-          placeholder="Search name, email, company, industry, state…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && load()}
-        />
-        {!filter && (
-          <>
-            <select className="select" value={source} onChange={(e) => setSource(e.target.value)}>
-              <option value="">All sources</option>
-              {meta.sources.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-            <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">All statuses</option>
-              {FUNNEL_STATUSES.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        <select
-          className="select"
-          value={businessType}
-          onChange={(e) => setBusinessType(e.target.value)}
-          title="Filter by business type"
-        >
-          <option value="">All business types</option>
-          {Object.entries(BUSINESS_TYPE_LABELS).map(([k, label]) => (
-            <option key={k} value={k}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="select"
-          value={stateFilter}
-          onChange={(e) => setStateFilter(e.target.value)}
-          title="Filter by US state"
-        >
-          <option value="">All states</option>
-          {(meta.states?.length
-            ? meta.states.map((s) => s.state)
-            : US_STATES.map((s) => s.code)
-          ).map((st) => (
-            <option key={st} value={st}>
-              {st}
-            </option>
-          ))}
-          <option value="unspecified">No state set</option>
-        </select>
-        <select
-          className="select"
-          value={followUpDue}
-          onChange={(e) => setFollowUpDue(e.target.value)}
-          title="Follow-up due filter"
-        >
-          <option value="">All follow-ups</option>
-          <option value="today">Due for follow-up today</option>
-          <option value="overdue">Overdue follow-up</option>
-          <option value="upcoming">Upcoming follow-up</option>
-        </select>
-        <select className="select" value={emailStatus} onChange={(e) => setEmailStatus(e.target.value)}>
-          <option value="">All email</option>
-          <option value="sent">Emailed</option>
-          <option value="opened">Opened email</option>
-          <option value="replied">Replied email</option>
-          <option value="not_sent">Not emailed</option>
-        </select>
-        <select
-          className="select"
-          value={importBatchId}
-          onChange={(e) => setImportBatchId(e.target.value)}
-          title="Filter by CSV upload batch"
-        >
-          <option value="">All upload batches</option>
-          {(meta.importBatches || []).map((b) => (
-            <option key={b.id} value={b.id}>
-              {fmtDay(b.created_at)} · {b.filename || 'CSV'} ({b.imported_count ?? '?'})
-            </option>
-          ))}
-        </select>
-        <input
-          className="input"
-          type="date"
-          title="Start date (date added)"
-          aria-label="Start date"
-          value={dateAddedFrom}
-          onChange={(e) => setDateAddedFrom(e.target.value)}
-          style={{ maxWidth: 150 }}
-        />
-        <input
-          className="input"
-          type="date"
-          title="End date (date added)"
-          aria-label="End date"
-          value={dateAddedTo}
-          onChange={(e) => setDateAddedTo(e.target.value)}
-          style={{ maxWidth: 150 }}
-        />
-        <button type="button" className="btn btn-secondary" onClick={load}>
-          Refresh
-        </button>
-        {can('leads:import') ? (
-          <button type="button" className="btn btn-secondary" onClick={() => setShowCsvImport(true)}>
-            CSV upload
-          </button>
-        ) : null}
-        {can('leads:create') ? (
-          <button type="button" className="btn btn-primary" onClick={handleOpenCreate}>
-            New lead
-          </button>
-        ) : null}
+      <div className="leads-toolbar card">
+        <div className="leads-toolbar-row leads-toolbar-primary">
+          <input
+            className="input leads-toolbar-search"
+            placeholder="Search name, email, company, industry, state…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && load()}
+          />
+          <div className="leads-toolbar-actions">
+            {can('leads:import') ? (
+              <button type="button" className="btn btn-secondary" onClick={() => setShowCsvImport(true)}>
+                CSV upload
+              </button>
+            ) : null}
+            {can('leads:create') ? (
+              <button type="button" className="btn btn-primary" onClick={handleOpenCreate}>
+                New lead
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="leads-toolbar-row leads-toolbar-filters">
+          {!filter ? (
+            <>
+              <select className="select" value={source} onChange={(e) => setSource(e.target.value)}>
+                <option value="">All sources</option>
+                {meta.sources.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">All statuses</option>
+                {FUNNEL_STATUSES.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
+          <select
+            className="select"
+            value={businessType}
+            onChange={(e) => setBusinessType(e.target.value)}
+            title="Filter by business type"
+          >
+            <option value="">All business types</option>
+            {Object.entries(BUSINESS_TYPE_LABELS).map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="select"
+            value={stateFilter}
+            onChange={(e) => setStateFilter(e.target.value)}
+            title="Filter by US state"
+          >
+            <option value="">All states</option>
+            {(meta.states?.length
+              ? meta.states.map((s) => s.state)
+              : US_STATES.map((s) => s.code)
+            ).map((st) => (
+              <option key={st} value={st}>
+                {st}
+              </option>
+            ))}
+            <option value="unspecified">No state set</option>
+          </select>
+          <select
+            className="select"
+            value={followUpDue}
+            onChange={(e) => setFollowUpDue(e.target.value)}
+            title="Follow-up due filter"
+          >
+            <option value="">All follow-ups</option>
+            <option value="today">Due for follow-up today</option>
+            <option value="overdue">Overdue follow-up</option>
+            <option value="upcoming">Upcoming follow-up</option>
+          </select>
+          <select className="select" value={emailStatus} onChange={(e) => setEmailStatus(e.target.value)}>
+            <option value="">All email</option>
+            <option value="sent">Emailed</option>
+            <option value="opened">Opened email</option>
+            <option value="replied">Replied email</option>
+            <option value="not_sent">Not emailed</option>
+          </select>
+          <select
+            className="select"
+            value={importBatchId}
+            onChange={(e) => setImportBatchId(e.target.value)}
+            title="Filter by CSV upload batch"
+          >
+            <option value="">All upload batches</option>
+            {(meta.importBatches || []).map((b) => (
+              <option key={b.id} value={b.id}>
+                {fmtDay(b.created_at)} · {b.filename || 'CSV'} ({b.imported_count ?? '?'})
+              </option>
+            ))}
+          </select>
+          <input
+            className="input"
+            type="date"
+            title="Start date (date added)"
+            aria-label="Start date"
+            value={dateAddedFrom}
+            onChange={(e) => setDateAddedFrom(e.target.value)}
+          />
+          <input
+            className="input"
+            type="date"
+            title="End date (date added)"
+            aria-label="End date"
+            value={dateAddedTo}
+            onChange={(e) => setDateAddedTo(e.target.value)}
+          />
+        </div>
       </div>
 
       {selected.size > 0 && can('leads:update_own') ? (
