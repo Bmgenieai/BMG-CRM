@@ -606,6 +606,17 @@ tr:hover td { background: #f8fafc; }
   gap: 6px;
   align-items: center;
 }
+.dashboard-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .dashboard-split {
+    grid-template-columns: 1fr;
+  }
+}
 .snapshot-card {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }

@@ -276,14 +276,6 @@ export default function AppLayout({ children }) {
                   <span className="nav-label">Book a demo</span>
                 </NavLink>
                 <NavLink
-                  to="/chats"
-                  title="Chat support"
-                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-                >
-                  <MessageCircle size={16} />
-                  <span className="nav-label">Chat support</span>
-                </NavLink>
-                <NavLink
                   to="/email-replies"
                   title="Email replies"
                   className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}

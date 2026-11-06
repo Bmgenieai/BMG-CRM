@@ -14,16 +14,56 @@ const DASHBOARD_PERIODS = [
   { key: 'overall', label: 'Overall' },
 ];
 
-/** Simplified pipeline — matches status picker (no challenge-accepted / trial). */
+/**
+ * Pipeline left → right. Display count = leads at this stage OR further
+ * (so numbers always go high → low). Hidden statuses (challenge/trial) still
+ * count toward “Demo or further”.
+ */
 const PIPELINE_STAGES = [
-  { key: 'uncontacted', label: 'New', field: 'uncontacted' },
-  { key: 'contacted', label: 'Contacted', field: 'contacted' },
-  { key: 'engaged', label: 'Engaged', field: 'engaged' },
-  { key: 'qualified', label: 'Qualified', field: 'qualified' },
-  { key: 'demo_scheduled', label: 'Demo', field: 'demoScheduled' },
-  { key: 'paid', label: 'Paid', field: 'paid' },
-  { key: 'repeat', label: 'Repeat', field: 'repeat' },
+  { key: 'uncontacted', label: 'New' },
+  { key: 'contacted', label: 'Contacted' },
+  { key: 'engaged', label: 'Engaged' },
+  { key: 'qualified', label: 'Qualified' },
+  { key: 'demo_scheduled', label: 'Demo' },
+  { key: 'paid', label: 'Paid' },
+  { key: 'repeat', label: 'Repeat' },
 ];
+
+/** Full order for cumulative math (includes statuses not shown as boxes). */
+const PIPELINE_CUMULATIVE_ORDER = [
+  'uncontacted',
+  'contacted',
+  'engaged',
+  'qualified',
+  'demo_scheduled',
+  'challenge_offered',
+  'challenge_accepted',
+  'trial',
+  'paid',
+  'repeat',
+];
+
+function stageStock(stages, key) {
+  const map = {
+    uncontacted: stages.uncontacted,
+    contacted: stages.contacted,
+    engaged: stages.engaged,
+    qualified: stages.qualified,
+    demo_scheduled: stages.demoScheduled,
+    challenge_offered: stages.challengeOffered,
+    challenge_accepted: stages.challengeAccepted,
+    trial: stages.trials,
+    paid: stages.paid,
+    repeat: stages.repeat,
+  };
+  return Number(map[key]) || 0;
+}
+
+function cumulativeFromStage(stages, fromKey) {
+  const idx = PIPELINE_CUMULATIVE_ORDER.indexOf(fromKey);
+  if (idx < 0) return stageStock(stages, fromKey);
+  return PIPELINE_CUMULATIVE_ORDER.slice(idx).reduce((sum, key) => sum + stageStock(stages, key), 0);
+}
 
 function SnapshotCard({ label, value, hint, danger, onClick }) {
   return (
@@ -114,6 +154,7 @@ export default function DashboardPage() {
       metric,
       title: title || String(metric).replace(/_/g, ' '),
       period,
+      cumulative: false,
       ...extra,
     });
   };
@@ -124,7 +165,6 @@ export default function DashboardPage() {
   const stages = funnel?.stages || {};
   const emailsSent = (totals.emails || 0) + (totals.emailFollowups || 0);
   const overdueFollowups = reps.reduce((s, r) => s + (Number(r.overdueFollowups) || 0), 0);
-  const demosBooked = totals.toDemo ?? 0;
 
   if (error) return <div className="card">{error}</div>;
   if (!funnel || !bdWork) return <div className="card">Loading dashboard…</div>;
@@ -322,11 +362,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 3) Pipeline */}
+      {/* 3) Pipeline — cumulative (high → low) */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>Pipeline</h3>
         <p className="stat-hint" style={{ marginTop: 0 }}>
-          Each lead sits in one stage. Click a stage to see who.
+          Leads at this stage or further — numbers shrink left to right. Click to see who.
         </p>
         <div className="funnel-flow">
           {PIPELINE_STAGES.map((s, idx) => (
@@ -334,8 +374,13 @@ export default function DashboardPage() {
               {idx > 0 ? <span className="funnel-arrow">→</span> : null}
               <FunnelStep
                 label={s.label}
-                value={stages[s.field] ?? 0}
-                onClick={() => openDrilldown('stage', `${s.label} leads`, { stage: s.key })}
+                value={cumulativeFromStage(stages, s.key)}
+                onClick={() =>
+                  openDrilldown('stage', `${s.label} or further`, {
+                    stage: s.key,
+                    cumulative: true,
+                  })
+                }
               />
             </React.Fragment>
           ))}
@@ -353,60 +398,183 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* 4) Needs attention */}
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Needs attention</h3>
-        <div className="grid grid-2" style={{ gap: 12 }}>
-          <div
-            className="attention-item"
-            onClick={() => openDrilldown('followups_overdue', 'Overdue follow-ups')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                openDrilldown('followups_overdue', 'Overdue follow-ups');
-              }
-            }}
-          >
-            <div>
-              <strong>Overdue follow-ups</strong>
-              <p className="stat-hint" style={{ margin: '0.15rem 0 0' }}>
-                Past due — should be worked next
-              </p>
-            </div>
-            <span
-              className="attention-count"
-              style={{ color: overdueFollowups > 0 ? 'var(--danger)' : undefined }}
-            >
-              {overdueFollowups}
-            </span>
-          </div>
-          <div
-            className="attention-item"
-            onClick={() => openDrilldown('demos_booked', `Demos booked (${periodLabel})`)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                openDrilldown('demos_booked', `Demos booked (${periodLabel})`);
-              }
-            }}
-          >
-            <div>
-              <strong>Demos booked</strong>
-              <p className="stat-hint" style={{ margin: '0.15rem 0 0' }}>
-                In {periodLabel.toLowerCase()}
-              </p>
-            </div>
-            <span className="attention-count">{demosBooked}</span>
+      {/* 4) By profession + by US state — same period chips */}
+      <div className="dashboard-split" style={{ marginBottom: '1rem' }}>
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>By profession</h3>
+          <p className="stat-hint" style={{ marginTop: 0 }}>
+            Realtors, agencies, photographers — activity in{' '}
+            <strong>{periodLabel.toLowerCase()}</strong>. Click a number for the list.
+          </p>
+          <div className="table-wrap">
+            <table className="leads-table">
+              <thead>
+                <tr>
+                  <th>Profession</th>
+                  <th>Leads added</th>
+                  <th>Emails</th>
+                  <th>Replies</th>
+                  <th>Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.byBusinessType || []).length ? (
+                  funnel.byBusinessType.map((row) => (
+                    <tr key={row.key}>
+                      <td style={{ fontWeight: 600 }}>{row.label}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          onClick={() =>
+                            openDrilldown('business_type', `${row.label} — leads added`, {
+                              businessType: row.key,
+                            })
+                          }
+                        >
+                          {row.leadsAdded ?? 0}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          onClick={() =>
+                            openDrilldown(
+                              'emails_by_business_type',
+                              `${row.label} — emails`,
+                              { businessType: row.key },
+                            )
+                          }
+                        >
+                          {row.emailsSent ?? 0}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          onClick={() =>
+                            openDrilldown('email_replies', `${row.label} — replies`, {
+                              businessType: row.key,
+                            })
+                          }
+                        >
+                          {row.replies ?? 0}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          onClick={() =>
+                            openDrilldown('paid', `${row.label} — paid`, {
+                              businessType: row.key,
+                            })
+                          }
+                        >
+                          {row.paid ?? 0}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="empty">
+                      No profession activity in this period
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-        <div style={{ marginTop: '0.85rem' }}>
-          <Link to="/follow-ups" className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
-            Open follow-ups →
-          </Link>
+
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>By US state</h3>
+          <p className="stat-hint" style={{ marginTop: 0 }}>
+            Where leads came from and were worked — same period. Top states first.
+          </p>
+          <div className="table-wrap">
+            <table className="leads-table">
+              <thead>
+                <tr>
+                  <th>State</th>
+                  <th>Leads added</th>
+                  <th>Emails</th>
+                  <th>Replies</th>
+                  <th>Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.byState || []).length ? (
+                  funnel.byState.map((row) => (
+                    <tr key={row.key}>
+                      <td style={{ fontWeight: 600 }}>{row.label}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          onClick={() =>
+                            openDrilldown('by_state', `${row.label} — leads added`, {
+                              state: row.key,
+                            })
+                          }
+                        >
+                          {row.leadsAdded ?? 0}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          onClick={() =>
+                            openDrilldown('emails_by_state', `${row.label} — emails`, {
+                              state: row.key,
+                            })
+                          }
+                        >
+                          {row.emailsSent ?? 0}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          onClick={() =>
+                            openDrilldown('email_replies', `${row.label} — replies`, {
+                              state: row.key,
+                            })
+                          }
+                        >
+                          {row.replies ?? 0}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          onClick={() =>
+                            openDrilldown('paid', `${row.label} — paid`, {
+                              state: row.key,
+                            })
+                          }
+                        >
+                          {row.paid ?? 0}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="empty">
+                      No state activity in this period
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -417,6 +585,7 @@ export default function DashboardPage() {
           period={drilldown.period}
           userId={drilldown.userId}
           stage={drilldown.stage}
+          cumulative={drilldown.cumulative}
           businessType={drilldown.businessType}
           state={drilldown.state}
           reason={drilldown.reason}

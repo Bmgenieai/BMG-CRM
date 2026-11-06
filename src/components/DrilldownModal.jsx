@@ -9,6 +9,7 @@ export default function DrilldownModal({
   userId,
   emailAccountId,
   stage,
+  cumulative = false,
   businessType,
   state,
   reason,
@@ -31,6 +32,7 @@ export default function DrilldownModal({
     if (userId) params.set('userId', userId);
     if (emailAccountId) params.set('emailAccountId', emailAccountId);
     if (stage) params.set('stage', stage);
+    if (cumulative) params.set('cumulative', '1');
     if (businessType) params.set('businessType', businessType);
     if (state) params.set('state', state);
     if (reason) params.set('reason', reason);
@@ -44,7 +46,7 @@ export default function DrilldownModal({
         setError(e.message || 'Failed to load details');
         setLoading(false);
       });
-  }, [metric, period, userId, emailAccountId, stage, businessType, state, reason]);
+  }, [metric, period, userId, emailAccountId, stage, cumulative, businessType, state, reason]);
 
   const items = data?.items || [];
 
