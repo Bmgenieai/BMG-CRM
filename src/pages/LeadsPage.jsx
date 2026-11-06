@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 import CohortFilter from '../components/CohortFilter.jsx';
+import CsvImportModal from '../components/CsvImportModal.jsx';
 
 const FILTER_TITLES = {
   uncontacted: 'New / Uncontacted',
@@ -167,6 +168,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [bulkFuDate, setBulkFuDate] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showCsvImport, setShowCsvImport] = useState(false);
   const [form, setForm] = useState(() => ({
     ...EMPTY_FORM,
     source: user?.role === 'telesales' ? 'telesales' : 'manual',
@@ -522,9 +524,9 @@ export default function LeadsPage({ refreshSidebarCounts }) {
           Refresh
         </button>
         {can('leads:import') ? (
-          <Link to="/import" className="btn btn-secondary">
+          <button type="button" className="btn btn-secondary" onClick={() => setShowCsvImport(true)}>
             CSV upload
-          </Link>
+          </button>
         ) : null}
         {can('leads:create') ? (
           <button type="button" className="btn btn-primary" onClick={handleOpenCreate}>
@@ -676,6 +678,16 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
       {selectedId ? (
         <LeadPanel leadId={selectedId} onClose={closeLead} onChanged={load} />
+      ) : null}
+
+      {showCsvImport ? (
+        <CsvImportModal
+          onClose={() => setShowCsvImport(false)}
+          onImported={() => {
+            load();
+            refreshSidebarCounts?.();
+          }}
+        />
       ) : null}
 
       {showCreate ? (

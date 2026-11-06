@@ -2,10 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
-  GitBranch,
   CalendarClock,
-  Share2,
-  Upload,
   Shield,
   LogOut,
   Mail,
@@ -16,9 +13,6 @@ import {
   ClipboardList,
   ChevronDown,
   ChevronRight,
-  Linkedin,
-  Facebook,
-  Instagram,
   User,
   PanelLeftClose,
   PanelLeft,
@@ -30,33 +24,12 @@ import { useAuth } from '../auth.jsx';
 const SIDEBAR_COLLAPSED_KEY = 'bmg-crm-sidebar-collapsed';
 
 const TOOL_LINKS = [
-  { to: '/distribution', label: 'Distribution', icon: Share2, perm: 'leads:assign' },
-  { to: '/follow-ups', label: 'Follow-ups', icon: CalendarClock, perm: null },
   { to: '/email', label: 'Cold email', icon: Mail, perm: 'email:bulk_send' },
   { to: '/email-performance', label: 'My email stats', icon: BarChart3, perm: 'email:bulk_send' },
   { to: '/campaigns', label: 'Campaigns', icon: ClipboardList, perm: 'email:manage_campaigns' },
   { to: '/email-accounts', label: 'Email accounts', icon: Mail, perm: 'email:manage_accounts' },
-  { to: '/working-tree', label: 'Working tree', icon: GitBranch, perm: null },
-  { to: '/import', label: 'CSV / Sheet import', icon: Upload, perm: 'leads:import' },
   { to: '/admin', label: 'Admin', icon: Shield, perm: 'admin:employees' },
 ];
-
-const STATUS_TABS = [
-  { slug: 'uncontacted', label: 'Uncontacted' },
-  { slug: 'contacted', label: 'Contacted' },
-  { slug: 'engaged', label: 'Engaged' },
-  { slug: 'qualified', label: 'Qualified' },
-  { slug: 'demo-scheduled', label: 'Demo scheduled' },
-  { slug: 'challenge-offered', label: 'Challenge offered' },
-  { slug: 'challenge-accepted', label: 'Challenge accepted' },
-  { slug: 'trial', label: 'Test completed' },
-  { slug: 'paid', label: 'Paid' },
-  { slug: 'repeat', label: 'Repeat' },
-  { slug: 'nurture', label: 'Nurture / DQ' },
-];
-
-const STATUS_SLUGS = new Set(STATUS_TABS.map((t) => t.slug));
-const SOCIAL_SLUGS = new Set(['linkedin', 'facebook', 'instagram']);
 
 const PRODUCT_TABS = [
   { slug: 'signup', label: 'Signup · no purchase' },
@@ -107,7 +80,6 @@ export default function AppLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [counts, setCounts] = useState(null);
-  const [leadsOpen, setLeadsOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
   const [inboundOpen, setInboundOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -134,11 +106,6 @@ export default function AppLayout({ children }) {
     });
   };
 
-  const statusPathOpen = (() => {
-    const m = location.pathname.match(/^\/leads\/([^/]+)/);
-    return Boolean(m && STATUS_SLUGS.has(m[1]));
-  })();
-
   const productPathOpen = (() => {
     const m = location.pathname.match(/^\/leads\/([^/]+)/);
     return Boolean(m && PRODUCT_SLUGS.has(m[1]));
@@ -146,10 +113,6 @@ export default function AppLayout({ children }) {
 
   const inboundPathOpen = INBOUND_PATHS.has(location.pathname);
   const toolsPathOpen = TOOL_PATHS.has(location.pathname);
-
-  useEffect(() => {
-    if (statusPathOpen) setLeadsOpen(true);
-  }, [statusPathOpen]);
 
   useEffect(() => {
     if (productPathOpen) setProductOpen(true);
@@ -305,104 +268,24 @@ export default function AppLayout({ children }) {
             </NavLink>
           ) : (
             <>
-              {can('analytics:view_team') ? (
-                <NavLink
-                  to="/product-analytics"
-                  title="Product analytics"
-                  className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-                >
-                  <BarChart3 size={18} />
-                  <span className="nav-label">Product analytics</span>
-                </NavLink>
-              ) : null}
-
-              <NavLink
-                to="/telesales-working"
-                title="BD working"
-                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-              >
-                <ClipboardList size={18} />
-                <span className="nav-label">BD working</span>
-              </NavLink>
-
               <div className="nav-section-label">Leads</div>
-              <div className="nav-dropdown">
-                <div className="nav-dropdown-row">
-                  <NavLink
-                    to="/leads"
-                    end
-                    title="All leads"
-                    className={({ isActive }) =>
-                      `nav-link nav-link-sub nav-dropdown-link${isActive && !statusPathOpen ? ' active' : ''}`
-                    }
-                    onClick={() => setLeadsOpen(true)}
-                  >
-                    {sidebarCollapsed ? <List size={18} /> : null}
-                    <span className="nav-label" style={{ flex: 1 }}>All leads</span>
-                    {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
-                  </NavLink>
-                  <button
-                    type="button"
-                    className="nav-dropdown-toggle"
-                    aria-expanded={leadsOpen}
-                    aria-label={leadsOpen ? 'Hide lead statuses' : 'Show lead statuses'}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setLeadsOpen((o) => !o);
-                    }}
-                  >
-                    {leadsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </button>
-                </div>
-                {leadsOpen ? (
-                  <div className="nav-dropdown-children">
-                    {STATUS_TABS.map((t) => (
-                      <TabLink
-                        key={t.slug}
-                        to={`/leads/${t.slug}`}
-                        label={t.label}
-                        count={counts?.statusCounts?.[t.slug]}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
               <NavLink
-                to="/leads/linkedin"
-                title="LinkedIn leads"
+                to="/leads"
+                end
+                title="All leads"
                 className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
               >
-                <Linkedin size={16} />
-                <span className="nav-label" style={{ flex: 1 }}>LinkedIn leads</span>
-                {counts?.socialCounts?.linkedin != null ? (
-                  <span className="nav-count">{counts.socialCounts.linkedin}</span>
-                ) : null}
+                {sidebarCollapsed ? <List size={18} /> : null}
+                <span className="nav-label" style={{ flex: 1 }}>All leads</span>
+                {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
               </NavLink>
-
               <NavLink
-                to="/leads/facebook"
-                title="Facebook leads"
+                to="/follow-ups"
+                title="Follow-ups"
                 className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
               >
-                <Facebook size={16} />
-                <span className="nav-label" style={{ flex: 1 }}>Facebook leads</span>
-                {counts?.socialCounts?.facebook != null ? (
-                  <span className="nav-count">{counts.socialCounts.facebook}</span>
-                ) : null}
-              </NavLink>
-
-              <NavLink
-                to="/leads/instagram"
-                title="Instagram leads"
-                className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-              >
-                <Instagram size={16} />
-                <span className="nav-label" style={{ flex: 1 }}>Instagram leads</span>
-                {counts?.socialCounts?.instagram != null ? (
-                  <span className="nav-count">{counts.socialCounts.instagram}</span>
-                ) : null}
+                <CalendarClock size={16} />
+                <span className="nav-label" style={{ flex: 1 }}>Follow-ups</span>
               </NavLink>
 
               {!sidebarCollapsed ? (

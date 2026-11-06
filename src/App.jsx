@@ -4,15 +4,11 @@ import { useAuth } from './auth.jsx';
 import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
-import ProductAnalyticsPage from './pages/ProductAnalyticsPage.jsx';
 import TelesalesWorkingPage from './pages/TelesalesWorkingPage.jsx';
 import LeadsPage from './pages/LeadsPage.jsx';
 import LeadDetailPage from './pages/LeadDetailPage.jsx';
-import DistributionPage from './pages/DistributionPage.jsx';
 import FollowUpsPage from './pages/FollowUpsPage.jsx';
-import WorkingTreePage from './pages/WorkingTreePage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
-import ImportPage from './pages/ImportPage.jsx';
 import EmailPage from './pages/EmailPage.jsx';
 import EmailRepliesPage from './pages/EmailRepliesPage.jsx';
 import EmailAccountsPage from './pages/EmailAccountsPage.jsx';
@@ -52,7 +48,7 @@ function ProtectedLayout() {
         <AppLayout>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/product-analytics" element={<ProductAnalyticsPage />} />
+            {/* Kept for Dashboard “full BD report” deep links; no sidebar tab */}
             <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
             <Route path="/demos" element={<DemosPage />} />
             <Route path="/chats" element={<ChatsPage />} />
@@ -60,15 +56,17 @@ function ProtectedLayout() {
             <Route path="/leads" element={<LeadsPage />} />
             <Route path="/leads/:filter" element={<LeadsPage />} />
             <Route path="/leads/:id" element={<LeadDetailPage />} />
-            <Route path="/distribution" element={<DistributionPage />} />
             <Route path="/follow-ups" element={<FollowUpsPage />} />
             <Route path="/email" element={<EmailPage />} />
             <Route path="/email-performance" element={<EmailPerformancePage />} />
             <Route path="/campaigns" element={<CampaignsPage />} />
             <Route path="/email-accounts" element={<EmailAccountsPage />} />
-            <Route path="/working-tree" element={<WorkingTreePage />} />
-            <Route path="/import" element={<ImportPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            {/* Removed from sidebar — redirect old bookmarks */}
+            <Route path="/product-analytics" element={<Navigate to="/" replace />} />
+            <Route path="/distribution" element={<Navigate to="/leads" replace />} />
+            <Route path="/working-tree" element={<Navigate to="/" replace />} />
+            <Route path="/import" element={<Navigate to="/leads" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AppLayout>
