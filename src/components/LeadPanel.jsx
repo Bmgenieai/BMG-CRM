@@ -1153,7 +1153,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 </div>
                 {showLostPicker ? (
                   <div style={{ marginTop: 12 }}>
-                    <label className="label">Nurture / DQ reason</label>
+                    <label className="label">Not interested reason</label>
                     <select
                       className="select"
                       value={lostReason}

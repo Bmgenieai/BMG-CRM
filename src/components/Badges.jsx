@@ -36,11 +36,11 @@ export function StatusBadge({ status }) {
     challenge_accepted: 'Challenge accepted',
     trial: 'Test completed',
     paid: 'Paid',
-    repeat: 'Repeat / expanded',
-    nurture: 'Nurture / DQ',
+    repeat: 'Repeat',
+    nurture: 'Not interested',
     conversation: 'Engaged / Replied',
     demo_booked: 'Demo scheduled',
-    lost: 'Nurture / DQ',
+    lost: 'Not interested',
     new: 'New / Uncontacted',
     contacted_legacy: 'Contacted',
     interested: 'Engaged / Replied',
@@ -103,11 +103,9 @@ export const FUNNEL_STATUSES = [
   { key: 'qualified', label: 'Qualified' },
   { key: 'demo_scheduled', label: 'Demo scheduled' },
   { key: 'challenge_offered', label: 'Shoot Challenge offered' },
-  { key: 'challenge_accepted', label: 'Shoot Challenge accepted' },
-  { key: 'trial', label: 'Test completed' },
   { key: 'paid', label: 'Paid customer' },
-  { key: 'repeat', label: 'Repeat / expanded' },
-  { key: 'nurture', label: 'Nurture / Disqualified' },
+  { key: 'repeat', label: 'Repeat' },
+  { key: 'nurture', label: 'Not interested' },
 ];
 
 export const BUSINESS_TYPE_LABELS = {

@@ -25,11 +25,11 @@ const FILTER_TITLES = {
   'challenge-accepted': 'Shoot Challenge accepted',
   trial: 'Test completed',
   paid: 'Paid customers',
-  repeat: 'Repeat / expanded',
-  nurture: 'Nurture / Disqualified',
+  repeat: 'Repeat',
+  nurture: 'Not interested',
   conversation: 'Engaged / Replied',
   'demo-booked': 'Demo scheduled',
-  lost: 'Nurture / Disqualified',
+  lost: 'Not interested',
   signup: 'Signup · no purchase',
   'free-credit': 'Free credit · no purchase',
   winback: 'Win-back · no repurchase',
@@ -300,7 +300,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     }
     let lostReason;
     if (bulkStatus === 'nurture') {
-      lostReason = window.prompt('Reason for Nurture / Disqualified:') || '';
+      lostReason = window.prompt('Reason for Not interested:') || '';
       if (!lostReason.trim()) {
         setError('Reason required for nurture / DQ');
         return;
@@ -398,9 +398,9 @@ export default function LeadsPage({ refreshSidebarCounts }) {
             </select>
             <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">All statuses</option>
-              {(meta.statuses?.length ? meta.statuses : FUNNEL_STATUSES.map((s) => s.key)).map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABELS_UI[s] || meta.statusLabels?.[s] || String(s).replace(/_/g, ' ')}
+              {FUNNEL_STATUSES.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
                 </option>
               ))}
             </select>
