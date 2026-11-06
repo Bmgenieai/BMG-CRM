@@ -145,16 +145,27 @@ export default function CsvImportModal({ onClose, onImported }) {
             Imported <strong>{result.imported}</strong> / {result.rowCount} rows
             {result.skipped ? ` · skipped ${result.skipped}` : ''}
             {result.duplicates ? ` · duplicates ${result.duplicates}` : ''}
-            {result.source ? ` · source ${result.source}` : ''}. Batch {result.batchId}
+            {result.sourceLabel || result.source
+              ? ` · source ${result.sourceLabel || result.source}`
+              : ''}
+            . Batch {result.batchId}
             {result.dateAdded ? ` · Date added ${String(result.dateAdded).slice(0, 10)}` : ''}.
+            {result.skipReasons?.missing_name ? (
+              <div className="stat-hint" style={{ marginTop: 6 }}>
+                {result.skipReasons.missing_name} row(s) skipped — no usable name/email (check
+                column headers like <code>Agent</code>, <code>name</code>, or{' '}
+                <code>Verified email</code>).
+              </div>
+            ) : null}
           </div>
         ) : null}
 
         <div style={{ marginTop: '1.25rem' }}>
           <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.95rem' }}>Required format</h4>
           <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 0 }}>
-            First row = headers. UTF-8. One lead per row. Each row needs at least <code>name</code> or{' '}
-            <code>email</code>.
+            First row = headers. UTF-8. One lead per row. Each row needs a name (or email). Zillow
+            sheets with <code>Agent</code> / <code>Verified email</code> / <code>Brokerage</code> are
+            supported.
           </p>
           <div className="table-wrap">
             <table>
@@ -169,17 +180,23 @@ export default function CsvImportModal({ onClose, onImported }) {
                 <tr>
                   <td><code>name</code></td>
                   <td>Yes*</td>
-                  <td>Also <code>Name</code>, <code>full_name</code></td>
+                  <td>
+                    Also <code>Name</code>, <code>full_name</code>, <code>Agent</code>
+                  </td>
                 </tr>
                 <tr>
                   <td><code>email</code></td>
                   <td>Recommended</td>
-                  <td>Also <code>Email</code></td>
+                  <td>
+                    Also <code>Email</code>, <code>Verified email</code>
+                  </td>
                 </tr>
                 <tr>
                   <td><code>linkedin_url</code></td>
                   <td>No</td>
-                  <td>Recommended for LinkedIn imports</td>
+                  <td>
+                    Also <code>Agent LinkedIn</code> / <code>LinkedIn</code>
+                  </td>
                 </tr>
                 <tr>
                   <td><code>contact</code></td>
@@ -189,7 +206,9 @@ export default function CsvImportModal({ onClose, onImported }) {
                 <tr>
                   <td><code>company</code></td>
                   <td>No</td>
-                  <td>Employer name for employee format</td>
+                  <td>
+                    Also <code>Brokerage</code> / <code>Company Name</code>
+                  </td>
                 </tr>
                 <tr>
                   <td><code>industry</code></td>
