@@ -7,7 +7,6 @@ import {
   LogOut,
   Mail,
   Inbox,
-  BarChart3,
   CalendarDays,
   MessageCircle,
   ClipboardList,
@@ -25,37 +24,13 @@ const SIDEBAR_COLLAPSED_KEY = 'bmg-crm-sidebar-collapsed';
 
 const TOOL_LINKS = [
   { to: '/email', label: 'Cold email', icon: Mail, perm: 'email:bulk_send' },
-  { to: '/email-performance', label: 'My email stats', icon: BarChart3, perm: 'email:bulk_send' },
   { to: '/campaigns', label: 'Campaigns', icon: ClipboardList, perm: 'email:manage_campaigns' },
-  { to: '/email-accounts', label: 'Email accounts', icon: Mail, perm: 'email:manage_accounts' },
-  { to: '/admin', label: 'Admin', icon: Shield, perm: 'admin:employees' },
+  { to: '/email-accounts', label: 'Brevo accounts', icon: Mail, perm: 'email:manage_accounts' },
+  { to: '/admin', label: 'Employees', icon: Shield, perm: 'admin:employees' },
 ];
 
-const PRODUCT_TABS = [
-  { slug: 'signup', label: 'Signup · no purchase' },
-  { slug: 'free-credit', label: 'Free credit · no purchase' },
-  { slug: 'winback', label: 'Win-back · no repurchase' },
-  { slug: 'checkout-abandoned', label: 'Stripe · abandoned' },
-  { slug: 'revisions', label: 'Asked for revisions' },
-];
-
-const PRODUCT_SLUGS = new Set(PRODUCT_TABS.map((t) => t.slug));
 const INBOUND_PATHS = new Set(['/demos', '/chats', '/email-replies']);
 const TOOL_PATHS = new Set(TOOL_LINKS.map((l) => l.to));
-
-function TabLink({ to, label, count, end = false }) {
-  return (
-    <NavLink
-      to={to}
-      end={end}
-      title={label}
-      className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-    >
-      <span className="nav-label" style={{ flex: 1 }}>{label}</span>
-      {count != null ? <span className="nav-count">{count}</span> : null}
-    </NavLink>
-  );
-}
 
 function NavSection({ label, open, onToggle, children, forceOpen = false }) {
   const showBody = open || forceOpen;
@@ -80,7 +55,6 @@ export default function AppLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [counts, setCounts] = useState(null);
-  const [productOpen, setProductOpen] = useState(false);
   const [inboundOpen, setInboundOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -106,17 +80,8 @@ export default function AppLayout({ children }) {
     });
   };
 
-  const productPathOpen = (() => {
-    const m = location.pathname.match(/^\/leads\/([^/]+)/);
-    return Boolean(m && PRODUCT_SLUGS.has(m[1]));
-  })();
-
   const inboundPathOpen = INBOUND_PATHS.has(location.pathname);
   const toolsPathOpen = TOOL_PATHS.has(location.pathname);
-
-  useEffect(() => {
-    if (productPathOpen) setProductOpen(true);
-  }, [productPathOpen]);
 
   useEffect(() => {
     if (inboundPathOpen) setInboundOpen(true);
@@ -271,12 +236,11 @@ export default function AppLayout({ children }) {
               <div className="nav-section-label">Leads</div>
               <NavLink
                 to="/leads"
-                end
-                title="All leads"
+                title="Leads"
                 className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
               >
                 {sidebarCollapsed ? <List size={18} /> : null}
-                <span className="nav-label" style={{ flex: 1 }}>All leads</span>
+                <span className="nav-label" style={{ flex: 1 }}>Leads</span>
                 {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
               </NavLink>
               <NavLink
@@ -287,23 +251,6 @@ export default function AppLayout({ children }) {
                 <CalendarClock size={16} />
                 <span className="nav-label" style={{ flex: 1 }}>Follow-ups</span>
               </NavLink>
-
-              {!sidebarCollapsed ? (
-                <NavSection
-                  label="From bmgenie.ai"
-                  open={productOpen}
-                  onToggle={() => setProductOpen((o) => !o)}
-                >
-                  {PRODUCT_TABS.map((t) => (
-                    <TabLink
-                      key={t.slug}
-                      to={`/leads/${t.slug}`}
-                      label={t.label}
-                      count={counts?.productCounts?.[t.slug]}
-                    />
-                  ))}
-                </NavSection>
-              ) : null}
 
               <NavSection
                 label="Inbound"

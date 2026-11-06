@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import {
@@ -13,8 +13,18 @@ import {
   US_STATES,
 } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
-import CohortFilter from '../components/CohortFilter.jsx';
 import CsvImportModal from '../components/CsvImportModal.jsx';
+
+/** Product queues from bmgenie.ai — shown as clickable boxes on Leads. */
+const PRODUCT_QUEUE_BOXES = [
+  { slug: 'signup', label: 'Signup · no purchase', hint: 'Signed up, no package' },
+  { slug: 'free-credit', label: 'Free credit · no purchase', hint: 'Used free credit' },
+  { slug: 'winback', label: 'Win-back · no repurchase', hint: 'Credits used up' },
+  { slug: 'checkout-abandoned', label: 'Stripe · abandoned', hint: 'Left checkout' },
+  { slug: 'revisions', label: 'Asked for revisions', hint: 'Revision request' },
+];
+
+const PRODUCT_SLUGS = new Set(PRODUCT_QUEUE_BOXES.map((b) => b.slug));
 
 const FILTER_TITLES = {
   uncontacted: 'New / Uncontacted',
@@ -144,7 +154,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const { can, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('id');
-  const cohort = searchParams.get('cohort') || 'all';
   const followUpDueParam = searchParams.get('followUpDue') || '';
 
   const preset = FILTER_QUERY[filter] || {};
@@ -176,13 +185,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [error, setError] = useState('');
   const [dupWarning, setDupWarning] = useState(null);
   const [createBusy, setCreateBusy] = useState(false);
-
-  const setCohort = (next) => {
-    const nextParams = new URLSearchParams(searchParams);
-    if (!next || next === 'all') nextParams.delete('cohort');
-    else nextParams.set('cohort', next);
-    setSearchParams(nextParams, { replace: true });
-  };
+  const [productCounts, setProductCounts] = useState({});
 
   const pageTitle = useMemo(() => {
     if (filter && FILTER_TITLES[filter]) return FILTER_TITLES[filter];
@@ -252,7 +255,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     if (status) params.set('status', status);
     if (businessType) params.set('business_type', businessType);
     if (stateFilter) params.set('state', stateFilter);
-    if (cohort && cohort !== 'all') params.set('cohort', cohort);
     if (emailStatus) params.set('emailStatus', emailStatus);
     if (importBatchId) params.set('importBatchId', importBatchId);
     if (dateAddedFrom) params.set('dateAddedFrom', dateAddedFrom);
@@ -274,6 +276,12 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   }, []);
 
   useEffect(() => {
+    api('/leads/counts')
+      .then((c) => setProductCounts(c.productCounts || {}))
+      .catch(() => setProductCounts({}));
+  }, [filter, leads.length]);
+
+  useEffect(() => {
     setFollowUpDue(followUpDueParam);
   }, [followUpDueParam]);
 
@@ -285,7 +293,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     status,
     businessType,
     stateFilter,
-    cohort,
     emailStatus,
     importBatchId,
     dateAddedFrom,
@@ -395,8 +402,47 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
       {error ? <div className="login-error">{error}</div> : null}
 
-      <div style={{ marginBottom: '1rem' }}>
-        <CohortFilter value={cohort} onChange={setCohort} />
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>From bmgenie.ai</h3>
+            <p className="stat-hint" style={{ margin: '0.25rem 0 0' }}>
+              Click a box to open that queue in Leads
+            </p>
+          </div>
+          {PRODUCT_SLUGS.has(filter) ? (
+            <Link to="/leads" className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
+              Clear filter · all leads
+            </Link>
+          ) : null}
+        </div>
+        <div className="grid grid-5" style={{ marginTop: '0.75rem' }}>
+          {PRODUCT_QUEUE_BOXES.map((box) => {
+            const active = filter === box.slug;
+            const count = productCounts[box.slug];
+            return (
+              <Link
+                key={box.slug}
+                to={`/leads/${box.slug}`}
+                className="stat-clickable"
+                title={`Show ${box.label}`}
+                style={{
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  display: 'block',
+                  border: active ? '2px solid var(--brand)' : undefined,
+                  background: active ? 'var(--brand-soft)' : undefined,
+                }}
+              >
+                <p className="stat-label">{box.label}</p>
+                <p className="stat-value" style={{ fontSize: '1.35rem' }}>
+                  {count != null ? count : '—'}
+                </p>
+                <span className="stat-hint" style={{ fontSize: '0.72rem' }}>{box.hint}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       <div className="toolbar">
