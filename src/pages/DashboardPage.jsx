@@ -20,7 +20,8 @@ const DASHBOARD_PERIODS = [
  * count toward “Demo or further”.
  */
 const PIPELINE_STAGES = [
-  { key: 'uncontacted', label: 'New' },
+  // Leftmost = everyone still in the funnel (New or further), not only uncontacted stock.
+  { key: 'uncontacted', label: 'In pipeline' },
   { key: 'contacted', label: 'Contacted' },
   { key: 'engaged', label: 'Engaged' },
   { key: 'qualified', label: 'Qualified' },
@@ -366,7 +367,8 @@ export default function DashboardPage() {
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>Pipeline</h3>
         <p className="stat-hint" style={{ marginTop: 0 }}>
-          Leads at this stage or further — numbers shrink left to right. Click to see who.
+          Same leads as the Leads menu (no test/Pakistan). Each box = this stage or further —
+          numbers shrink left to right. Click to see who.
         </p>
         <div className="funnel-flow">
           {PIPELINE_STAGES.map((s, idx) => (
