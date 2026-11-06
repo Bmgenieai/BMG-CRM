@@ -273,10 +273,7 @@ export default function AppLayout({ children }) {
                   className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
                 >
                   <CalendarDays size={16} />
-                  <span className="nav-label" style={{ flex: 1 }}>Book a demo</span>
-                  {counts?.demosCount != null ? (
-                    <span className="nav-count">{counts.demosCount}</span>
-                  ) : null}
+                  <span className="nav-label">Book a demo</span>
                 </NavLink>
                 <NavLink
                   to="/chats"
@@ -284,18 +281,7 @@ export default function AppLayout({ children }) {
                   className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
                 >
                   <MessageCircle size={16} />
-                  <span className="nav-label" style={{ flex: 1 }}>Chat support</span>
-                  {Number(counts?.chatsWaitingHuman || 0) > 0 ? (
-                    <span
-                      className="nav-count"
-                      title="Visitors waiting for a human"
-                      style={{ background: '#dc2626', color: '#fff' }}
-                    >
-                      {counts.chatsWaitingHuman} need you
-                    </span>
-                  ) : counts?.chatsOpen != null ? (
-                    <span className="nav-count">{counts.chatsOpen}</span>
-                  ) : null}
+                  <span className="nav-label">Chat support</span>
                 </NavLink>
                 <NavLink
                   to="/email-replies"
@@ -303,10 +289,7 @@ export default function AppLayout({ children }) {
                   className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
                 >
                   <Inbox size={16} />
-                  <span className="nav-label" style={{ flex: 1 }}>Email replies</span>
-                  {counts?.emailRepliesCount != null ? (
-                    <span className="nav-count">{counts.emailRepliesCount}</span>
-                  ) : null}
+                  <span className="nav-label">Email replies</span>
                 </NavLink>
               </NavSection>
 
