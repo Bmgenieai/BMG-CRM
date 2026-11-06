@@ -117,7 +117,7 @@ function FunnelStep({ label, value, onClick }) {
 
 export default function DashboardPage() {
   const { user, can } = useAuth();
-  const [period, setPeriod] = useState('today');
+  const [period, setPeriod] = useState('yesterday');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [funnel, setFunnel] = useState(null);
@@ -211,20 +211,20 @@ export default function DashboardPage() {
             <strong>{periodLabel}</strong>
           </p>
         </div>
-        <div className="ceo-dashboard-filters">
+        <div className="ceo-dashboard-filters" role="group" aria-label="Dashboard date filters">
           <div className="ceo-period-chips" role="group" aria-label="Date period">
             {DASHBOARD_PERIODS.map((p) => (
               <button
                 key={p.key}
                 type="button"
                 className={`btn ${!hasCustomDates && period === p.key ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
                 onClick={() => selectPeriod(p.key)}
               >
                 {p.label}
               </button>
             ))}
           </div>
+          <span className="ceo-filter-divider" aria-hidden="true" />
           <div className="ceo-date-range" role="group" aria-label="Custom date range">
             <label className="ceo-date-field">
               <span>From</span>
@@ -240,6 +240,7 @@ export default function DashboardPage() {
                 }}
               />
             </label>
+            <span className="ceo-date-sep">–</span>
             <label className="ceo-date-field">
               <span>To</span>
               <input
@@ -257,11 +258,10 @@ export default function DashboardPage() {
             {hasCustomDates ? (
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem' }}
+                className="btn btn-ghost ceo-date-clear"
                 onClick={() => selectPeriod(period)}
               >
-                Clear dates
+                Clear
               </button>
             ) : null}
           </div>
