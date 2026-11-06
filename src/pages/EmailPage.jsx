@@ -142,6 +142,10 @@ export default function EmailPage() {
       setError('Select at least one lead');
       return;
     }
+    if (!emailAccountId) {
+      setError('Select a From account (email) before sending');
+      return;
+    }
     setBusy(true);
     setError('');
     setMessage('');
@@ -155,7 +159,7 @@ export default function EmailPage() {
           htmlContent,
           textContent,
           syncToBrevo: true,
-          emailAccountId: emailAccountId || undefined,
+          emailAccountId,
         },
       });
       setMessage(`Sent ${data.sent} email(s)${data.failed ? ` · ${data.failed} failed` : ''}`);
@@ -194,6 +198,10 @@ export default function EmailPage() {
       setError('Select at least one lead');
       return;
     }
+    if (!emailAccountId) {
+      setError('Select a From account (email) before scheduling');
+      return;
+    }
     if (!scheduleAt) {
       setError('Pick a date and time to schedule');
       return;
@@ -217,7 +225,7 @@ export default function EmailPage() {
           textContent,
           syncToBrevo: true,
           scheduledAt: when.toISOString(),
-          emailAccountId: emailAccountId || undefined,
+          emailAccountId,
         },
       });
       setMessage(
@@ -267,16 +275,16 @@ export default function EmailPage() {
               className="select"
               value={emailAccountId}
               onChange={(e) => setEmailAccountId(e.target.value)}
+              required
             >
-              {accounts.length ? (
-                accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label} · {a.email}
-                  </option>
-                ))
-              ) : (
-                <option value="">{status?.sender || 'Default sender'}</option>
-              )}
+              <option value="" disabled>
+                {accounts.length ? 'Select email account…' : 'No Brevo accounts — add one under Brevo accounts'}
+              </option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label} · {a.email}
+                </option>
+              ))}
             </select>
           </div>
 

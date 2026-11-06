@@ -4,11 +4,23 @@ import { useAuth } from '../auth.jsx';
 import { fmtDate, StatusBadge } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 
+function fmtDay(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString();
+  } catch {
+    return iso;
+  }
+}
+
 export default function FollowUpsPage() {
   const { can } = useAuth();
   const canManage = can('followups:manage_own') || can('followups:manage_team');
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState('');
+  const [q, setQ] = useState('');
+  const [dueFrom, setDueFrom] = useState('');
+  const [dueTo, setDueTo] = useState('');
   const [error, setError] = useState('');
   const [completeId, setCompleteId] = useState(null);
   const [outcome, setOutcome] = useState('');
@@ -18,6 +30,9 @@ export default function FollowUpsPage() {
   const load = () => {
     const params = new URLSearchParams();
     if (status) params.set('status', status);
+    if (q.trim()) params.set('q', q.trim());
+    if (dueFrom) params.set('dueFrom', dueFrom);
+    if (dueTo) params.set('dueTo', dueTo);
     api(`/follow-ups?${params}`)
       .then(setRows)
       .catch((e) => setError(e.message));
@@ -25,7 +40,8 @@ export default function FollowUpsPage() {
 
   useEffect(() => {
     load();
-  }, [status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, dueFrom, dueTo]);
 
   const complete = async (id) => {
     try {
@@ -56,13 +72,42 @@ export default function FollowUpsPage() {
       {error ? <div className="login-error">{error}</div> : null}
 
       <div className="toolbar">
+        <input
+          className="input"
+          placeholder="Search lead, email, company, note, assignee…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && load()}
+          style={{ minWidth: 220, flex: 1 }}
+        />
         <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All</option>
+          <option value="">All statuses</option>
           <option value="pending">Pending</option>
           <option value="overdue">Overdue</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
+        <input
+          className="input"
+          type="date"
+          title="Due from"
+          aria-label="Due from"
+          value={dueFrom}
+          onChange={(e) => setDueFrom(e.target.value)}
+          style={{ maxWidth: 150 }}
+        />
+        <input
+          className="input"
+          type="date"
+          title="Due to"
+          aria-label="Due to"
+          value={dueTo}
+          onChange={(e) => setDueTo(e.target.value)}
+          style={{ maxWidth: 150 }}
+        />
+        <button type="button" className="btn btn-secondary" onClick={load}>
+          Search
+        </button>
       </div>
 
       <div className="card table-wrap">
@@ -70,6 +115,7 @@ export default function FollowUpsPage() {
           <thead>
             <tr>
               <th>Due</th>
+              <th>Lead created</th>
               <th>Lead</th>
               <th>Assignee</th>
               <th>Status</th>
@@ -85,6 +131,7 @@ export default function FollowUpsPage() {
                 onClick={() => setSelectedLeadId(f.lead_id)}
               >
                 <td>{fmtDate(f.due_at)}</td>
+                <td>{fmtDay(f.lead_created_at)}</td>
                 <td>
                   <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{f.lead_name}</span>
                 </td>
@@ -111,7 +158,7 @@ export default function FollowUpsPage() {
             ))}
             {!rows.length ? (
               <tr>
-                <td colSpan={6} className="empty">
+                <td colSpan={7} className="empty">
                   No follow-ups
                 </td>
               </tr>

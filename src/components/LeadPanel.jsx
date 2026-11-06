@@ -490,6 +490,10 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const sendColdEmail = async (e) => {
     e.preventDefault();
     if (!lead?.email) return;
+    if (!emailAccountId) {
+      setError('Select a From account (email) before sending');
+      return;
+    }
     setBusy(true);
     setError('');
     setEmailMsg('');
@@ -502,7 +506,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
           htmlContent: emailHtml,
           textContent: emailText,
           syncToBrevo: true,
-          emailAccountId: emailAccountId || undefined,
+          emailAccountId,
         },
       });
       setEmailMsg('Email sent');
@@ -1230,22 +1234,26 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       </div>
                     ) : (
                       <form onSubmit={sendColdEmail}>
-                        {emailAccounts.length ? (
-                          <div className="field">
-                            <label className="label">From</label>
-                            <select
-                              className="select"
-                              value={emailAccountId}
-                              onChange={(e) => setEmailAccountId(e.target.value)}
-                            >
-                              {emailAccounts.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.label} · {a.email}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        ) : null}
+                        <div className="field">
+                          <label className="label">From</label>
+                          <select
+                            className="select"
+                            value={emailAccountId}
+                            onChange={(e) => setEmailAccountId(e.target.value)}
+                            required
+                          >
+                            <option value="" disabled>
+                              {emailAccounts.length
+                                ? 'Select email account…'
+                                : 'No Brevo accounts — add one under Brevo accounts'}
+                            </option>
+                            {emailAccounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.label} · {a.email}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <div className="field">
                           <label className="label">Template</label>
                           <select

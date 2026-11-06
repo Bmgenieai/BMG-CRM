@@ -54,9 +54,15 @@ export default function CampaignsPage() {
         api('/email/templates'),
         api('/leads'),
       ]);
-      setAccounts((acc.accounts || []).filter((a) => a.is_active));
+      const activeAccounts = (acc.accounts || []).filter((a) => a.is_active);
+      setAccounts(activeAccounts);
       setTemplates(tpl.templates || []);
       setLeads((leadRows || []).filter((l) => l.email));
+      setEmailAccountId((prev) => {
+        if (prev && activeAccounts.some((a) => a.id === prev)) return prev;
+        const def = activeAccounts.find((a) => a.is_default) || activeAccounts[0];
+        return def?.id || '';
+      });
       await loadList();
       if (selectedId) await loadDetail(selectedId);
     } catch (e) {
@@ -110,13 +116,17 @@ export default function CampaignsPage() {
 
   const create = async (e) => {
     e.preventDefault();
+    if (!emailAccountId) {
+      setError('Select a From account (email) for this campaign');
+      return;
+    }
     setBusy(true);
     setError('');
     setMessage('');
     try {
       const body = {
         name,
-        emailAccountId: emailAccountId || undefined,
+        emailAccountId,
         steps: steps.map((s, i) => ({
           stepOrder: i + 1,
           delayDays: Number(s.delayDays) || 0,
@@ -149,6 +159,10 @@ export default function CampaignsPage() {
 
   const saveDraft = async () => {
     if (!detail || detail.status === 'active') return;
+    if (!detail.email_account_id) {
+      setError('Select a From account (email) before saving');
+      return;
+    }
     setBusy(true);
     setError('');
     setMessage('');
@@ -157,7 +171,7 @@ export default function CampaignsPage() {
         method: 'PATCH',
         body: {
           name: detail.name,
-          emailAccountId: detail.email_account_id || null,
+          emailAccountId: detail.email_account_id,
           steps: (detail.steps || []).map((s, i) => ({
             stepOrder: i + 1,
             delayDays: Number(s.delay_days) || 0,
@@ -200,6 +214,10 @@ export default function CampaignsPage() {
 
   const launch = async () => {
     if (!detail) return;
+    if (!detail.email_account_id) {
+      setError('Select a From account (email) before launching');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -282,8 +300,11 @@ export default function CampaignsPage() {
                 className="select"
                 value={emailAccountId}
                 onChange={(e) => setEmailAccountId(e.target.value)}
+                required
               >
-                <option value="">Default</option>
+                <option value="" disabled>
+                  Select email account…
+                </option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.label} · {a.email}
@@ -541,8 +562,11 @@ export default function CampaignsPage() {
                     onChange={(e) =>
                       setDetail({ ...detail, email_account_id: e.target.value || null })
                     }
+                    required
                   >
-                    <option value="">Default</option>
+                    <option value="" disabled>
+                      Select email account…
+                    </option>
                     {accounts.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.label} · {a.email}
