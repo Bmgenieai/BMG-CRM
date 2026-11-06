@@ -6,6 +6,8 @@ export default function DrilldownModal({
   title,
   metric,
   period = 'overall',
+  dateFrom,
+  dateTo,
   userId,
   emailAccountId,
   stage,
@@ -28,7 +30,12 @@ export default function DrilldownModal({
 
     const params = new URLSearchParams();
     if (metric) params.set('metric', metric);
-    if (period) params.set('period', period);
+    if (dateFrom && dateTo) {
+      params.set('from', dateFrom);
+      params.set('to', dateTo);
+    } else if (period) {
+      params.set('period', period);
+    }
     if (userId) params.set('userId', userId);
     if (emailAccountId) params.set('emailAccountId', emailAccountId);
     if (stage) params.set('stage', stage);
@@ -46,7 +53,19 @@ export default function DrilldownModal({
         setError(e.message || 'Failed to load details');
         setLoading(false);
       });
-  }, [metric, period, userId, emailAccountId, stage, cumulative, businessType, state, reason]);
+  }, [
+    metric,
+    period,
+    dateFrom,
+    dateTo,
+    userId,
+    emailAccountId,
+    stage,
+    cumulative,
+    businessType,
+    state,
+    reason,
+  ]);
 
   const items = data?.items || [];
 

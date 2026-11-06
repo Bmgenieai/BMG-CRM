@@ -118,6 +118,8 @@ function FunnelStep({ label, value, onClick }) {
 export default function DashboardPage() {
   const { user, can } = useAuth();
   const [period, setPeriod] = useState('today');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [funnel, setFunnel] = useState(null);
   const [bdWork, setBdWork] = useState(null);
   const [error, setError] = useState('');
@@ -126,13 +128,27 @@ export default function DashboardPage() {
 
   const isChatSupport = user?.role === 'chat_support';
   const canViewTeam = can('analytics:view_team');
+  const hasCustomDates = Boolean(dateFrom && dateTo);
+
+  const filterQuery = useMemo(() => {
+    const p = new URLSearchParams();
+    if (hasCustomDates) {
+      p.set('from', dateFrom);
+      p.set('to', dateTo);
+    } else {
+      p.set('period', period);
+    }
+    return p.toString();
+  }, [hasCustomDates, dateFrom, dateTo, period]);
 
   useEffect(() => {
     if (isChatSupport) return undefined;
     setError('');
+    setFunnel(null);
+    setBdWork(null);
     Promise.all([
-      api(`/analytics/funnel?period=${period}`),
-      api(`/analytics/telesales-working?period=${period}`).catch(() => null),
+      api(`/analytics/funnel?${filterQuery}`),
+      api(`/analytics/telesales-working?${filterQuery}`).catch(() => null),
     ])
       .then(([funnelData, working]) => {
         setFunnel(funnelData);
@@ -140,7 +156,7 @@ export default function DashboardPage() {
       })
       .catch((e) => setError(e.message));
     return undefined;
-  }, [period, isChatSupport]);
+  }, [filterQuery, isChatSupport]);
 
   const reps = useMemo(() => {
     const rows = bdWork?.reps || [];
@@ -150,22 +166,35 @@ export default function DashboardPage() {
 
   if (isChatSupport) return <ChatSupportDashboard />;
 
+  const selectPeriod = (key) => {
+    setPeriod(key);
+    setDateFrom('');
+    setDateTo('');
+  };
+
   const openDrilldown = (metric, title, extra = {}) => {
     setDrilldown({
       metric,
       title: title || String(metric).replace(/_/g, ' '),
-      period,
+      period: hasCustomDates ? 'custom' : period,
+      dateFrom: hasCustomDates ? dateFrom : undefined,
+      dateTo: hasCustomDates ? dateTo : undefined,
       cumulative: false,
       ...extra,
     });
   };
 
   const periodObj = DASHBOARD_PERIODS.find((p) => p.key === period) || DASHBOARD_PERIODS[0];
-  const periodLabel = periodObj.label;
+  const periodLabel = hasCustomDates
+    ? dateFrom === dateTo
+      ? dateFrom
+      : `${dateFrom} → ${dateTo}`
+    : funnel?.periodLabel || periodObj.label;
   const totals = bdWork?.totals || {};
   const stages = funnel?.stages || {};
   const emailsSent = (totals.emails || 0) + (totals.emailFollowups || 0);
   const overdueFollowups = reps.reduce((s, r) => s + (Number(r.overdueFollowups) || 0), 0);
+  const workingLinkQs = filterQuery;
 
   if (error) return <div className="card">{error}</div>;
   if (!funnel || !bdWork) return <div className="card">Loading dashboard…</div>;
@@ -179,21 +208,63 @@ export default function DashboardPage() {
           </h1>
           <p className="page-sub" style={{ margin: '0.25rem 0 0' }}>
             {canViewTeam ? 'Team results' : 'Your results'} for{' '}
-            <strong>{periodLabel.toLowerCase()}</strong>
+            <strong>{periodLabel}</strong>
           </p>
         </div>
-        <div className="ceo-period-chips" role="group" aria-label="Date period">
-          {DASHBOARD_PERIODS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              className={`btn ${period === p.key ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
-              onClick={() => setPeriod(p.key)}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="ceo-dashboard-filters">
+          <div className="ceo-period-chips" role="group" aria-label="Date period">
+            {DASHBOARD_PERIODS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                className={`btn ${!hasCustomDates && period === p.key ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+                onClick={() => selectPeriod(p.key)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="ceo-date-range" role="group" aria-label="Custom date range">
+            <label className="ceo-date-field">
+              <span>From</span>
+              <input
+                type="date"
+                className="input"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setDateFrom(v);
+                  if (v && !dateTo) setDateTo(v);
+                }}
+              />
+            </label>
+            <label className="ceo-date-field">
+              <span>To</span>
+              <input
+                type="date"
+                className="input"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setDateTo(v);
+                  if (v && !dateFrom) setDateFrom(v);
+                }}
+              />
+            </label>
+            {hasCustomDates ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem' }}
+                onClick={() => selectPeriod(period)}
+              >
+                Clear dates
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -252,7 +323,7 @@ export default function DashboardPage() {
           </div>
           {canViewTeam ? (
             <Link
-              to={`/telesales-working?period=${period}`}
+              to={`/telesales-working?${workingLinkQs}`}
               className="btn btn-ghost"
               style={{ fontSize: '0.85rem' }}
             >
@@ -280,7 +351,7 @@ export default function DashboardPage() {
                   <tr key={r.id}>
                     <td>
                       <Link
-                        to={`/telesales-working?period=${period}&userId=${r.id}`}
+                        to={`/telesales-working?${workingLinkQs}&userId=${r.id}`}
                         style={{ color: 'var(--brand-primary)', fontWeight: 600 }}
                         title={`Open full detail for ${r.name}`}
                       >
@@ -367,8 +438,10 @@ export default function DashboardPage() {
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>Pipeline</h3>
         <p className="stat-hint" style={{ marginTop: 0 }}>
-          Same leads as the Leads menu (no test/Pakistan). Each box = this stage or further —
-          numbers shrink left to right. Click to see who.
+          {hasCustomDates || period !== 'overall'
+            ? `Leads added in ${periodLabel} (same queue as Leads menu). `
+            : 'All active leads in the Leads menu (no test/Pakistan). '}
+          Each box = this stage or further — numbers shrink left to right. Click to see who.
         </p>
         <div className="funnel-flow">
           {PIPELINE_STAGES.map((s, idx) => (
@@ -585,6 +658,8 @@ export default function DashboardPage() {
           title={drilldown.title}
           metric={drilldown.metric}
           period={drilldown.period}
+          dateFrom={drilldown.dateFrom}
+          dateTo={drilldown.dateTo}
           userId={drilldown.userId}
           stage={drilldown.stage}
           cumulative={drilldown.cumulative}

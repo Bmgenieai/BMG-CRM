@@ -366,7 +366,16 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
   return (
     <div>
-      <h1 className="page-title">{pageTitle}</h1>
+      <h1 className="page-title" style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <span>{pageTitle}</span>
+        <span
+          className="nav-count"
+          title="Leads matching current filters"
+          style={{ fontSize: '0.95rem', fontWeight: 700 }}
+        >
+          {leads.length}
+        </span>
+      </h1>
       {(filter === 'signup' || filter === 'free-credit' || filter === 'winback') ? (
         <p className="page-sub">
           {filter === 'signup' && 'Auto-created when users sign up on bmgenie.ai without buying a package.'}

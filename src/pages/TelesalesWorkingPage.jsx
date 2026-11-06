@@ -75,6 +75,9 @@ export default function TelesalesWorkingPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const period = searchParams.get('period') || 'today';
+  const dateFrom = searchParams.get('from') || '';
+  const dateTo = searchParams.get('to') || '';
+  const hasCustomDates = Boolean(dateFrom && dateTo);
   const userId = searchParams.get('userId') || '';
   const stateFilter = searchParams.get('state') || '';
   const [data, setData] = useState(null);
@@ -85,6 +88,8 @@ export default function TelesalesWorkingPage() {
   const setPeriod = (next) => {
     const p = new URLSearchParams(searchParams);
     p.set('period', next);
+    p.delete('from');
+    p.delete('to');
     setSearchParams(p, { replace: true });
   };
 
@@ -105,19 +110,27 @@ export default function TelesalesWorkingPage() {
   useEffect(() => {
     setError('');
     setData(null);
-    const q = new URLSearchParams({ period });
+    const q = new URLSearchParams();
+    if (hasCustomDates) {
+      q.set('from', dateFrom);
+      q.set('to', dateTo);
+    } else {
+      q.set('period', period);
+    }
     if (userId) q.set('userId', userId);
     if (stateFilter) q.set('state', stateFilter);
     api(`/analytics/telesales-working?${q}`)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [period, userId, stateFilter]);
+  }, [period, dateFrom, dateTo, hasCustomDates, userId, stateFilter]);
 
   const openDrilldown = (metric, title, repId = null, extra = {}) => {
     setDrilldown({
       metric,
       title: title || String(metric).replace(/_/g, ' '),
-      period,
+      period: hasCustomDates ? 'custom' : period,
+      dateFrom: hasCustomDates ? dateFrom : undefined,
+      dateTo: hasCustomDates ? dateTo : undefined,
       userId: repId || userId || undefined,
       state: stateFilter || undefined,
       ...extra,
@@ -655,6 +668,8 @@ export default function TelesalesWorkingPage() {
           title={drilldown.title}
           metric={drilldown.metric}
           period={drilldown.period}
+          dateFrom={drilldown.dateFrom}
+          dateTo={drilldown.dateTo}
           userId={drilldown.userId}
           state={drilldown.state}
           onClose={() => setDrilldown(null)}

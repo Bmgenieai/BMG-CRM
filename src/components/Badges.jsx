@@ -102,7 +102,6 @@ export const FUNNEL_STATUSES = [
   { key: 'engaged', label: 'Engaged / Replied' },
   { key: 'qualified', label: 'Qualified' },
   { key: 'demo_scheduled', label: 'Demo scheduled' },
-  { key: 'challenge_offered', label: 'Shoot Challenge offered' },
   { key: 'paid', label: 'Paid customer' },
   { key: 'repeat', label: 'Repeat' },
   { key: 'nurture', label: 'Not interested' },

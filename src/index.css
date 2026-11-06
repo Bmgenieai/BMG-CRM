@@ -606,6 +606,31 @@ tr:hover td { background: #f8fafc; }
   gap: 6px;
   align-items: center;
 }
+.ceo-dashboard-filters {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.ceo-date-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.ceo-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--muted, #64748b);
+  font-weight: 600;
+}
+.ceo-date-field .input {
+  min-width: 140px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
 .dashboard-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
