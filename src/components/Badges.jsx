@@ -37,6 +37,7 @@ export function StatusBadge({ status }) {
     trial: 'Test completed',
     paid: 'Paid',
     repeat: 'Repeat',
+    completed: 'Completed',
     nurture: 'Not interested',
     conversation: 'Engaged / Replied',
     demo_booked: 'Demo scheduled',
@@ -104,6 +105,7 @@ export const FUNNEL_STATUSES = [
   { key: 'demo_scheduled', label: 'Demo scheduled' },
   { key: 'paid', label: 'Paid customer' },
   { key: 'repeat', label: 'Repeat' },
+  { key: 'completed', label: 'Completed' },
   { key: 'nurture', label: 'Not interested' },
 ];
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { apiUrl, getToken } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
@@ -8,16 +8,26 @@ function todayLocal() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+const IMPORT_SOURCES = [
+  { key: 'telesales', label: 'BD' },
+  { key: 'linkedin', label: 'LinkedIn' },
+  { key: 'instagram', label: 'Instagram' },
+  { key: 'facebook', label: 'Facebook' },
+];
+
 export default function CsvImportModal({ onClose, onImported }) {
   const { user } = useAuth();
   const [file, setFile] = useState(null);
   const [dateAdded, setDateAdded] = useState(() => todayLocal());
+  const [source, setSource] = useState('telesales');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const isTelesales = user?.role === 'telesales';
-  const sourcePreview = isTelesales ? 'BD' : 'CSV / Google Sheet';
+  const sourceLabel = useMemo(
+    () => IMPORT_SOURCES.find((s) => s.key === source)?.label || 'BD',
+    [source],
+  );
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -29,6 +39,7 @@ export default function CsvImportModal({ onClose, onImported }) {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('source_label', 'csv_import');
+      fd.append('source', source);
       if (dateAdded) fd.append('date_added', dateAdded);
       const res = await fetch(apiUrl('/leads/import/csv'), {
         method: 'POST',
@@ -61,9 +72,9 @@ export default function CsvImportModal({ onClose, onImported }) {
           <div>
             <h3 style={{ marginBottom: 4 }}>Import leads from CSV</h3>
             <p className="page-sub" style={{ margin: 0 }}>
-              Export Google Sheet as CSV, then upload. Source shows as{' '}
+              Export Google Sheet as CSV, then upload. Leads are tagged as{' '}
               <strong>
-                {sourcePreview} · {user?.name || 'your name'}
+                {sourceLabel} · {user?.name || 'your name'}
               </strong>
               .
             </p>
@@ -76,6 +87,24 @@ export default function CsvImportModal({ onClose, onImported }) {
         {error ? <div className="login-error" style={{ marginTop: '0.75rem' }}>{error}</div> : null}
 
         <form onSubmit={onSubmit} style={{ marginTop: '1rem' }}>
+          <div className="field">
+            <label className="label">Where did these leads come from?</label>
+            <select
+              className="select"
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              required
+            >
+              {IMPORT_SOURCES.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+              Pick LinkedIn / Instagram / Facebook so this batch counts as that social working.
+            </p>
+          </div>
           <div className="field">
             <label className="label">CSV file</label>
             <input
@@ -115,7 +144,8 @@ export default function CsvImportModal({ onClose, onImported }) {
           <div style={{ marginTop: '0.85rem', fontSize: '0.92rem' }}>
             Imported <strong>{result.imported}</strong> / {result.rowCount} rows
             {result.skipped ? ` · skipped ${result.skipped}` : ''}
-            {result.duplicates ? ` · duplicates ${result.duplicates}` : ''}. Batch {result.batchId}
+            {result.duplicates ? ` · duplicates ${result.duplicates}` : ''}
+            {result.source ? ` · source ${result.source}` : ''}. Batch {result.batchId}
             {result.dateAdded ? ` · Date added ${String(result.dateAdded).slice(0, 10)}` : ''}.
           </div>
         ) : null}
@@ -145,6 +175,11 @@ export default function CsvImportModal({ onClose, onImported }) {
                   <td><code>email</code></td>
                   <td>Recommended</td>
                   <td>Also <code>Email</code></td>
+                </tr>
+                <tr>
+                  <td><code>linkedin_url</code></td>
+                  <td>No</td>
+                  <td>Recommended for LinkedIn imports</td>
                 </tr>
                 <tr>
                   <td><code>contact</code></td>
@@ -205,8 +240,8 @@ export default function CsvImportModal({ onClose, onImported }) {
               fontSize: '0.75rem',
               overflow: 'auto',
             }}
-          >{`name,contact,company,state,job_title,industry,business_type,contact_format,follow_up_notes,email,estimated_revenue
-Sunset Realty Photos,+1-602-555-0144,Sunset Realty Photos,Arizona,,Real estate photography,photographer,company,Called Mon — interested,info@sunset.com,450`}</pre>
+          >{`name,contact,company,state,job_title,industry,business_type,linkedin_url,contact_format,follow_up_notes,email,estimated_revenue
+Sunset Realty Photos,+1-602-555-0144,Sunset Realty Photos,Arizona,,Real estate photography,photographer,https://www.linkedin.com/in/example,company,Called Mon — interested,info@sunset.com,450`}</pre>
         </div>
       </div>
     </div>

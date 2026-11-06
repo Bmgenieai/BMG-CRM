@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, downloadApiFile } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { fmtDate, StatusBadge, StateBadge } from '../components/Badges.jsx';
 import DrilldownModal from '../components/DrilldownModal.jsx';
@@ -84,6 +84,7 @@ export default function TelesalesWorkingPage() {
   const [error, setError] = useState('');
   const [drilldown, setDrilldown] = useState(null);
   const [activeLeadId, setActiveLeadId] = useState(null);
+  const [reportBusy, setReportBusy] = useState(false);
 
   const setPeriod = (next) => {
     const p = new URLSearchParams(searchParams);
@@ -176,7 +177,36 @@ export default function TelesalesWorkingPage() {
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-          <PeriodChips value={period} onChange={setPeriod} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <PeriodChips value={period} onChange={setPeriod} />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={reportBusy}
+              onClick={async () => {
+                setReportBusy(true);
+                setError('');
+                try {
+                  const q = new URLSearchParams();
+                  if (hasCustomDates) {
+                    q.set('from', dateFrom);
+                    q.set('to', dateTo);
+                  } else {
+                    q.set('period', period);
+                  }
+                  if (userId) q.set('userId', userId);
+                  else if (!canViewTeam && user?.id) q.set('userId', user.id);
+                  await downloadApiFile(`/analytics/daily-report?${q}`, 'BD_daily_report.csv');
+                } catch (e) {
+                  setError(e.message || 'Report download failed');
+                } finally {
+                  setReportBusy(false);
+                }
+              }}
+            >
+              {reportBusy ? 'Preparing…' : 'Download report'}
+            </button>
+          </div>
           {canViewTeam ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span className="stat-hint" style={{ fontWeight: 600 }}>State:</span>

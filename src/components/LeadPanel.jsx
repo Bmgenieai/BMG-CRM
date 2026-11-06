@@ -1334,10 +1334,6 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       </button>
                     ) : null}
                   </div>
-                  <p className="stat-hint" style={{ marginTop: 0 }}>
-                    Click an email to open the complete conversation (same as Email replies). Opens are
-                    tracked per email step (Email 1, 2, 3…).
-                  </p>
                   {(lead.emailHistory?.messages || []).length ? (
                     <ul className="lead-activity-list">
                       {[...(lead.emailHistory.messages || [])]

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, downloadApiFile } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import DrilldownModal from '../components/DrilldownModal.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
@@ -125,6 +125,8 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [drilldown, setDrilldown] = useState(null);
   const [activeLeadId, setActiveLeadId] = useState(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportMsg, setReportMsg] = useState('');
 
   const isChatSupport = user?.role === 'chat_support';
   const canViewTeam = can('analytics:view_team');
@@ -170,6 +172,21 @@ export default function DashboardPage() {
     setPeriod(key);
     setDateFrom('');
     setDateTo('');
+  };
+
+  const downloadReport = async (forUserId) => {
+    setReportBusy(true);
+    setReportMsg('');
+    try {
+      const q = new URLSearchParams(filterQuery);
+      if (forUserId) q.set('userId', forUserId);
+      const name = await downloadApiFile(`/analytics/daily-report?${q}`, 'BD_daily_report.csv');
+      setReportMsg(`Downloaded ${name}`);
+    } catch (e) {
+      setReportMsg(e.message || 'Report download failed');
+    } finally {
+      setReportBusy(false);
+    }
   };
 
   const openDrilldown = (metric, title, extra = {}) => {
@@ -268,6 +285,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {reportMsg ? (
+        <p className="stat-hint" style={{ marginTop: 0, marginBottom: '0.75rem' }}>
+          {reportMsg}
+        </p>
+      ) : null}
+
       {/* 1) Snapshot — team totals once */}
       <div className="grid grid-5" style={{ marginBottom: '1rem' }}>
         <SnapshotCard
@@ -321,15 +344,29 @@ export default function DashboardPage() {
               Same period — click a name or number for details
             </p>
           </div>
-          {canViewTeam ? (
-            <Link
-              to={`/telesales-working?${workingLinkQs}`}
-              className="btn btn-ghost"
-              style={{ fontSize: '0.85rem' }}
-            >
-              Full BD detail →
-            </Link>
-          ) : null}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {!canViewTeam ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: '0.85rem' }}
+                disabled={reportBusy}
+                onClick={() => downloadReport(user?.id)}
+                title="Download CSV activity report for this period"
+              >
+                {reportBusy ? 'Preparing…' : 'Download my daily report'}
+              </button>
+            ) : null}
+            {canViewTeam ? (
+              <Link
+                to={`/telesales-working?${workingLinkQs}`}
+                className="btn btn-ghost"
+                style={{ fontSize: '0.85rem' }}
+              >
+                Full BD detail →
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         <div className="table-wrap">
@@ -350,13 +387,27 @@ export default function DashboardPage() {
                 reps.map((r) => (
                   <tr key={r.id}>
                     <td>
-                      <Link
-                        to={`/telesales-working?${workingLinkQs}&userId=${r.id}`}
-                        style={{ color: 'var(--brand-primary)', fontWeight: 600 }}
-                        title={`Open full detail for ${r.name}`}
-                      >
-                        {r.name}
-                      </Link>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Link
+                          to={`/telesales-working?${workingLinkQs}&userId=${r.id}`}
+                          style={{ color: 'var(--brand-primary)', fontWeight: 600 }}
+                          title={`Open full detail for ${r.name}`}
+                        >
+                          {r.name}
+                        </Link>
+                        {canViewTeam ? (
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            style={{ fontSize: '0.75rem', padding: '0.15rem 0.45rem' }}
+                            disabled={reportBusy}
+                            onClick={() => downloadReport(r.id)}
+                            title={`Download ${r.name}'s activity report`}
+                          >
+                            Report
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                     <td>
                       <button
@@ -437,12 +488,6 @@ export default function DashboardPage() {
       {/* 3) Pipeline — cumulative (high → low) */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>Pipeline</h3>
-        <p className="stat-hint" style={{ marginTop: 0 }}>
-          {hasCustomDates || period !== 'overall'
-            ? `Leads added in ${periodLabel} (same queue as Leads menu). `
-            : 'All active leads in the Leads menu (no test/Pakistan). '}
-          Each box = this stage or further — numbers shrink left to right. Click to see who.
-        </p>
         <div className="funnel-flow">
           {PIPELINE_STAGES.map((s, idx) => (
             <React.Fragment key={s.key}>
@@ -461,14 +506,23 @@ export default function DashboardPage() {
           ))}
         </div>
         <p className="stat-hint" style={{ marginBottom: 0, marginTop: '0.75rem' }}>
-          Not interested:{' '}
+          Closed — no more BD work:{' '}
+          <button
+            type="button"
+            className="table-num-btn"
+            style={{ fontWeight: 700 }}
+            onClick={() => openDrilldown('stage', 'Completed leads', { stage: 'completed' })}
+          >
+            Completed {stages.completed ?? 0}
+          </button>
+          {' · '}
           <button
             type="button"
             className="table-num-btn"
             style={{ fontWeight: 700 }}
             onClick={() => openDrilldown('stage', 'Not interested leads', { stage: 'nurture' })}
           >
-            {stages.nurture ?? 0}
+            Not interested {stages.nurture ?? 0}
           </button>
         </p>
       </div>
@@ -477,10 +531,6 @@ export default function DashboardPage() {
       <div className="dashboard-split" style={{ marginBottom: '1rem' }}>
         <div className="card">
           <h3 style={{ marginTop: 0 }}>By profession</h3>
-          <p className="stat-hint" style={{ marginTop: 0 }}>
-            Realtors, agencies, photographers — activity in{' '}
-            <strong>{periodLabel.toLowerCase()}</strong>. Click a number for the list.
-          </p>
           <div className="table-wrap">
             <table className="leads-table">
               <thead>
@@ -567,9 +617,6 @@ export default function DashboardPage() {
 
         <div className="card">
           <h3 style={{ marginTop: 0 }}>By US state</h3>
-          <p className="stat-hint" style={{ marginTop: 0 }}>
-            Where leads came from and were worked — same period. Top states first.
-          </p>
           <div className="table-wrap">
             <table className="leads-table">
               <thead>

@@ -24,6 +24,37 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+/** Download an authenticated file (CSV etc.) and trigger browser save. */
+export async function downloadApiFile(path, fallbackName = 'download.csv') {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(apiUrl(path), { headers });
+  if (!res.ok) {
+    let msg = `Download failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data?.error) msg = data.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const match = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(cd);
+  const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : fallbackName;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return filename;
+}
+
 export async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (!(options.body instanceof FormData)) {
