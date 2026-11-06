@@ -11,6 +11,30 @@ const emptyStep = () => ({
   templateId: '',
 });
 
+/** Avoid showing the email twice when lead.name was stored as the email. */
+function displayCampaignLeadName(lead) {
+  const name = String(lead?.lead_name || '').trim();
+  const email = String(lead?.lead_email || '').trim();
+  const company = String(lead?.lead_company || '').trim();
+  const nameLooksLikeEmail =
+    !name ||
+    (email && name.toLowerCase() === email.toLowerCase()) ||
+    name.includes('@');
+  if (!nameLooksLikeEmail) return name;
+  if (company) return company;
+  const local = email.split('@')[0] || '';
+  if (!local) return '—';
+  const human = local
+    .replace(/[._+-]+/g, ' ')
+    .replace(/\d+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+  return human || '—';
+}
+
 export default function CampaignsPage() {
   const { can } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
@@ -29,6 +53,7 @@ export default function CampaignsPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [detailLeadFilter, setDetailLeadFilter] = useState('');
 
   if (!can('email:manage_campaigns')) return <Navigate to="/" replace />;
 
@@ -75,6 +100,7 @@ export default function CampaignsPage() {
   }, []);
 
   useEffect(() => {
+    setDetailLeadFilter('');
     if (selectedId) loadDetail(selectedId).catch((e) => setError(e.message));
     else setDetail(null);
   }, [selectedId]);
@@ -267,6 +293,21 @@ export default function CampaignsPage() {
   const toggleLead = (id) => {
     setPickLeads((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
+  const detailLeads = useMemo(() => {
+    const rows = detail?.leads || [];
+    const q = detailLeadFilter.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((l) => {
+      const name = displayCampaignLeadName(l).toLowerCase();
+      return (
+        name.includes(q) ||
+        (l.lead_email || '').toLowerCase().includes(q) ||
+        (l.lead_company || '').toLowerCase().includes(q) ||
+        (l.status || '').toLowerCase().includes(q)
+      );
+    });
+  }, [detail, detailLeadFilter]);
 
   return (
     <div>
@@ -509,6 +550,10 @@ export default function CampaignsPage() {
 
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Campaigns</h3>
+          <p className="stat-hint" style={{ marginTop: 0 }}>
+            Status is overall campaign state (all leads finished → completed). Steps = emails in the
+            sequence, not “current step”.
+          </p>
           <div className="table-wrap">
             <table>
               <thead>
@@ -516,7 +561,7 @@ export default function CampaignsPage() {
                   <th>Name</th>
                   <th>Status</th>
                   <th>Leads</th>
-                  <th>Steps</th>
+                  <th title="Number of emails in the sequence">Emails</th>
                 </tr>
               </thead>
               <tbody>
@@ -549,7 +594,7 @@ export default function CampaignsPage() {
                 {detail.status}
                 {detail.account_email ? ` · ${detail.account_email}` : ''}
                 {detail.counts
-                  ? ` · ${detail.counts.active || 0} active · ${detail.counts.completed || 0} done · ${detail.counts.stopped || 0} stopped`
+                  ? ` · ${detail.counts.total || detail.leads?.length || 0} leads · ${detail.counts.active || 0} active · ${detail.counts.completed || 0} done · ${detail.counts.stopped || 0} stopped`
                   : ''}
               </p>
 
@@ -607,17 +652,31 @@ export default function CampaignsPage() {
                 ) : null}
               </div>
 
-              <h4>Steps</h4>
+              <h4>Sequence ({(detail.steps || []).length} emails)</h4>
               <ul style={{ paddingLeft: 18 }}>
-                {(detail.steps || []).map((s) => (
+                {(detail.steps || []).map((s, idx) => (
                   <li key={s.id}>
-                    Day {s.delay_days}: {s.subject || s.template_id || '(no subject)'}
+                    Email {idx + 1} · send on day {s.delay_days}:{' '}
+                    {s.subject || s.template_id || '(no subject)'}
                   </li>
                 ))}
               </ul>
 
-              <h4>Leads</h4>
-              <div className="table-wrap" style={{ maxHeight: 240, overflow: 'auto' }}>
+              <h4>
+                Leads ({detail.counts?.total ?? detail.leads?.length ?? 0}
+                {detailLeadFilter.trim()
+                  ? ` · ${detailLeads.length} match`
+                  : ''}
+                )
+              </h4>
+              <input
+                className="input"
+                placeholder="Search name, email, company, status"
+                value={detailLeadFilter}
+                onChange={(e) => setDetailLeadFilter(e.target.value)}
+                style={{ marginBottom: 8 }}
+              />
+              <div className="table-wrap" style={{ maxHeight: 420, overflow: 'auto' }}>
                 <table>
                   <thead>
                     <tr>
@@ -627,13 +686,21 @@ export default function CampaignsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(detail.leads || []).map((l) => (
-                      <tr key={l.id}>
-                        <td>{l.lead_name}</td>
-                        <td>{l.lead_email}</td>
-                        <td>{l.status}</td>
+                    {detailLeads.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="empty">
+                          No leads match.
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      detailLeads.map((l) => (
+                        <tr key={l.id}>
+                          <td>{displayCampaignLeadName(l)}</td>
+                          <td>{l.lead_email}</td>
+                          <td>{l.status}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
