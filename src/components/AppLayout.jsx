@@ -7,6 +7,7 @@ import {
   LogOut,
   Mail,
   Inbox,
+  BarChart3,
   CalendarDays,
   MessageCircle,
   ClipboardList,
@@ -260,6 +261,20 @@ export default function AppLayout({ children }) {
                 <Sparkles size={16} />
                 <span className="nav-label" style={{ flex: 1 }}>From bmgenie.ai</span>
               </NavLink>
+
+              {(can('email:bulk_send') ||
+                can('analytics:view_own') ||
+                can('analytics:view_team') ||
+                can('analytics:view_all')) && (
+                <NavLink
+                  to="/email-performance"
+                  title="Email stats"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <BarChart3 size={16} />
+                  <span className="nav-label" style={{ flex: 1 }}>Email stats</span>
+                </NavLink>
+              )}
 
               <NavSection
                 label="Inbound"
