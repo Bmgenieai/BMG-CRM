@@ -29,26 +29,19 @@ export default function FromBmgeniePage() {
 
       {error ? <div className="login-error">{error}</div> : null}
 
-      <div className="grid grid-5">
+      <div className="grid grid-5" style={{ gap: '1rem' }}>
         {PRODUCT_QUEUE_BOXES.map((box) => {
           const count = productCounts[box.slug];
           return (
             <Link
               key={box.slug}
               to={`/leads/${box.slug}`}
-              className="stat-clickable"
+              className="card queue-box"
               title={`Open ${box.label} in Leads`}
-              style={{
-                textDecoration: 'none',
-                color: 'inherit',
-                display: 'block',
-              }}
             >
               <p className="stat-label">{box.label}</p>
-              <p className="stat-value" style={{ fontSize: '1.5rem' }}>
-                {count != null ? count : '—'}
-              </p>
-              <span className="stat-hint" style={{ fontSize: '0.78rem' }}>{box.hint}</span>
+              <p className="stat-value">{count != null ? count : '—'}</p>
+              <p className="stat-hint" style={{ marginBottom: 0 }}>{box.hint}</p>
             </Link>
           );
         })}

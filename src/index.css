@@ -944,6 +944,24 @@ tr:hover td { background: #f8fafc; }
   box-shadow: 0 4px 14px rgba(85, 115, 244, 0.15);
   transform: translateY(-2px);
 }
+.queue-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  text-decoration: none;
+  color: inherit;
+  min-height: 140px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  cursor: pointer;
+}
+.queue-box:hover {
+  border-color: var(--brand-primary);
+  box-shadow: 0 4px 14px rgba(85, 115, 244, 0.15);
+  transform: translateY(-2px);
+}
+.queue-box:hover .stat-value {
+  color: var(--brand-primary);
+}
 .stat-clickable {
   cursor: pointer;
   border-radius: 8px;
