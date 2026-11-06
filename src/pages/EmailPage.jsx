@@ -255,32 +255,6 @@ export default function EmailPage() {
       {error ? <div className="login-error">{error}</div> : null}
       {message ? <div className="card" style={{ borderColor: 'var(--success)', color: 'var(--success)', marginBottom: '1rem' }}>{message}</div> : null}
 
-      <div className="grid grid-3" style={{ marginBottom: '1rem' }}>
-        <div className="card">
-          <p className="stat-label">Brevo status</p>
-          <p className="stat-value" style={{ fontSize: '1.1rem' }}>
-            {status?.enabled ? 'Connected' : 'Not configured'}
-          </p>
-          <p className="stat-hint">
-            {status?.enabled
-              ? `${status.senderName} <${status.sender}>`
-              : 'Set BREVO_ENABLED=true + API key on CRM API'}
-          </p>
-        </div>
-        <div className="card">
-          <p className="stat-label">Default list</p>
-          <p className="stat-value" style={{ fontSize: '1.1rem' }}>
-            {status?.defaultListId ? `#${status.defaultListId}` : '—'}
-          </p>
-          <p className="stat-hint">BREVO_LIST_ID in API .env</p>
-        </div>
-        <div className="card">
-          <p className="stat-label">Leads with email</p>
-          <p className="stat-value">{filteredLeads.length}</p>
-          <p className="stat-hint">{selected.length} selected</p>
-        </div>
-      </div>
-
       <div className="grid grid-2">
         <div className="card">
           <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>

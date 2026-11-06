@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import {
@@ -14,17 +14,6 @@ import {
 } from '../components/Badges.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 import CsvImportModal from '../components/CsvImportModal.jsx';
-
-/** Product queues from bmgenie.ai — shown as clickable boxes on Leads. */
-const PRODUCT_QUEUE_BOXES = [
-  { slug: 'signup', label: 'Signup · no purchase', hint: 'Signed up, no package' },
-  { slug: 'free-credit', label: 'Free credit · no purchase', hint: 'Used free credit' },
-  { slug: 'winback', label: 'Win-back · no repurchase', hint: 'Credits used up' },
-  { slug: 'checkout-abandoned', label: 'Stripe · abandoned', hint: 'Left checkout' },
-  { slug: 'revisions', label: 'Asked for revisions', hint: 'Revision request' },
-];
-
-const PRODUCT_SLUGS = new Set(PRODUCT_QUEUE_BOXES.map((b) => b.slug));
 
 const FILTER_TITLES = {
   uncontacted: 'New / Uncontacted',
@@ -170,8 +159,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [dateAddedFrom, setDateAddedFrom] = useState('');
   const [dateAddedTo, setDateAddedTo] = useState('');
   const [followUpDue, setFollowUpDue] = useState(followUpDueParam);
-  const [followUpFrom, setFollowUpFrom] = useState('');
-  const [followUpTo, setFollowUpTo] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkFuDate, setBulkFuDate] = useState('');
@@ -185,7 +172,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [error, setError] = useState('');
   const [dupWarning, setDupWarning] = useState(null);
   const [createBusy, setCreateBusy] = useState(false);
-  const [productCounts, setProductCounts] = useState({});
 
   const pageTitle = useMemo(() => {
     if (filter && FILTER_TITLES[filter]) return FILTER_TITLES[filter];
@@ -260,8 +246,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     if (dateAddedFrom) params.set('dateAddedFrom', dateAddedFrom);
     if (dateAddedTo) params.set('dateAddedTo', dateAddedTo);
     if (followUpDue) params.set('followUpDue', followUpDue);
-    if (followUpFrom) params.set('followUpFrom', followUpFrom);
-    if (followUpTo) params.set('followUpTo', followUpTo);
     api(`/leads?${params}`)
       .then((rows) => {
         setLeads(rows);
@@ -274,12 +258,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   useEffect(() => {
     api('/leads/meta').then(setMeta).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    api('/leads/counts')
-      .then((c) => setProductCounts(c.productCounts || {}))
-      .catch(() => setProductCounts({}));
-  }, [filter, leads.length]);
 
   useEffect(() => {
     setFollowUpDue(followUpDueParam);
@@ -298,8 +276,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     dateAddedFrom,
     dateAddedTo,
     followUpDue,
-    followUpFrom,
-    followUpTo,
   ]);
 
   const allSelected = leads.length > 0 && selected.size === leads.length;
@@ -402,49 +378,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
       {error ? <div className="login-error">{error}</div> : null}
 
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <h3 style={{ margin: 0 }}>From bmgenie.ai</h3>
-            <p className="stat-hint" style={{ margin: '0.25rem 0 0' }}>
-              Click a box to open that queue in Leads
-            </p>
-          </div>
-          {PRODUCT_SLUGS.has(filter) ? (
-            <Link to="/leads" className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
-              Clear filter · all leads
-            </Link>
-          ) : null}
-        </div>
-        <div className="grid grid-5" style={{ marginTop: '0.75rem' }}>
-          {PRODUCT_QUEUE_BOXES.map((box) => {
-            const active = filter === box.slug;
-            const count = productCounts[box.slug];
-            return (
-              <Link
-                key={box.slug}
-                to={`/leads/${box.slug}`}
-                className="stat-clickable"
-                title={`Show ${box.label}`}
-                style={{
-                  textDecoration: 'none',
-                  color: 'inherit',
-                  display: 'block',
-                  border: active ? '2px solid var(--brand)' : undefined,
-                  background: active ? 'var(--brand-soft)' : undefined,
-                }}
-              >
-                <p className="stat-label">{box.label}</p>
-                <p className="stat-value" style={{ fontSize: '1.35rem' }}>
-                  {count != null ? count : '—'}
-                </p>
-                <span className="stat-hint" style={{ fontSize: '0.72rem' }}>{box.hint}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="toolbar">
         <input
           className="input"
@@ -514,22 +447,6 @@ export default function LeadsPage({ refreshSidebarCounts }) {
           <option value="overdue">Overdue follow-up</option>
           <option value="upcoming">Upcoming follow-up</option>
         </select>
-        <input
-          className="input"
-          type="date"
-          title="Follow-up from"
-          value={followUpFrom}
-          onChange={(e) => setFollowUpFrom(e.target.value)}
-          style={{ maxWidth: 150 }}
-        />
-        <input
-          className="input"
-          type="date"
-          title="Follow-up to"
-          value={followUpTo}
-          onChange={(e) => setFollowUpTo(e.target.value)}
-          style={{ maxWidth: 150 }}
-        />
         <select className="select" value={emailStatus} onChange={(e) => setEmailStatus(e.target.value)}>
           <option value="">All email</option>
           <option value="sent">Emailed</option>
@@ -553,7 +470,8 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         <input
           className="input"
           type="date"
-          title="Date added from"
+          title="Start date (date added)"
+          aria-label="Start date"
           value={dateAddedFrom}
           onChange={(e) => setDateAddedFrom(e.target.value)}
           style={{ maxWidth: 150 }}
@@ -561,7 +479,8 @@ export default function LeadsPage({ refreshSidebarCounts }) {
         <input
           className="input"
           type="date"
-          title="Date added to"
+          title="End date (date added)"
+          aria-label="End date"
           value={dateAddedTo}
           onChange={(e) => setDateAddedTo(e.target.value)}
           style={{ maxWidth: 150 }}

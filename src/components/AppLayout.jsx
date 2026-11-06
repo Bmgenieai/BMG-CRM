@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   List,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -250,6 +251,14 @@ export default function AppLayout({ children }) {
               >
                 <CalendarClock size={16} />
                 <span className="nav-label" style={{ flex: 1 }}>Follow-ups</span>
+              </NavLink>
+              <NavLink
+                to="/from-bmgenie"
+                title="From bmgenie.ai"
+                className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+              >
+                <Sparkles size={16} />
+                <span className="nav-label" style={{ flex: 1 }}>From bmgenie.ai</span>
               </NavLink>
 
               <NavSection

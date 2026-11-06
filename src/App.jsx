@@ -16,6 +16,7 @@ import CampaignsPage from './pages/CampaignsPage.jsx';
 import EmailPerformancePage from './pages/EmailPerformancePage.jsx';
 import DemosPage from './pages/DemosPage.jsx';
 import ChatsPage from './pages/ChatsPage.jsx';
+import FromBmgeniePage from './pages/FromBmgeniePage.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -56,6 +57,7 @@ function ProtectedLayout() {
             <Route path="/leads" element={<LeadsPage />} />
             <Route path="/leads/:filter" element={<LeadsPage />} />
             <Route path="/leads/:id" element={<LeadDetailPage />} />
+            <Route path="/from-bmgenie" element={<FromBmgeniePage />} />
             <Route path="/follow-ups" element={<FollowUpsPage />} />
             <Route path="/email" element={<EmailPage />} />
             <Route path="/email-performance" element={<EmailPerformancePage />} />
