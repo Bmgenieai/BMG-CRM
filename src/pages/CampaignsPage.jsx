@@ -131,6 +131,10 @@ export default function CampaignsPage() {
   }, [leads, leadFilter, leadStatus, leadSource, leadSheetId]);
 
   const previewStep = async (idx, step) => {
+    if (!emailAccountId) {
+      setError('Select a From account (email) before preview');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -140,6 +144,7 @@ export default function CampaignsPage() {
         subject: step.subject,
         htmlContent: step.htmlContent,
         textContent: step.textContent || undefined,
+        emailAccountId,
       };
       if (leadId) body.leadId = leadId;
       else body.sample = true;

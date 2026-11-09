@@ -122,12 +122,23 @@ export default function EmailPage() {
   const runPreview = async () => {
     const leadId = previewLeadId || selected[0] || filteredLeads[0]?.id;
     if (!leadId) return;
+    if (!emailAccountId) {
+      setError('Select a From account (email) before preview');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
       const data = await api('/email/preview', {
         method: 'POST',
-        body: { leadId, templateId: templateId || undefined, subject, htmlContent, textContent },
+        body: {
+          leadId,
+          templateId: templateId || undefined,
+          subject,
+          htmlContent,
+          textContent,
+          emailAccountId,
+        },
       });
       setPreview(data);
     } catch (e) {
