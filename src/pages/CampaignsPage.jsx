@@ -54,6 +54,9 @@ export default function CampaignsPage() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [detailLeadFilter, setDetailLeadFilter] = useState('');
+  const [importBatches, setImportBatches] = useState([]);
+  const [leadSheetId, setLeadSheetId] = useState('');
+  const [stepPreviews, setStepPreviews] = useState({});
 
   if (!can('email:manage_campaigns')) return <Navigate to="/" replace />;
 
@@ -74,15 +77,17 @@ export default function CampaignsPage() {
   const load = async () => {
     setError('');
     try {
-      const [acc, tpl, leadRows] = await Promise.all([
+      const [acc, tpl, leadRows, meta] = await Promise.all([
         api('/email/accounts'),
         api('/email/templates'),
         api('/leads'),
+        api('/leads/meta').catch(() => ({ importBatches: [] })),
       ]);
       const activeAccounts = (acc.accounts || []).filter((a) => a.is_active);
       setAccounts(activeAccounts);
       setTemplates(tpl.templates || []);
       setLeads((leadRows || []).filter((l) => l.email));
+      setImportBatches(meta.importBatches || []);
       setEmailAccountId((prev) => {
         if (prev && activeAccounts.some((a) => a.id === prev)) return prev;
         const def = activeAccounts.find((a) => a.is_default) || activeAccounts[0];
@@ -110,14 +115,42 @@ export default function CampaignsPage() {
     return leads.filter((l) => {
       if (leadStatus && l.status !== leadStatus) return false;
       if (leadSource && l.source !== leadSource) return false;
+      if (leadSheetId === '__manual__') {
+        if (l.import_batch_id) return false;
+      } else if (leadSheetId && l.import_batch_id !== leadSheetId) {
+        return false;
+      }
       if (!q) return true;
       return (
         (l.name || '').toLowerCase().includes(q) ||
         (l.email || '').toLowerCase().includes(q) ||
-        (l.company || '').toLowerCase().includes(q)
+        (l.company || '').toLowerCase().includes(q) ||
+        (l.import_batch_filename || '').toLowerCase().includes(q)
       );
     });
-  }, [leads, leadFilter, leadStatus, leadSource]);
+  }, [leads, leadFilter, leadStatus, leadSource, leadSheetId]);
+
+  const previewStep = async (idx, step) => {
+    setBusy(true);
+    setError('');
+    try {
+      const leadId = pickLeads[0] || filteredLeads[0]?.id;
+      const body = {
+        templateId: step.templateId || undefined,
+        subject: step.subject,
+        htmlContent: step.htmlContent,
+        textContent: step.textContent || undefined,
+      };
+      if (leadId) body.leadId = leadId;
+      else body.sample = true;
+      const data = await api('/email/preview', { method: 'POST', body });
+      setStepPreviews((prev) => ({ ...prev, [idx]: data }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const selectFiltered = () => {
     setPickLeads((prev) => [...new Set([...prev, ...filteredLeads.map((l) => l.id)])]);
@@ -437,7 +470,45 @@ export default function CampaignsPage() {
                     }
                     required
                   />
+                  <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+                    Use {'{{first_name}}'} and {'{{company}}'} — preview fills them before launch.
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  onClick={() => previewStep(idx, s)}
+                >
+                  Preview with personalization
+                </button>
+                {stepPreviews[idx] ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: 10,
+                      border: '1px solid var(--border)',
+                      borderRadius: 8,
+                      background: 'var(--alabaster, #f7f7f5)',
+                    }}
+                  >
+                    <p className="stat-hint" style={{ marginTop: 0 }}>
+                      Preview
+                      {stepPreviews[idx].previewMode === 'sample'
+                        ? ` · sample ${stepPreviews[idx].sampleLead?.name || 'Alex Rivera'} @ ${stepPreviews[idx].sampleLead?.company || 'Horizon Realty'}`
+                        : ' · selected / first lead'}
+                    </p>
+                    <p style={{ fontWeight: 600, margin: '0 0 8px' }}>
+                      Subject: {stepPreviews[idx].subject}
+                    </p>
+                    <div
+                      style={{ fontSize: '0.9rem', lineHeight: 1.45 }}
+                      dangerouslySetInnerHTML={{
+                        __html: stepPreviews[idx].htmlContent || '<p>(no HTML)</p>',
+                      }}
+                    />
+                  </div>
+                ) : null}
               </div>
             ))}
 
@@ -462,11 +533,27 @@ export default function CampaignsPage() {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
                 <input
                   className="input"
-                  placeholder="Search name, email, company"
+                  placeholder="Search name, email, company, sheet"
                   value={leadFilter}
                   onChange={(e) => setLeadFilter(e.target.value)}
                   style={{ flex: '1 1 160px', minWidth: 0 }}
                 />
+                <select
+                  className="select"
+                  value={leadSheetId}
+                  onChange={(e) => setLeadSheetId(e.target.value)}
+                  style={{ flex: '1 1 180px', minWidth: 0 }}
+                  title="Filter by uploaded sheet"
+                >
+                  <option value="">All uploaded sheets</option>
+                  <option value="__manual__">Manual / no sheet</option>
+                  {importBatches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.filename}
+                      {b.imported_count != null ? ` (${b.imported_count})` : ''}
+                    </option>
+                  ))}
+                </select>
                 <select
                   className="select"
                   value={leadStatus}
@@ -526,15 +613,28 @@ export default function CampaignsPage() {
                         padding: '6px 8px',
                         borderBottom: '1px solid var(--border)',
                         fontSize: '0.85rem',
+                        alignItems: 'flex-start',
                       }}
                     >
                       <input
                         type="checkbox"
                         checked={pickLeads.includes(l.id)}
                         onChange={() => toggleLead(l.id)}
+                        style={{ marginTop: 2 }}
                       />
                       <span>
                         {l.name} · {l.email}
+                        <span
+                          style={{
+                            display: 'block',
+                            fontSize: '0.72rem',
+                            color: 'var(--muted)',
+                            marginTop: 2,
+                          }}
+                          title={l.import_batch_filename || 'Manual / no sheet'}
+                        >
+                          {l.import_batch_filename || 'Manual / no sheet'}
+                        </span>
                       </span>
                     </label>
                   ))
@@ -561,7 +661,11 @@ export default function CampaignsPage() {
                   <th>Name</th>
                   <th>Status</th>
                   <th>Leads</th>
-                  <th title="Number of emails in the sequence">Emails</th>
+                  <th title="Number of emails in the sequence">Steps</th>
+                  <th>Sent</th>
+                  <th>Opened</th>
+                  <th>Replies</th>
+                  <th>Bounces</th>
                 </tr>
               </thead>
               <tbody>
@@ -581,6 +685,20 @@ export default function CampaignsPage() {
                     <td>{c.status}</td>
                     <td>{c.lead_count}</td>
                     <td>{c.step_count}</td>
+                    <td>{c.sent_count || 0}</td>
+                    <td>
+                      {c.opened_count || 0}
+                      {c.sent_count ? (
+                        <span className="stat-hint"> ({c.open_rate}%)</span>
+                      ) : null}
+                    </td>
+                    <td>
+                      {c.reply_count || 0}
+                      {c.sent_count ? (
+                        <span className="stat-hint"> ({c.reply_rate}%)</span>
+                      ) : null}
+                    </td>
+                    <td>{c.bounced_count || 0}</td>
                   </tr>
                 ))}
               </tbody>
@@ -597,6 +715,46 @@ export default function CampaignsPage() {
                   ? ` · ${detail.counts.total || detail.leads?.length || 0} leads · ${detail.counts.active || 0} active · ${detail.counts.completed || 0} done · ${detail.counts.stopped || 0} stopped`
                   : ''}
               </p>
+
+              {detail.stats ? (
+                <div
+                  className="grid grid-4"
+                  style={{ marginBottom: '0.85rem', gap: 8 }}
+                >
+                  {[
+                    { label: 'Sent', value: detail.stats.sent },
+                    {
+                      label: 'Opened',
+                      value: detail.stats.opened,
+                      hint: detail.stats.sent ? `${detail.stats.openRate}%` : null,
+                    },
+                    {
+                      label: 'Replies',
+                      value: detail.stats.replies,
+                      hint: detail.stats.sent ? `${detail.stats.replyRate}%` : null,
+                    },
+                    {
+                      label: 'Bounces',
+                      value: detail.stats.bounced,
+                      hint: detail.stats.sent ? `${detail.stats.bounceRate}%` : null,
+                    },
+                  ].map((card) => (
+                    <div key={card.label} className="card" style={{ margin: 0, padding: '0.65rem 0.75rem' }}>
+                      <p className="stat-label" style={{ margin: 0 }}>
+                        {card.label}
+                      </p>
+                      <p className="stat-value" style={{ margin: '4px 0 0', fontSize: '1.35rem' }}>
+                        {card.value ?? 0}
+                      </p>
+                      {card.hint ? (
+                        <p className="stat-hint" style={{ margin: 0 }}>
+                          {card.hint}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
               {(detail.status === 'draft' || detail.status === 'paused') && (
                 <div className="field">
@@ -654,12 +812,22 @@ export default function CampaignsPage() {
 
               <h4>Sequence ({(detail.steps || []).length} emails)</h4>
               <ul style={{ paddingLeft: 18 }}>
-                {(detail.steps || []).map((s, idx) => (
-                  <li key={s.id}>
-                    Email {idx + 1} · send on day {s.delay_days}:{' '}
-                    {s.subject || s.template_id || '(no subject)'}
-                  </li>
-                ))}
+                {(detail.steps || []).map((s, idx) => {
+                  const stepStat = (detail.stats?.byStep || []).find((x) => x.step_id === s.id);
+                  return (
+                    <li key={s.id} style={{ marginBottom: 6 }}>
+                      Email {idx + 1} · send on day {s.delay_days}:{' '}
+                      {s.subject || s.template_id || '(no subject)'}
+                      {stepStat ? (
+                        <span className="stat-hint" style={{ display: 'block' }}>
+                          {stepStat.sent} sent · {stepStat.opened} opened ({stepStat.openRate}%) ·{' '}
+                          {stepStat.replies} replies ({stepStat.replyRate}%) · {stepStat.bounced}{' '}
+                          bounced
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
 
               <h4>
