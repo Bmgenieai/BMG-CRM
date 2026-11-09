@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { api, downloadApiFile } from '../api.js';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { fmtDate, StatusBadge, StateBadge } from '../components/Badges.jsx';
 import DrilldownModal from '../components/DrilldownModal.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 
@@ -14,77 +13,72 @@ const PERIODS = [
   { key: 'overall', label: 'Overall' },
 ];
 
-const ACTIVITY_LABELS = {
-  call: 'Call',
-  call_attempted: 'Call attempted',
-  call_connected: 'Call connected',
-  whatsapp: 'WhatsApp',
-  email: 'Email',
-  email_sent: 'Email sent',
-  email_followup: 'Email follow-up',
-  note: 'Note',
-  linkedin: 'LinkedIn',
-  linkedin_connection_sent: 'LI connection sent',
-  linkedin_connection_accepted: 'LI accepted',
-  linkedin_message: 'LI message',
-  linkedin_reply: 'LI reply',
-  linkedin_followup: 'LI follow-up',
-  meeting_scheduled: 'Meeting scheduled',
-  reply: 'Reply',
-  status_change: 'Stage change',
-};
+const COLUMNS = [
+  { key: 'prospectsScraped', label: 'Prospects Scraped / Researched', metric: 'prospects_scraped' },
+  { key: 'emailsUploaded', label: 'Emails Uploaded to CRM', metric: 'emails_uploaded' },
+  { key: 'crmEmailsSent', label: 'CRM Emails Sent', metric: 'crm_emails_sent' },
+  { key: 'manualEmailsSent', label: 'Manual Emails Sent', metric: 'manual_emails_sent' },
+  {
+    key: 'linkedinConnectionSent',
+    label: 'LinkedIn Connection Requests',
+    metric: 'linkedin_connection_sent',
+  },
+  { key: 'linkedinMessages', label: 'LinkedIn Messages Sent', metric: 'linkedin_messages' },
+  { key: 'linkedinFollowups', label: 'LinkedIn Follow-ups', metric: 'linkedin_followup' },
+  { key: 'totalEmailOutreach', label: 'Total Email Outreach', metric: 'total_email_outreach' },
+  { key: 'totalLinkedinOutreach', label: 'Total LinkedIn Outreach', metric: 'linkedin' },
+  { key: 'openRate', label: 'Open rate%', metric: 'email_opens', suffix: '%' },
+  { key: 'emailReplies', label: 'Email Replies', metric: 'email_replies' },
+  { key: 'positiveReplies', label: 'Positive Replies', metric: 'positive_replies' },
+  { key: 'meetingsBooked', label: 'Meetings / Calls Booked', metric: 'meetings' },
+];
 
-function StatCard({ label, value, hint, onClick }) {
-  return (
-    <div
-      className={`card ${onClick ? 'clickable' : ''}`}
-      onClick={onClick}
-      style={{
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'all 0.15s ease',
-      }}
-      title={onClick ? `Click to inspect ${label}` : undefined}
-    >
-      <p className="stat-label">{label}</p>
-      <p className="stat-value" style={{ color: 'var(--brand-primary)', margin: '0.2rem 0' }}>
-        {value ?? 0}
-      </p>
-      {hint ? <p className="stat-hint" style={{ margin: 0 }}>{hint}</p> : null}
-    </div>
-  );
+function todayLocal() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function PeriodChips({ value, onChange }) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-      {PERIODS.map((p) => (
-        <button
-          key={p.key}
-          type="button"
-          className={`btn ${value === p.key ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => onChange(p.key)}
-        >
-          {p.label}
-        </button>
-      ))}
-    </div>
-  );
+function csvEscape(v) {
+  const s = v == null ? '' : String(v);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadTextFile(filename, text, mime = 'text/csv;charset=utf-8') {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export default function TelesalesWorkingPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const period = searchParams.get('period') || 'today';
   const dateFrom = searchParams.get('from') || '';
   const dateTo = searchParams.get('to') || '';
   const hasCustomDates = Boolean(dateFrom && dateTo);
   const userId = searchParams.get('userId') || '';
-  const stateFilter = searchParams.get('state') || '';
+  const sourceFilter = searchParams.get('source') || '';
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [drilldown, setDrilldown] = useState(null);
   const [activeLeadId, setActiveLeadId] = useState(null);
-  const [reportBusy, setReportBusy] = useState(false);
+
+  const canViewTeam = can('analytics:view_all') || can('analytics:view_team');
+
+  const setParam = (key, value) => {
+    const p = new URLSearchParams(searchParams);
+    if (value) p.set(key, value);
+    else p.delete(key);
+    setSearchParams(p, { replace: true });
+  };
 
   const setPeriod = (next) => {
     const p = new URLSearchParams(searchParams);
@@ -94,17 +88,13 @@ export default function TelesalesWorkingPage() {
     setSearchParams(p, { replace: true });
   };
 
-  const setFocusUser = (id) => {
+  const setCustomRange = (from, to) => {
     const p = new URLSearchParams(searchParams);
-    if (id) p.set('userId', id);
-    else p.delete('userId');
-    setSearchParams(p, { replace: true });
-  };
-
-  const setStateFilter = (next) => {
-    const p = new URLSearchParams(searchParams);
-    if (next) p.set('state', next);
-    else p.delete('state');
+    if (from && to) {
+      p.set('from', from);
+      p.set('to', to);
+      p.delete('period');
+    }
     setSearchParams(p, { replace: true });
   };
 
@@ -119,42 +109,110 @@ export default function TelesalesWorkingPage() {
       q.set('period', period);
     }
     if (userId) q.set('userId', userId);
-    if (stateFilter) q.set('state', stateFilter);
+    if (sourceFilter) q.set('source', sourceFilter);
     api(`/analytics/telesales-working?${q}`)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [period, dateFrom, dateTo, hasCustomDates, userId, stateFilter]);
+  }, [period, dateFrom, dateTo, hasCustomDates, userId, sourceFilter]);
 
-  const openDrilldown = (metric, title, repId = null, extra = {}) => {
+  const rows = useMemo(() => {
+    if (!data?.reps) return [];
+    let list = data.reps;
+    if (!canViewTeam) list = list.filter((r) => r.id === user?.id);
+    if (userId) list = list.filter((r) => r.id === userId);
+    return list;
+  }, [data, canViewTeam, user?.id, userId]);
+
+  const openDrilldown = (metric, title, repId = null) => {
     setDrilldown({
       metric,
-      title: title || String(metric).replace(/_/g, ' '),
+      title,
       period: hasCustomDates ? 'custom' : period,
       dateFrom: hasCustomDates ? dateFrom : undefined,
       dateTo: hasCustomDates ? dateTo : undefined,
-      userId: repId || userId || undefined,
-      state: stateFilter || undefined,
-      ...extra,
+      userId: repId || userId || (!canViewTeam ? user?.id : undefined),
     });
   };
 
-  if (error) return <div className="card">{error}</div>;
+  const exportCsv = () => {
+    if (!data) return;
+    const header = ['BD', ...COLUMNS.map((c) => c.label)];
+    const lines = [header.map(csvEscape).join(',')];
+    for (const r of rows) {
+      lines.push(
+        [r.name, ...COLUMNS.map((c) => (c.suffix === '%' ? `${r[c.key] ?? 0}%` : r[c.key] ?? 0))]
+          .map(csvEscape)
+          .join(','),
+      );
+    }
+    if (canViewTeam && data.totals) {
+      lines.push(
+        [
+          'TOTAL',
+          ...COLUMNS.map((c) =>
+            c.suffix === '%' ? `${data.totals[c.key] ?? 0}%` : data.totals[c.key] ?? 0,
+          ),
+        ]
+          .map(csvEscape)
+          .join(','),
+      );
+    }
+    const range =
+      data.fromYmd === data.toYmd ? data.fromYmd : `${data.fromYmd}_to_${data.toYmd}`;
+    downloadTextFile(`BD_working_${range}.csv`, lines.join('\n'));
+  };
+
+  const exportPdf = () => {
+    if (!data) return;
+    const rangeLabel =
+      data.fromYmd === data.toYmd ? data.fromYmd : `${data.fromYmd} → ${data.toYmd}`;
+    const head = COLUMNS.map((c) => `<th>${c.label}</th>`).join('');
+    const body = rows
+      .map((r) => {
+        const cells = COLUMNS.map((c) => {
+          const v = c.suffix === '%' ? `${r[c.key] ?? 0}%` : r[c.key] ?? 0;
+          return `<td>${v}</td>`;
+        }).join('');
+        return `<tr><td><strong>${r.name}</strong></td>${cells}</tr>`;
+      })
+      .join('');
+    const totalRow =
+      canViewTeam && data.totals
+        ? `<tr><td><strong>TOTAL</strong></td>${COLUMNS.map((c) => {
+            const v =
+              c.suffix === '%' ? `${data.totals[c.key] ?? 0}%` : data.totals[c.key] ?? 0;
+            return `<td><strong>${v}</strong></td>`;
+          }).join('')}</tr>`
+        : '';
+    const w = window.open('', '_blank');
+    if (!w) {
+      setError('Allow popups to download PDF');
+      return;
+    }
+    w.document.write(`<!doctype html><html><head><title>BD Working ${rangeLabel}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 16px; color: #111; }
+        h1 { font-size: 18px; margin: 0 0 4px; }
+        p { margin: 0 0 12px; color: #555; font-size: 12px; }
+        table { border-collapse: collapse; width: 100%; font-size: 10px; }
+        th, td { border: 1px solid #ccc; padding: 6px 5px; text-align: left; }
+        th { background: #1e3a5f; color: #fff; }
+        tr:nth-child(even) td { background: #f3f7fb; }
+        @media print { body { padding: 0; } }
+      </style></head><body>
+      <h1>BD Working</h1>
+      <p>${data.label || ''} · ${rangeLabel}${sourceFilter ? ` · source ${sourceFilter}` : ''}</p>
+      <table><thead><tr><th>BD</th>${head}</tr></thead>
+      <tbody>${body}${totalRow}</tbody></table>
+      <script>window.onload = function () { window.print(); }</script>
+      </body></html>`);
+    w.document.close();
+  };
+
+  if (error) return <div className="card login-error">{error}</div>;
   if (!data) return <div className="card">Loading BD working…</div>;
 
-  const {
-    totals,
-    reps,
-    byState = [],
-    feed,
-    leadsCreated,
-    focusUserId,
-    canViewTeam,
-    label,
-    fromYmd,
-    toYmd,
-  } = data;
-  const focusRep = focusUserId ? reps.find((r) => r.id === focusUserId) : null;
-  const showTeamTable = canViewTeam && reps.length > 0;
+  const { label, fromYmd, toYmd, sources = [], totals } = data;
 
   return (
     <div>
@@ -169,531 +227,199 @@ export default function TelesalesWorkingPage() {
         }}
       >
         <div>
-          <h1 className="page-title">{canViewTeam ? 'BD working (CEO view)' : 'My working'}</h1>
-          <p className="page-sub">
+          <h1 className="page-title">BD Working</h1>
+          <p className="page-sub" style={{ margin: 0 }}>
             {label}
             {fromYmd === toYmd ? ` · ${fromYmd}` : ` · ${fromYmd} → ${toYmd}`}
-            {focusRep ? ` · ${focusRep.name}` : ''}
+            {sourceFilter ? ` · source ${sourceFilter}` : ''}
+          </p>
+          <p className="stat-hint" style={{ margin: '0.35rem 0 0' }}>
+            Click any number for the underlying leads / activity. Default view is today.
           </p>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <PeriodChips value={period} onChange={setPeriod} />
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-secondary" onClick={exportCsv}>
+            Download CSV
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={exportPdf}>
+            Download PDF
+          </button>
+        </div>
+      </div>
+
+      <div
+        className="card"
+        style={{
+          marginBottom: '1rem',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 10,
+          alignItems: 'flex-end',
+        }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {PERIODS.map((p) => (
             <button
+              key={p.key}
               type="button"
-              className="btn btn-secondary"
-              disabled={reportBusy}
-              onClick={async () => {
-                setReportBusy(true);
-                setError('');
-                try {
-                  const q = new URLSearchParams();
-                  if (hasCustomDates) {
-                    q.set('from', dateFrom);
-                    q.set('to', dateTo);
-                  } else {
-                    q.set('period', period);
-                  }
-                  if (userId) q.set('userId', userId);
-                  else if (!canViewTeam && user?.id) q.set('userId', user.id);
-                  await downloadApiFile(`/analytics/daily-report?${q}`, 'BD_daily_report.csv');
-                } catch (e) {
-                  setError(e.message || 'Report download failed');
-                } finally {
-                  setReportBusy(false);
-                }
-              }}
+              className={`btn ${!hasCustomDates && period === p.key ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setPeriod(p.key)}
             >
-              {reportBusy ? 'Preparing…' : 'Download report'}
+              {p.label}
             </button>
-          </div>
-          {canViewTeam ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span className="stat-hint" style={{ fontWeight: 600 }}>State:</span>
-              <select
-                className="select"
-                value={stateFilter}
-                onChange={(e) => setStateFilter(e.target.value)}
-                style={{ minWidth: 160 }}
-                title="Filter BD working by US state"
-              >
-                <option value="">All states</option>
-                {byState.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label}
-                  </option>
+          ))}
+        </div>
+
+        <label className="field" style={{ margin: 0, minWidth: 140 }}>
+          <span className="label">From</span>
+          <input
+            type="date"
+            className="input"
+            value={dateFrom || (hasCustomDates ? '' : fromYmd || todayLocal())}
+            onChange={(e) =>
+              setCustomRange(e.target.value, dateTo || e.target.value || todayLocal())
+            }
+          />
+        </label>
+        <label className="field" style={{ margin: 0, minWidth: 140 }}>
+          <span className="label">To</span>
+          <input
+            type="date"
+            className="input"
+            value={dateTo || (hasCustomDates ? '' : toYmd || todayLocal())}
+            onChange={(e) =>
+              setCustomRange(dateFrom || fromYmd || todayLocal(), e.target.value)
+            }
+          />
+        </label>
+
+        {canViewTeam ? (
+          <label className="field" style={{ margin: 0, minWidth: 160 }}>
+            <span className="label">BD name</span>
+            <select
+              className="select"
+              value={userId}
+              onChange={(e) => setParam('userId', e.target.value)}
+            >
+              <option value="">All BDs</option>
+              {(data.reps || []).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        <label className="field" style={{ margin: 0, minWidth: 160 }}>
+          <span className="label">Source</span>
+          <select
+            className="select"
+            value={sourceFilter}
+            onChange={(e) => setParam('source', e.target.value)}
+          >
+            <option value="">All sources</option>
+            {sources.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="table-wrap" style={{ maxWidth: '100%', overflow: 'auto' }}>
+          <table className="leads-table" style={{ minWidth: 1400 }}>
+            <thead>
+              <tr>
+                <th style={{ position: 'sticky', left: 0, background: 'var(--surface, #fff)', zIndex: 1 }}>
+                  BD
+                </th>
+                {COLUMNS.map((c) => (
+                  <th key={c.key} title={c.label}>
+                    {c.label}
+                  </th>
                 ))}
-                {!byState.some((s) => s.key === 'unspecified') ? (
-                  <option value="unspecified">Unspecified</option>
-                ) : null}
-              </select>
-              {stateFilter ? (
-                <button type="button" className="btn btn-ghost" onClick={() => setStateFilter('')}>
-                  Clear state
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {canViewTeam && stateFilter ? (
-        <p className="stat-hint" style={{ marginTop: 0, marginBottom: '0.75rem' }}>
-          Showing BD working for state <strong>{stateFilter === 'unspecified' ? 'Unspecified' : stateFilter}</strong> only.
-        </p>
-      ) : null}
-
-      {/* Section 1: What BDs did (activities) */}
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>1. What BDs did (activities)</h3>
-        <div className="grid grid-6">
-          <StatCard
-            label="Leads added"
-            value={totals.leadsAdded}
-            hint={`${totals.leadsManual} manual · ${totals.leadsCsv} CSV`}
-            onClick={() => openDrilldown('leads_added', 'Leads added')}
-          />
-          <StatCard
-            label="Emails sent"
-            value={(totals.emails || 0) + (totals.emailFollowups || 0)}
-            hint={`${totals.emails || 0} first · ${totals.emailFollowups || 0} follow-ups`}
-            onClick={() => openDrilldown('emails_sent', 'Emails sent')}
-          />
-          <StatCard
-            label="LinkedIn actions"
-            value={totals.linkedin}
-            hint={`${totals.linkedinConnectionSent || 0} requests · ${totals.linkedinMessages || 0} msgs`}
-            onClick={() => openDrilldown('linkedin', 'LinkedIn actions')}
-          />
-          <StatCard
-            label="Facebook actions"
-            value={totals.facebook || 0}
-            hint={`${totals.facebookMessages || 0} msgs · ${totals.facebookReplies || 0} replies`}
-            onClick={() => openDrilldown('facebook', 'Facebook actions')}
-          />
-          <StatCard
-            label="Instagram actions"
-            value={totals.instagram || 0}
-            hint={`${totals.instagramMessages || 0} msgs · ${totals.instagramReplies || 0} replies`}
-            onClick={() => openDrilldown('instagram', 'Instagram actions')}
-          />
-          <StatCard
-            label="Calls"
-            value={totals.calls}
-            hint={`${totals.callsConnected || 0} connected · ${totals.messages || 0} WhatsApp`}
-            onClick={() => openDrilldown('calls', 'Calls')}
-          />
-        </div>
-      </div>
-
-      {/* Section 2: What moved in the funnel */}
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ marginTop: 0 }}>2. What moved in the funnel (unique leads)</h3>
-        <div className="grid grid-4">
-          <StatCard
-            label="Leads touched"
-            value={totals.leadsTouched}
-            hint="Unique prospects worked"
-            onClick={() => openDrilldown('leads_touched', 'Unique leads touched')}
-          />
-          <StatCard
-            label="Replies received"
-            value={totals.replies}
-            onClick={() => openDrilldown('email_replies', 'Replies received')}
-          />
-          <StatCard
-            label="→ Engaged"
-            value={totals.toEngaged ?? totals.toConversation}
-            hint="Prospects who replied / engaged"
-            onClick={() => openDrilldown('to_engaged', 'Moved to Engaged')}
-          />
-          <StatCard
-            label="→ Demo booked"
-            value={totals.toDemo}
-            onClick={() => openDrilldown('to_demo', 'Demos booked')}
-          />
-        </div>
-        <div className="grid grid-4" style={{ marginTop: '0.75rem' }}>
-          <StatCard
-            label="→ Trial / test"
-            value={totals.toTrial}
-            onClick={() => openDrilldown('to_trial', 'Trial / test leads')}
-          />
-          <StatCard
-            label="Paid"
-            value={totals.paid}
-            onClick={() => openDrilldown('paid', 'Paid leads')}
-          />
-          <StatCard
-            label="Follow-ups completed"
-            value={totals.followupsCompleted}
-            onClick={() => openDrilldown('followups_completed', 'Follow-ups completed')}
-          />
-          <StatCard
-            label="Meetings logged"
-            value={totals.meetings}
-            onClick={() => openDrilldown('meetings', 'Meetings logged')}
-          />
-        </div>
-      </div>
-
-      {/* Working by US state */}
-      {canViewTeam && byState.length > 0 ? (
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <h3 style={{ marginTop: 0 }}>Working by US state</h3>
-          <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
-            <table>
-              <thead>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
                 <tr>
-                  <th>State</th>
-                  <th>Leads touched</th>
-                  <th>Emails</th>
-                  <th>LinkedIn</th>
-                  <th>Calls</th>
-                  <th>Replies</th>
-                  <th>Activities</th>
+                  <td colSpan={COLUMNS.length + 1} className="empty">
+                    No BD activity for this period.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {byState.map((s) => (
-                  <tr
-                    key={s.key}
-                    style={{
-                      background:
-                        stateFilter === s.key
-                          ? 'color-mix(in srgb, var(--brand-primary) 12%, transparent)'
-                          : undefined,
-                    }}
-                  >
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id}>
                     <td
-                      style={{ cursor: 'pointer', fontWeight: 600 }}
-                      onClick={() => setStateFilter(s.key === stateFilter ? '' : s.key)}
-                      title="Filter page to this state"
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <StateBadge state={s.label === 'Unspecified' ? null : s.label} />
-                        <span>{s.label}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() =>
-                          openDrilldown('leads_touched', `Touched in ${s.label}`, null, { state: s.key })
-                        }
-                      >
-                        {s.leadsTouched}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() =>
-                          openDrilldown('emails_sent', `Emails to ${s.label}`, null, { state: s.key })
-                        }
-                      >
-                        {s.emails}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() =>
-                          openDrilldown('linkedin', `LinkedIn in ${s.label}`, null, { state: s.key })
-                        }
-                      >
-                        {s.linkedin}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() =>
-                          openDrilldown('calls', `Calls in ${s.label}`, null, { state: s.key })
-                        }
-                      >
-                        {s.calls}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() =>
-                          openDrilldown('email_replies', `Replies from ${s.label}`, null, { state: s.key })
-                        }
-                      >
-                        {s.replies}
-                      </span>
-                    </td>
-                    <td>{s.activities}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Section 3: Per BD comparison */}
-      {showTeamTable ? (
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div>
-              <h3 style={{ margin: 0 }}>3. Per BD comparison</h3>
-            </div>
-            {focusUserId ? (
-              <button type="button" className="btn btn-ghost" onClick={() => setFocusUser('')}>
-                Clear selection
-              </button>
-            ) : null}
-          </div>
-          <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>BD</th>
-                  <th>Leads added</th>
-                  <th>Emails</th>
-                  <th>LinkedIn</th>
-                  <th>Facebook</th>
-                  <th>Instagram</th>
-                  <th>Calls</th>
-                  <th>Touched</th>
-                  <th>→ Engaged</th>
-                  <th>→ Demo</th>
-                  <th>Paid</th>
-                  <th>Overdue FU</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reps.map((r) => (
-                  <tr
-                    key={r.id}
-                    style={{
-                      background:
-                        focusUserId === r.id
-                          ? 'color-mix(in srgb, var(--brand-primary) 12%, transparent)'
-                          : undefined,
-                    }}
-                  >
-                    <td
-                      style={{ cursor: 'pointer', fontWeight: 600 }}
-                      onClick={() => setFocusUser(r.id)}
-                      title="Filter feed below"
+                      style={{
+                        position: 'sticky',
+                        left: 0,
+                        background: 'var(--surface, #fff)',
+                        fontWeight: 600,
+                      }}
                     >
                       {r.name}
                     </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('leads_added', `${r.name}: Leads added`, r.id)}
-                      >
-                        {r.leadsAdded}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('emails_sent', `${r.name}: Emails sent`, r.id)}
-                      >
-                        {(r.emails || 0) + (r.emailFollowups || 0)}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('linkedin', `${r.name}: LinkedIn actions`, r.id)}
-                      >
-                        {r.linkedin}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('facebook', `${r.name}: Facebook actions`, r.id)}
-                      >
-                        {r.facebook || 0}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('instagram', `${r.name}: Instagram actions`, r.id)}
-                      >
-                        {r.instagram || 0}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('calls', `${r.name}: Calls`, r.id)}
-                      >
-                        {r.calls}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('leads_touched', `${r.name}: Leads touched`, r.id)}
-                      >
-                        {r.leadsTouched}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('to_engaged', `${r.name}: Engaged`, r.id)}
-                      >
-                        {r.toEngaged ?? r.toConversation}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('to_demo', `${r.name}: Demos booked`, r.id)}
-                      >
-                        {r.toDemo}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        onClick={() => openDrilldown('paid', `${r.name}: Paid`, r.id)}
-                      >
-                        {r.paid}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className="stat-clickable"
-                        style={{ color: r.overdueFollowups > 0 ? 'var(--danger)' : undefined }}
-                        onClick={() => openDrilldown('followups_overdue', `${r.name}: Overdue follow-ups`, r.id)}
-                      >
-                        {r.overdueFollowups}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
-
-      {focusRep || !canViewTeam ? (
-        <div className="grid grid-2">
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>
-              Activity feed
-              {focusRep ? ` · ${focusRep.name}` : ''}
-            </h3>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Type</th>
-                    <th>Lead</th>
-                    <th>State</th>
-                    <th>Summary</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(feed || []).length ? (
-                    feed.map((a) => (
-                      <tr
-                        key={a.id}
-                        className="clickable-row"
-                        style={{ cursor: a.lead_id ? 'pointer' : 'default' }}
-                        onClick={() => a.lead_id && setActiveLeadId(a.lead_id)}
-                      >
-                        <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(a.created_at)}</td>
-                        <td>{ACTIVITY_LABELS[a.type] || a.type}</td>
-                        <td>
-                          {a.lead_id ? (
-                            <span style={{ color: 'var(--brand-primary)', fontWeight: 500 }}>
-                              {a.lead_name || a.lead_email || a.lead_id}
-                            </span>
-                          ) : (
-                            '—'
-                          )}
+                    {COLUMNS.map((c) => {
+                      const raw = r[c.key] ?? 0;
+                      const display = c.suffix === '%' ? `${raw}%` : raw;
+                      return (
+                        <td key={c.key}>
+                          <button
+                            type="button"
+                            className="table-num-btn"
+                            onClick={() =>
+                              openDrilldown(c.metric, `${r.name} — ${c.label}`, r.id)
+                            }
+                            title={`View ${c.label}`}
+                          >
+                            {display}
+                          </button>
                         </td>
-                        <td>
-                          {a.lead_state ? <StateBadge state={a.lead_state} /> : <span className="stat-hint">—</span>}
-                        </td>
-                        <td>{a.summary}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="empty">
-                        No logged outreach in this period.
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+              {canViewTeam && rows.length > 0 && totals ? (
+                <tr style={{ background: 'color-mix(in srgb, var(--brand-primary) 8%, transparent)' }}>
+                  <td
+                    style={{
+                      position: 'sticky',
+                      left: 0,
+                      background: 'color-mix(in srgb, var(--brand-primary) 8%, white)',
+                      fontWeight: 700,
+                    }}
+                  >
+                    TOTAL
+                  </td>
+                  {COLUMNS.map((c) => {
+                    const raw = totals[c.key] ?? 0;
+                    const display = c.suffix === '%' ? `${raw}%` : raw;
+                    return (
+                      <td key={c.key}>
+                        <button
+                          type="button"
+                          className="table-num-btn"
+                          style={{ fontWeight: 700 }}
+                          onClick={() => openDrilldown(c.metric, `All BDs — ${c.label}`, null)}
+                        >
+                          {display}
+                        </button>
                       </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>
-              Leads added
-              {focusRep ? ` · ${focusRep.name}` : ''}
-            </h3>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Name</th>
-                    <th>State</th>
-                    <th>Status</th>
-                    <th>Method</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(leadsCreated || []).length ? (
-                    leadsCreated.map((l) => (
-                      <tr
-                        key={l.id}
-                        className="clickable-row"
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => setActiveLeadId(l.id)}
-                      >
-                        <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(l.created_at)}</td>
-                        <td>
-                          <span style={{ color: 'var(--brand-primary)', fontWeight: 500 }}>
-                            {l.name}
-                          </span>
-                        </td>
-                        <td>
-                          {l.state ? <StateBadge state={l.state} /> : <span className="stat-hint">—</span>}
-                        </td>
-                        <td>
-                          <StatusBadge status={l.status} />
-                        </td>
-                        <td>
-                          <span className="badge badge-grey">{l.addMethod}</span>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="empty">
-                        No leads added in this period.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    );
+                  })}
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
-      ) : null}
+      </div>
 
-      {/* Drilldown Modal */}
-      {drilldown && (
+      {drilldown ? (
         <DrilldownModal
           title={drilldown.title}
           metric={drilldown.metric}
@@ -701,20 +427,17 @@ export default function TelesalesWorkingPage() {
           dateFrom={drilldown.dateFrom}
           dateTo={drilldown.dateTo}
           userId={drilldown.userId}
-          state={drilldown.state}
           onClose={() => setDrilldown(null)}
-          onOpenLead={(id) => setActiveLeadId(id)}
+          onOpenLead={(id) => {
+            setDrilldown(null);
+            setActiveLeadId(id);
+          }}
         />
-      )}
+      ) : null}
 
-      {/* Lead Detail Drawer */}
-      {activeLeadId && (
-        <LeadPanel
-          leadId={activeLeadId}
-          onClose={() => setActiveLeadId(null)}
-          onChanged={() => {}}
-        />
-      )}
+      {activeLeadId ? (
+        <LeadPanel leadId={activeLeadId} onClose={() => setActiveLeadId(null)} />
+      ) : null}
     </div>
   );
 }

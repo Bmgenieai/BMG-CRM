@@ -363,7 +363,7 @@ export default function DashboardPage() {
                 className="btn btn-ghost"
                 style={{ fontSize: '0.85rem' }}
               >
-                Full BD detail →
+                BD Working →
               </Link>
             ) : null}
           </div>

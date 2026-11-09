@@ -49,8 +49,8 @@ function ProtectedLayout() {
         <AppLayout>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
-            {/* Kept for Dashboard “full BD report” deep links; no sidebar tab */}
             <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
+            <Route path="/bd-working" element={<Navigate to="/telesales-working" replace />} />
             <Route path="/demos" element={<DemosPage />} />
             <Route path="/chats" element={<ChatsPage />} />
             <Route path="/email-replies" element={<EmailRepliesPage />} />

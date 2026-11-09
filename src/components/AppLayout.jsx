@@ -253,6 +253,18 @@ export default function AppLayout({ children }) {
                 <CalendarClock size={16} />
                 <span className="nav-label" style={{ flex: 1 }}>Follow-ups</span>
               </NavLink>
+              {(can('analytics:view_own') ||
+                can('analytics:view_team') ||
+                can('analytics:view_all')) && (
+                <NavLink
+                  to="/telesales-working"
+                  title="BD Working"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <ClipboardList size={16} />
+                  <span className="nav-label" style={{ flex: 1 }}>BD Working</span>
+                </NavLink>
+              )}
               <NavLink
                 to="/from-bmgenie"
                 title="From bmgenie.ai"
