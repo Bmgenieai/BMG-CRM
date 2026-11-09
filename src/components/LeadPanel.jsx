@@ -29,15 +29,17 @@ const LOST_REASONS = [
 ];
 
 const ACTIVITY_TYPES = [
+  { value: 'prospect_researched', label: 'Prospect scraped / researched' },
   { value: 'call', label: 'Phone call' },
   { value: 'call_attempted', label: 'Call attempted' },
   { value: 'call_connected', label: 'Call connected' },
-  { value: 'email', label: 'Email' },
+  { value: 'email', label: 'Manual email (Gmail / outside CRM)' },
   { value: 'email_followup', label: 'Email follow-up' },
   { value: 'linkedin', label: 'LinkedIn touch' },
   { value: 'facebook', label: 'Facebook message / DM' },
   { value: 'instagram', label: 'Instagram DM' },
-  { value: 'reply', label: 'Reply' },
+  { value: 'reply', label: 'Reply received' },
+  { value: 'meeting_scheduled', label: 'Meeting / call booked' },
   { value: 'demo_shown', label: 'Demo shown' },
   { value: 'note', label: 'Comment / note' },
   { value: 'whatsapp', label: 'WhatsApp / SMS' },
@@ -1498,7 +1500,9 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 {canEditLead ? (
                   <>
                 <p className="stat-hint" style={{ marginTop: 0 }}>
-                  Emails, LinkedIn, calls, and replies feed the Funnel dashboard rates.
+                  These logs fill <strong>BD Working</strong>: researched, manual email, positive
+                  replies, meetings. CRM/Brevo sends count automatically — do not re-log those as
+                  manual email.
                 </p>
                 <form onSubmit={logActivity}>
                   <div className="field">
@@ -1518,7 +1522,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   </div>
                   {callType === 'reply' ? (
                     <div className="field">
-                      <label className="label">Reply outcome</label>
+                      <label className="label">Reply outcome (Positive → BD Working)</label>
                       <select
                         className="select"
                         value={replyOutcome}
@@ -1538,13 +1542,19 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       rows={3}
                       required
                       placeholder={
-                        callType === 'linkedin'
-                          ? 'LinkedIn touch note…'
-                          : callType === 'reply'
-                            ? 'What did they reply?'
-                            : callType === 'demo_shown'
-                              ? 'Demo notes / attendees…'
-                              : 'What happened…'
+                        callType === 'prospect_researched'
+                          ? 'Where researched (Sendio, LinkedIn search, Zillow…)…'
+                          : callType === 'email'
+                            ? 'Manual email subject / note (not CRM send)…'
+                            : callType === 'linkedin'
+                              ? 'LinkedIn touch note…'
+                              : callType === 'reply'
+                                ? 'What did they reply?'
+                                : callType === 'meeting_scheduled'
+                                  ? 'Meeting time / Calendly / attendees…'
+                                  : callType === 'demo_shown'
+                                    ? 'Demo notes / attendees…'
+                                    : 'What happened…'
                       }
                       value={callOutcome}
                       onChange={(e) => setCallOutcome(e.target.value)}

@@ -236,6 +236,11 @@ export default function TelesalesWorkingPage() {
           <p className="stat-hint" style={{ margin: '0.35rem 0 0' }}>
             Click any number for the underlying leads / activity. Default view is today.
           </p>
+          <p className="stat-hint" style={{ margin: '0.35rem 0 0', maxWidth: 720 }}>
+            Log from lead drawer → <strong>Log outreach / reply</strong>: Prospect scraped /
+            researched · Manual email · Reply (Positive) · Meeting / call booked. CRM emails &amp;
+            CSV uploads count automatically.
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-secondary" onClick={exportCsv}>
