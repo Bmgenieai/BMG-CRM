@@ -307,14 +307,12 @@ export default function DashboardPage() {
         <SnapshotCard
           label="First emails"
           value={firstEmails}
-          hint="New / email 1"
-          onClick={() => openDrilldown('emails_sent', `First emails (${periodLabel})`)}
+          onClick={() => openDrilldown('crm_first_emails', `First emails (${periodLabel})`)}
         />
         <SnapshotCard
           label="Follow-up emails"
           value={followupEmails}
-          hint="Email 2, 3, …"
-          onClick={() => openDrilldown('email_followups', `Follow-up emails (${periodLabel})`)}
+          onClick={() => openDrilldown('crm_followup_emails', `Follow-up emails (${periodLabel})`)}
         />
         <SnapshotCard
           label="Replies got"
@@ -447,7 +445,9 @@ export default function DashboardPage() {
                         type="button"
                         className="table-num-btn"
                         onClick={() =>
-                          openDrilldown('emails_sent', `${r.name} — first emails`, { userId: r.id })
+                          openDrilldown('crm_first_emails', `${r.name} — first emails`, {
+                            userId: r.id,
+                          })
                         }
                       >
                         {r.crmFirstEmails ?? r.emails ?? 0}
@@ -458,7 +458,7 @@ export default function DashboardPage() {
                         type="button"
                         className="table-num-btn"
                         onClick={() =>
-                          openDrilldown('email_followups', `${r.name} — follow-ups`, {
+                          openDrilldown('crm_followup_emails', `${r.name} — follow-ups`, {
                             userId: r.id,
                           })
                         }
