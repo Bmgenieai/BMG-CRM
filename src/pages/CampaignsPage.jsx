@@ -3,13 +3,13 @@ import { Navigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
-/** Email format choices — used to compare which style gets more opens/replies. */
 const EMAIL_FORMATS = [
   { key: 'plain_text', label: 'Plain text' },
   { key: 'image', label: 'Image' },
   { key: 'gif', label: 'GIF' },
   { key: 'video', label: 'Video' },
 ];
+const VARIANT_LETTERS = ['A', 'B', 'C', 'D'];
 
 function formatLabel(key) {
   return EMAIL_FORMATS.find((f) => f.key === key)?.label || key || '—';
@@ -27,14 +27,32 @@ function formatNextSend(iso) {
   });
 }
 
+function emptyVariant(key = 'A') {
+  return {
+    key,
+    contentCategory: key === 'A' ? 'plain_text' : key === 'B' ? 'gif' : key === 'C' ? 'image' : 'video',
+    subject: '',
+    htmlContent: '',
+    textContent: '',
+    templateId: '',
+  };
+}
+
+/** One sequence email with Instantly-style A/B/C/D variants. */
 const emptyStep = () => ({
   delayDays: 0,
-  subject: '',
-  htmlContent: '',
-  textContent: '',
-  templateId: '',
-  contentCategory: 'plain_text',
+  activeVariant: 0,
+  variants: [emptyVariant('A')],
 });
+
+function splitHint(leadCount, variantCount) {
+  if (!leadCount || !variantCount) return '';
+  const base = Math.floor(leadCount / variantCount);
+  const rem = leadCount % variantCount;
+  if (!base && !rem) return '';
+  const parts = Array.from({ length: variantCount }, (_, i) => base + (i < rem ? 1 : 0));
+  return `${leadCount} leads → split ${parts.join(' / ')} across ${variantCount} variants`;
+}
 
 /** Avoid showing the email twice when lead.name was stored as the email. */
 function displayCampaignLeadName(lead) {
@@ -93,6 +111,46 @@ export default function CampaignsPage() {
     ]);
     setCampaigns(d.campaigns || []);
     if (cat) setCategoryStats(cat);
+  };
+
+  const updateVariant = (stepIdx, patch) => {
+    setSteps((prev) => {
+      const next = [...prev];
+      const step = { ...next[stepIdx] };
+      const vi = step.activeVariant || 0;
+      const variants = [...(step.variants || [])];
+      variants[vi] = { ...variants[vi], ...patch };
+      step.variants = variants;
+      next[stepIdx] = step;
+      return next;
+    });
+  };
+
+  const addVariantToAllSteps = () => {
+    setSteps((prev) => {
+      const used = new Set((prev[0]?.variants || []).map((v) => v.key));
+      const nextKey = VARIANT_LETTERS.find((k) => !used.has(k));
+      if (!nextKey) return prev;
+      return prev.map((step) => ({
+        ...step,
+        variants: [...(step.variants || []), emptyVariant(nextKey)],
+        activeVariant: (step.variants || []).length,
+      }));
+    });
+  };
+
+  const removeVariantFromAllSteps = (key) => {
+    setSteps((prev) => {
+      if ((prev[0]?.variants || []).length <= 1) return prev;
+      return prev.map((step) => {
+        const variants = (step.variants || []).filter((v) => v.key !== key);
+        return {
+          ...step,
+          variants,
+          activeVariant: Math.min(step.activeVariant || 0, Math.max(variants.length - 1, 0)),
+        };
+      });
+    });
   };
 
   const loadDetail = async (id) => {
@@ -160,26 +218,29 @@ export default function CampaignsPage() {
     });
   }, [leads, leadFilter, leadStatus, leadSource, leadSheetId]);
 
-  const previewStep = async (idx, step) => {
+  const previewStep = async (idx) => {
     if (!emailAccountId) {
       setError('Select a From account (email) before preview');
       return;
     }
+    const step = steps[idx];
+    const variant = step?.variants?.[step.activeVariant || 0];
+    if (!variant) return;
     setBusy(true);
     setError('');
     try {
       const leadId = pickLeads[0] || filteredLeads[0]?.id;
       const body = {
-        templateId: step.templateId || undefined,
-        subject: step.subject,
-        htmlContent: step.htmlContent,
-        textContent: step.textContent || undefined,
+        templateId: variant.templateId || undefined,
+        subject: variant.subject,
+        htmlContent: variant.htmlContent,
+        textContent: variant.textContent || undefined,
         emailAccountId,
       };
       if (leadId) body.leadId = leadId;
       else body.sample = true;
       const data = await api('/email/preview', { method: 'POST', body });
-      setStepPreviews((prev) => ({ ...prev, [idx]: data }));
+      setStepPreviews((prev) => ({ ...prev, [`${idx}-${variant.key}`]: data }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -195,16 +256,15 @@ export default function CampaignsPage() {
 
   const applyTemplate = (idx, templateId) => {
     const tpl = templates.find((t) => t.id === templateId);
-    setSteps((prev) => {
-      const next = [...prev];
-      const step = { ...next[idx], templateId };
-      if (tpl) {
-        step.subject = tpl.subject;
-        step.htmlContent = tpl.htmlContent;
-        step.textContent = tpl.textContent;
-      }
-      next[idx] = step;
-      return next;
+    updateVariant(idx, {
+      templateId,
+      ...(tpl
+        ? {
+            subject: tpl.subject,
+            htmlContent: tpl.htmlContent,
+            textContent: tpl.textContent,
+          }
+        : {}),
     });
   };
 
@@ -224,11 +284,14 @@ export default function CampaignsPage() {
         steps: steps.map((s, i) => ({
           stepOrder: i + 1,
           delayDays: Number(s.delayDays) || 0,
-          subject: s.subject || undefined,
-          htmlContent: s.htmlContent || undefined,
-          textContent: s.textContent || undefined,
-          templateId: s.templateId || undefined,
-          contentCategory: s.contentCategory || 'plain_text',
+          variants: (s.variants || []).map((v) => ({
+            key: v.key,
+            contentCategory: v.contentCategory || 'plain_text',
+            subject: v.subject || undefined,
+            htmlContent: v.htmlContent || undefined,
+            textContent: v.textContent || undefined,
+            templateId: v.templateId || undefined,
+          })),
         })),
       };
       const created = await api('/email/campaigns', { method: 'POST', body });
@@ -270,11 +333,26 @@ export default function CampaignsPage() {
           steps: (detail.steps || []).map((s, i) => ({
             stepOrder: i + 1,
             delayDays: Number(s.delay_days) || 0,
-            subject: s.subject || undefined,
-            htmlContent: s.html_content || undefined,
-            textContent: s.text_content || undefined,
-            templateId: s.template_id || undefined,
-            contentCategory: s.content_category || s.contentCategory || 'plain_text',
+            variants: (s.variants && s.variants.length
+              ? s.variants
+              : [
+                  {
+                    key: 'A',
+                    content_category: s.content_category,
+                    subject: s.subject,
+                    html_content: s.html_content,
+                    text_content: s.text_content,
+                    template_id: s.template_id,
+                  },
+                ]
+            ).map((v) => ({
+              key: v.variant_key || v.key || 'A',
+              contentCategory: v.content_category || v.contentCategory || 'plain_text',
+              subject: v.subject || undefined,
+              htmlContent: v.html_content || v.htmlContent || undefined,
+              textContent: v.text_content || v.textContent || undefined,
+              templateId: v.template_id || v.templateId || undefined,
+            })),
           })),
         },
       });
@@ -383,8 +461,8 @@ export default function CampaignsPage() {
     <div>
       <h1 className="page-title">Campaigns</h1>
       <p className="page-sub" style={{ marginTop: 0 }}>
-        Tag each email as Plain text, Image, GIF, or Video so you can see which format gets better
-        opens and replies.
+        Add variants A/B/C/D inside each email (like Instantly). Leads are split evenly across
+        variants — each group gets a different email from the same campaign.
       </p>
       {error ? <div className="login-error">{error}</div> : null}
       {message ? (
@@ -428,167 +506,219 @@ export default function CampaignsPage() {
               </select>
             </div>
 
-            {steps.map((s, idx) => (
-              <div
-                key={idx}
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: 8,
-                  padding: '0.75rem',
-                  marginBottom: 8,
-                }}
+            {(() => {
+              const variantCount = steps[0]?.variants?.length || 1;
+              const hint = splitHint(pickLeads.length, variantCount);
+              return hint ? (
+                <p className="stat-hint" style={{ marginTop: 0 }}>
+                  {hint}
+                </p>
+              ) : null;
+            })()}
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={(steps[0]?.variants || []).length >= 4}
+                onClick={addVariantToAllSteps}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <strong>Email {idx + 1}</strong>
-                  {steps.length > 1 ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() => setSteps((prev) => prev.filter((_, i) => i !== idx))}
-                    >
-                      Remove
-                    </button>
-                  ) : null}
-                </div>
-                <div className="field">
-                  <label className="label">Email format</label>
-                  <select
-                    className="select"
-                    value={s.contentCategory || 'plain_text'}
-                    onChange={(e) =>
-                      setSteps((prev) => {
-                        const next = [...prev];
-                        next[idx] = { ...next[idx], contentCategory: e.target.value };
-                        return next;
-                      })
-                    }
-                    required
-                  >
-                    {EMAIL_FORMATS.map((f) => (
-                      <option key={f.key} value={f.key}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
-                    Tag the style of this email so we can compare open and reply rates later.
-                  </p>
-                </div>
-                <div className="field">
-                  <label className="label">Delay (days after launch)</label>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    value={s.delayDays}
-                    onChange={(e) =>
-                      setSteps((prev) => {
-                        const next = [...prev];
-                        next[idx] = { ...next[idx], delayDays: e.target.value };
-                        return next;
-                      })
-                    }
-                  />
-                </div>
-                <div className="field">
-                  <label className="label">Template</label>
-                  <select
-                    className="select"
-                    value={s.templateId}
-                    onChange={(e) => applyTemplate(idx, e.target.value)}
-                  >
-                    <option value="">Custom</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label className="label">Subject</label>
-                  <input
-                    className="input"
-                    value={s.subject}
-                    onChange={(e) =>
-                      setSteps((prev) => {
-                        const next = [...prev];
-                        next[idx] = { ...next[idx], subject: e.target.value };
-                        return next;
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div className="field">
-                  <label className="label">HTML body</label>
-                  <textarea
-                    className="textarea"
-                    rows={4}
-                    value={s.htmlContent}
-                    onChange={(e) =>
-                      setSteps((prev) => {
-                        const next = [...prev];
-                        next[idx] = { ...next[idx], htmlContent: e.target.value };
-                        return next;
-                      })
-                    }
-                    required
-                  />
-                  <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
-                    Use {'{{first_name}}'} and {'{{company}}'} — preview fills them before launch.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={busy}
-                  onClick={() => previewStep(idx, s)}
+                Add variant ({VARIANT_LETTERS[(steps[0]?.variants || []).length] || '—'})
+              </button>
+              <span className="stat-hint" style={{ alignSelf: 'center' }}>
+                Same variants on every email in the sequence (A gets A on follow-ups too).
+              </span>
+            </div>
+
+            {steps.map((s, idx) => {
+              const variants = s.variants || [];
+              const vi = Math.min(s.activeVariant || 0, Math.max(variants.length - 1, 0));
+              const variant = variants[vi] || emptyVariant('A');
+              const previewKey = `${idx}-${variant.key}`;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    padding: '0.75rem',
+                    marginBottom: 8,
+                  }}
                 >
-                  Preview with personalization
-                </button>
-                {stepPreviews[idx] ? (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      padding: 10,
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      background: 'var(--alabaster, #f7f7f5)',
-                    }}
-                  >
-                    <p className="stat-hint" style={{ marginTop: 0 }}>
-                      Preview
-                      {stepPreviews[idx].previewMode === 'sample'
-                        ? ` · sample ${stepPreviews[idx].sampleLead?.name || 'Alex Rivera'} @ ${stepPreviews[idx].sampleLead?.company || 'Horizon Realty'}`
-                        : ' · selected / first lead'}
-                    </p>
-                    <p style={{ fontWeight: 600, margin: '0 0 8px' }}>
-                      Subject: {stepPreviews[idx].subject}
-                    </p>
-                    <div
-                      style={{ fontSize: '0.9rem', lineHeight: 1.45 }}
-                      dangerouslySetInnerHTML={{
-                        __html: stepPreviews[idx].htmlContent || '<p>(no HTML)</p>',
-                      }}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <strong>
+                      Email {idx + 1}
+                      {idx === 0 ? ' (Day 0)' : ''}
+                    </strong>
+                    {steps.length > 1 ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => setSteps((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        Remove email
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="field">
+                    <label className="label">Delay (days after launch)</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={s.delayDays}
+                      onChange={(e) =>
+                        setSteps((prev) => {
+                          const next = [...prev];
+                          next[idx] = { ...next[idx], delayDays: e.target.value };
+                          return next;
+                        })
+                      }
                     />
                   </div>
-                ) : null}
-              </div>
-            ))}
+
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                    {variants.map((v, vIdx) => (
+                      <button
+                        key={v.key}
+                        type="button"
+                        className={`btn ${vi === vIdx ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ minWidth: 44 }}
+                        onClick={() =>
+                          setSteps((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], activeVariant: vIdx };
+                            return next;
+                          })
+                        }
+                      >
+                        {v.key}
+                      </button>
+                    ))}
+                    {variants.length > 1 ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => removeVariantFromAllSteps(variant.key)}
+                        title={`Remove variant ${variant.key} from all emails`}
+                      >
+                        Remove {variant.key}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <p className="stat-hint" style={{ marginTop: 0 }}>
+                    Editing variant <strong>{variant.key}</strong> — {formatLabel(variant.contentCategory)}
+                  </p>
+
+                  <div className="field">
+                    <label className="label">Format for variant {variant.key}</label>
+                    <select
+                      className="select"
+                      value={variant.contentCategory || 'plain_text'}
+                      onChange={(e) => updateVariant(idx, { contentCategory: e.target.value })}
+                      required
+                    >
+                      {EMAIL_FORMATS.map((f) => (
+                        <option key={f.key} value={f.key}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="label">Template</label>
+                    <select
+                      className="select"
+                      value={variant.templateId || ''}
+                      onChange={(e) => applyTemplate(idx, e.target.value)}
+                    >
+                      <option value="">Custom</option>
+                      {templates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="label">Subject</label>
+                    <input
+                      className="input"
+                      value={variant.subject || ''}
+                      onChange={(e) => updateVariant(idx, { subject: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label">HTML body</label>
+                    <textarea
+                      className="textarea"
+                      rows={4}
+                      value={variant.htmlContent || ''}
+                      onChange={(e) => updateVariant(idx, { htmlContent: e.target.value })}
+                      required
+                    />
+                    <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+                      Use {'{{first_name}}'} and {'{{company}}'} — preview fills them before launch.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={busy}
+                    onClick={() => previewStep(idx)}
+                  >
+                    Preview variant {variant.key}
+                  </button>
+                  {stepPreviews[previewKey] ? (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        padding: 10,
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        background: 'var(--alabaster, #f7f7f5)',
+                      }}
+                    >
+                      <p className="stat-hint" style={{ marginTop: 0 }}>
+                        Preview · variant {variant.key}
+                      </p>
+                      <p style={{ fontWeight: 600, margin: '0 0 8px' }}>
+                        Subject: {stepPreviews[previewKey].subject}
+                      </p>
+                      <div
+                        style={{ fontSize: '0.9rem', lineHeight: 1.45 }}
+                        dangerouslySetInnerHTML={{
+                          __html: stepPreviews[previewKey].htmlContent || '<p>(no HTML)</p>',
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
 
             <button
               type="button"
               className="btn btn-secondary"
               style={{ marginBottom: 12 }}
               onClick={() =>
-                setSteps((prev) => [
-                  ...prev,
-                  { ...emptyStep(), delayDays: prev.length ? 3 : 0 },
-                ])
+                setSteps((prev) => {
+                  const keys = (prev[0]?.variants || [emptyVariant('A')]).map((v) => v.key);
+                  return [
+                    ...prev,
+                    {
+                      delayDays: prev.length ? 3 : 0,
+                      activeVariant: 0,
+                      variants: keys.map((k) => emptyVariant(k)),
+                    },
+                  ];
+                })
               }
             >
-              Add email
+              Add follow-up email
             </button>
 
             <div className="field">
@@ -715,15 +845,15 @@ export default function CampaignsPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
         <div className="card" style={{ margin: 0 }}>
-          <h3 style={{ marginTop: 0 }}>Which email format works better?</h3>
+          <h3 style={{ marginTop: 0 }}>Which variant works better?</h3>
           <p className="stat-hint" style={{ marginTop: 0 }}>
-            Open and reply rates by format (Plain text, Image, GIF, Video) across all campaigns.
+            Open and reply rates by variant (A/B/C/D) across all campaigns.
           </p>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Format</th>
+                  <th>Variant</th>
                   <th>Sent</th>
                   <th>Opened</th>
                   <th>Open rate</th>
@@ -732,16 +862,17 @@ export default function CampaignsPage() {
                 </tr>
               </thead>
               <tbody>
-                {(categoryStats?.categories || EMAIL_FORMATS.map((f) => ({
-                  content_category: f.key,
-                  label: f.label,
-                  sent: 0,
-                  opened: 0,
-                  openRate: 0,
-                  replies: 0,
-                  replyRate: 0,
-                }))).map((row) => (
-                  <tr key={row.content_category || row.label}>
+                {(categoryStats?.variants ||
+                  VARIANT_LETTERS.map((k) => ({
+                    variant_key: k,
+                    label: `Variant ${k}`,
+                    sent: 0,
+                    opened: 0,
+                    openRate: 0,
+                    replies: 0,
+                    replyRate: 0,
+                  }))).map((row) => (
+                  <tr key={row.variant_key || row.label}>
                     <td>{row.label}</td>
                     <td>{row.sent || 0}</td>
                     <td>{row.opened || 0}</td>
@@ -753,6 +884,35 @@ export default function CampaignsPage() {
               </tbody>
             </table>
           </div>
+          {(categoryStats?.categories || []).some((c) => c.sent > 0) ? (
+            <>
+              <h4 style={{ marginBottom: 6 }}>By format</h4>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Format</th>
+                      <th>Sent</th>
+                      <th>Open rate</th>
+                      <th>Reply rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(categoryStats.categories || [])
+                      .filter((row) => row.sent > 0)
+                      .map((row) => (
+                        <tr key={row.content_category || row.label}>
+                          <td>{row.label}</td>
+                          <td>{row.sent || 0}</td>
+                          <td>{row.sent ? `${row.openRate}%` : '—'}</td>
+                          <td>{row.sent ? `${row.replyRate}%` : '—'}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : null}
         </div>
 
         <div className="card" style={{ margin: 0 }}>
@@ -920,76 +1080,72 @@ export default function CampaignsPage() {
               </div>
 
               <h4>Sequence ({(detail.steps || []).length} emails)</h4>
-              {(detail.status === 'draft' || detail.status === 'paused') ? (
-                <div style={{ marginBottom: 12 }}>
-                  {(detail.steps || []).map((s, idx) => (
-                    <div
-                      key={s.id || idx}
-                      className="field"
-                      style={{
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        padding: '0.65rem 0.75rem',
-                        marginBottom: 8,
-                      }}
-                    >
-                      <strong>Email {idx + 1}</strong>
-                      <label className="label" style={{ marginTop: 8 }}>
-                        Email format
-                      </label>
-                      <select
-                        className="select"
-                        value={s.content_category || 'plain_text'}
-                        onChange={(e) => {
-                          const next = [...(detail.steps || [])];
-                          next[idx] = { ...next[idx], content_category: e.target.value };
-                          setDetail({ ...detail, steps: next });
-                        }}
-                      >
-                        {EMAIL_FORMATS.map((f) => (
-                          <option key={f.key} value={f.key}>
-                            {f.label}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="stat-hint" style={{ margin: '6px 0 0' }}>
-                        Day {s.delay_days} · {s.subject || s.template_id || '(no subject)'}
-                      </p>
-                    </div>
-                  ))}
+              {(detail.stats?.byVariant || []).length ? (
+                <div className="table-wrap" style={{ marginBottom: 12 }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Variant</th>
+                        <th>Leads</th>
+                        <th>Sent</th>
+                        <th>Opened</th>
+                        <th>Replies</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.stats.byVariant.map((row) => {
+                        const assigned =
+                          (detail.stats.variantAssigned || []).find(
+                            (a) => a.variant_key === row.variant_key,
+                          )?.leads || 0;
+                        return (
+                          <tr key={row.variant_key}>
+                            <td>{row.variant_key}</td>
+                            <td>{assigned}</td>
+                            <td>{row.sent}</td>
+                            <td>
+                              {row.opened}
+                              {row.sent ? ` (${row.openRate}%)` : ''}
+                            </td>
+                            <td>
+                              {row.replies}
+                              {row.sent ? ` (${row.replyRate}%)` : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              ) : (
-                <ul style={{ paddingLeft: 18 }}>
-                  {(detail.steps || []).map((s, idx) => {
-                    const stepStat = (detail.stats?.byStep || []).find((x) => x.step_id === s.id);
-                    return (
-                      <li key={s.id} style={{ marginBottom: 8 }}>
-                        <strong>Email {idx + 1}</strong>
-                        {' · '}
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            padding: '1px 8px',
-                            borderRadius: 999,
-                            background: 'color-mix(in srgb, var(--brand-primary) 12%, transparent)',
-                            fontSize: '0.8rem',
-                          }}
-                        >
-                          {formatLabel(s.content_category)}
+              ) : null}
+              <ul style={{ paddingLeft: 18 }}>
+                {(detail.steps || []).map((s, idx) => {
+                  const stepStat = (detail.stats?.byStep || []).find((x) => x.step_id === s.id);
+                  const variants = s.variants || [];
+                  return (
+                    <li key={s.id} style={{ marginBottom: 10 }}>
+                      <strong>Email {idx + 1}</strong>
+                      {' · day '}
+                      {s.delay_days}
+                      {stepStat ? (
+                        <span className="stat-hint">
+                          {' '}
+                          · {stepStat.sent} sent · {stepStat.openRate}% open · {stepStat.replyRate}%
+                          reply
                         </span>
-                        {' · day '}
-                        {s.delay_days}: {s.subject || s.template_id || '(no subject)'}
-                        {stepStat ? (
-                          <span className="stat-hint" style={{ display: 'block' }}>
-                            {stepStat.sent} sent · {stepStat.opened} opened ({stepStat.openRate}%) ·{' '}
-                            {stepStat.replies} replies ({stepStat.replyRate}%)
-                          </span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+                      ) : null}
+                      <ul style={{ paddingLeft: 16, marginTop: 4 }}>
+                        {variants.map((v) => (
+                          <li key={v.id || v.variant_key} className="stat-hint">
+                            Variant {v.variant_key} · {formatLabel(v.content_category)} ·{' '}
+                            {v.subject || '(no subject)'}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
 
               <h4>
                 Leads ({detail.counts?.total ?? detail.leads?.length ?? 0}
