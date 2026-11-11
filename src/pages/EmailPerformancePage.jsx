@@ -5,6 +5,14 @@ import { useAuth } from '../auth.jsx';
 import DrilldownModal from '../components/DrilldownModal.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
 
+const PERIODS = [
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'week', label: 'This week' },
+  { key: 'month', label: 'This month' },
+  { key: 'overall', label: 'Overall' },
+];
+
 function StatCard({ label, value, hint, onClick }) {
   return (
     <div
@@ -40,11 +48,22 @@ export default function EmailPerformancePage() {
   const [accountId, setAccountId] = useState('');
   const [scope, setScope] = useState('account');
   const [focusUserId, setFocusUserId] = useState('');
+  const [period, setPeriod] = useState('overall');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [error, setError] = useState('');
   const [drilldown, setDrilldown] = useState(null);
   const [leadId, setLeadId] = useState(null);
 
+  const hasCustomDates = Boolean(dateFrom && dateTo);
+
   if (!canUse) return <Navigate to="/" replace />;
+
+  const selectPeriod = (key) => {
+    setPeriod(key);
+    setDateFrom('');
+    setDateTo('');
+  };
 
   const load = () => {
     setError('');
@@ -52,6 +71,12 @@ export default function EmailPerformancePage() {
     if (accountId) params.set('emailAccountId', accountId);
     params.set('scope', focusUserId ? 'me' : scope);
     if (focusUserId) params.set('userId', focusUserId);
+    if (hasCustomDates) {
+      params.set('from', dateFrom);
+      params.set('to', dateTo);
+    } else {
+      params.set('period', period);
+    }
     api(`/email/performance?${params}`)
       .then((res) => {
         setData(res);
@@ -62,32 +87,117 @@ export default function EmailPerformancePage() {
 
   useEffect(() => {
     load();
-  }, [accountId, scope, focusUserId]);
+  }, [accountId, scope, focusUserId, period, dateFrom, dateTo]);
 
   const stats = data?.stats || {};
   const accounts = data?.accounts || [];
+  const byDay = data?.byDay || [];
   const activeAccountId = accountId || data?.account?.id || '';
+  const periodLabel = hasCustomDates
+    ? dateFrom === dateTo
+      ? dateFrom
+      : `${dateFrom} → ${dateTo}`
+    : data?.label || PERIODS.find((p) => p.key === period)?.label || 'Overall';
 
-  const openMetric = (metric, title) => {
+  const openMetric = (metric, title, dayYmd) => {
+    const useRange = Boolean(dayYmd) || hasCustomDates;
     setDrilldown({
       metric,
-      title,
+      title: dayYmd ? `${title} · ${dayYmd}` : title,
       emailAccountId: activeAccountId || undefined,
       userId: focusUserId || (scope === 'me' ? data?.user?.id : undefined),
+      dateFrom: dayYmd || (hasCustomDates ? dateFrom : undefined),
+      dateTo: dayYmd || (hasCustomDates ? dateTo : undefined),
+      period: useRange ? undefined : period,
     });
   };
 
   return (
     <div>
       <div style={{ marginBottom: '1rem' }}>
-        <h1 className="page-title">Email stats</h1>
-        {data?.account ? (
-          <p className="page-sub" style={{ margin: '0 0 0.75rem' }}>
-            {data.account.name} &lt;{data.account.email}&gt;
-          </p>
-        ) : (
-          <div style={{ marginBottom: '0.75rem' }} />
-        )}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: '0.75rem',
+          }}
+        >
+          <div>
+            <h1 className="page-title" style={{ margin: 0 }}>
+              Email stats
+            </h1>
+            {data?.account ? (
+              <p className="page-sub" style={{ margin: '0.25rem 0 0' }}>
+                {data.account.name} &lt;{data.account.email}&gt;
+                {periodLabel ? (
+                  <>
+                    {' '}
+                    · <strong>{periodLabel}</strong>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+          </div>
+          <div className="ceo-dashboard-filters" role="group" aria-label="Email stats date filters">
+            <div className="ceo-period-chips" role="group" aria-label="Date period">
+              {PERIODS.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  className={`btn ${!hasCustomDates && period === p.key ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => selectPeriod(p.key)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <span className="ceo-filter-divider" aria-hidden="true" />
+            <div className="ceo-date-range" role="group" aria-label="Custom date range">
+              <label className="ceo-date-field">
+                <span>From</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDateFrom(v);
+                    if (v && !dateTo) setDateTo(v);
+                  }}
+                />
+              </label>
+              <span className="ceo-date-sep">–</span>
+              <label className="ceo-date-field">
+                <span>To</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDateTo(v);
+                    if (v && !dateFrom) setDateFrom(v);
+                  }}
+                />
+              </label>
+              {hasCustomDates ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost ceo-date-clear"
+                  onClick={() => selectPeriod(period)}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
         <div
           style={{
             display: 'grid',
@@ -153,6 +263,7 @@ export default function EmailPerformancePage() {
         <StatCard
           label="Sent"
           value={stats.sent}
+          hint={periodLabel}
           onClick={() => openMetric('emails_sent', 'Emails sent')}
         />
         <StatCard
@@ -173,6 +284,47 @@ export default function EmailPerformancePage() {
           hint={stats.sent ? `${stats.replyRate}%` : null}
           onClick={() => openMetric('email_replies', 'Replies')}
         />
+      </div>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3 style={{ marginTop: 0 }}>By day</h3>
+        <p className="stat-hint" style={{ marginTop: 0 }}>
+          How many emails went out from this sender each day
+          {periodLabel ? ` · ${periodLabel}` : ''}.
+        </p>
+        {byDay.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Sent</th>
+                  <th>Opened</th>
+                  <th>Replies</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byDay.map((row) => (
+                  <tr
+                    key={row.day}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => openMetric('emails_sent', 'Emails sent', row.day)}
+                    title={`See emails sent on ${row.day}`}
+                  >
+                    <td>{row.day}</td>
+                    <td>{row.sent}</td>
+                    <td>{row.opened}</td>
+                    <td>{row.replies}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="stat-hint" style={{ marginBottom: 0 }}>
+            No sends in this date range.
+          </p>
+        )}
       </div>
 
       {canTeam && (data?.team || []).length ? (
@@ -211,7 +363,9 @@ export default function EmailPerformancePage() {
         <DrilldownModal
           title={drilldown.title}
           metric={drilldown.metric}
-          period="overall"
+          period={drilldown.period}
+          dateFrom={drilldown.dateFrom}
+          dateTo={drilldown.dateTo}
           userId={drilldown.userId}
           emailAccountId={drilldown.emailAccountId}
           onClose={() => setDrilldown(null)}

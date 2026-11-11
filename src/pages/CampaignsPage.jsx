@@ -3,12 +3,37 @@ import { Navigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
+/** Email format choices — used to compare which style gets more opens/replies. */
+const EMAIL_FORMATS = [
+  { key: 'plain_text', label: 'Plain text' },
+  { key: 'image', label: 'Image' },
+  { key: 'gif', label: 'GIF' },
+  { key: 'video', label: 'Video' },
+];
+
+function formatLabel(key) {
+  return EMAIL_FORMATS.find((f) => f.key === key)?.label || key || '—';
+}
+
+function formatNextSend(iso) {
+  if (!iso) return '—';
+  const d = new Date(String(iso).includes('T') ? iso : `${iso.replace(' ', 'T')}Z`);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 16);
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 const emptyStep = () => ({
   delayDays: 0,
   subject: '',
   htmlContent: '',
   textContent: '',
   templateId: '',
+  contentCategory: 'plain_text',
 });
 
 /** Avoid showing the email twice when lead.name was stored as the email. */
@@ -57,12 +82,17 @@ export default function CampaignsPage() {
   const [importBatches, setImportBatches] = useState([]);
   const [leadSheetId, setLeadSheetId] = useState('');
   const [stepPreviews, setStepPreviews] = useState({});
+  const [categoryStats, setCategoryStats] = useState(null);
 
   if (!can('email:manage_campaigns')) return <Navigate to="/" replace />;
 
   const loadList = async () => {
-    const d = await api('/email/campaigns');
+    const [d, cat] = await Promise.all([
+      api('/email/campaigns'),
+      api('/email/campaigns/category-stats?period=overall').catch(() => null),
+    ]);
     setCampaigns(d.campaigns || []);
+    if (cat) setCategoryStats(cat);
   };
 
   const loadDetail = async (id) => {
@@ -198,6 +228,7 @@ export default function CampaignsPage() {
           htmlContent: s.htmlContent || undefined,
           textContent: s.textContent || undefined,
           templateId: s.templateId || undefined,
+          contentCategory: s.contentCategory || 'plain_text',
         })),
       };
       const created = await api('/email/campaigns', { method: 'POST', body });
@@ -243,6 +274,7 @@ export default function CampaignsPage() {
             htmlContent: s.html_content || undefined,
             textContent: s.text_content || undefined,
             templateId: s.template_id || undefined,
+            contentCategory: s.content_category || s.contentCategory || 'plain_text',
           })),
         },
       });
@@ -350,6 +382,10 @@ export default function CampaignsPage() {
   return (
     <div>
       <h1 className="page-title">Campaigns</h1>
+      <p className="page-sub" style={{ marginTop: 0 }}>
+        Tag each email as Plain text, Image, GIF, or Video so you can see which format gets better
+        opens and replies.
+      </p>
       {error ? <div className="login-error">{error}</div> : null}
       {message ? (
         <div
@@ -403,7 +439,7 @@ export default function CampaignsPage() {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <strong>Step {idx + 1}</strong>
+                  <strong>Email {idx + 1}</strong>
                   {steps.length > 1 ? (
                     <button
                       type="button"
@@ -413,6 +449,30 @@ export default function CampaignsPage() {
                       Remove
                     </button>
                   ) : null}
+                </div>
+                <div className="field">
+                  <label className="label">Email format</label>
+                  <select
+                    className="select"
+                    value={s.contentCategory || 'plain_text'}
+                    onChange={(e) =>
+                      setSteps((prev) => {
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], contentCategory: e.target.value };
+                        return next;
+                      })
+                    }
+                    required
+                  >
+                    {EMAIL_FORMATS.map((f) => (
+                      <option key={f.key} value={f.key}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+                    Tag the style of this email so we can compare open and reply rates later.
+                  </p>
                 </div>
                 <div className="field">
                   <label className="label">Delay (days after launch)</label>
@@ -528,7 +588,7 @@ export default function CampaignsPage() {
                 ])
               }
             >
-              Add step
+              Add email
             </button>
 
             <div className="field">
@@ -653,11 +713,53 @@ export default function CampaignsPage() {
           </form>
         </div>
 
-        <div className="card">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
+        <div className="card" style={{ margin: 0 }}>
+          <h3 style={{ marginTop: 0 }}>Which email format works better?</h3>
+          <p className="stat-hint" style={{ marginTop: 0 }}>
+            Open and reply rates by format (Plain text, Image, GIF, Video) across all campaigns.
+          </p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Format</th>
+                  <th>Sent</th>
+                  <th>Opened</th>
+                  <th>Open rate</th>
+                  <th>Replies</th>
+                  <th>Reply rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(categoryStats?.categories || EMAIL_FORMATS.map((f) => ({
+                  content_category: f.key,
+                  label: f.label,
+                  sent: 0,
+                  opened: 0,
+                  openRate: 0,
+                  replies: 0,
+                  replyRate: 0,
+                }))).map((row) => (
+                  <tr key={row.content_category || row.label}>
+                    <td>{row.label}</td>
+                    <td>{row.sent || 0}</td>
+                    <td>{row.opened || 0}</td>
+                    <td>{row.sent ? `${row.openRate}%` : '—'}</td>
+                    <td>{row.replies || 0}</td>
+                    <td>{row.sent ? `${row.replyRate}%` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="card" style={{ margin: 0 }}>
           <h3 style={{ marginTop: 0 }}>Campaigns</h3>
           <p className="stat-hint" style={{ marginTop: 0 }}>
-            Status is overall campaign state (all leads finished → completed). Steps = emails in the
-            sequence, not “current step”.
+            Email 1 / 2 / 3 = how many of each sequence email were sent. Next follow-up = when the
+            next scheduled send goes out.
           </p>
           <div className="table-wrap">
             <table>
@@ -666,11 +768,12 @@ export default function CampaignsPage() {
                   <th>Name</th>
                   <th>Status</th>
                   <th>Leads</th>
-                  <th title="Number of emails in the sequence">Steps</th>
-                  <th>Sent</th>
+                  <th title="First email in the sequence">Email 1</th>
+                  <th title="Second email (follow-up)">Email 2</th>
+                  <th title="Third email (follow-up)">Email 3</th>
+                  <th>Next follow-up</th>
                   <th>Opened</th>
                   <th>Replies</th>
-                  <th>Bounces</th>
                 </tr>
               </thead>
               <tbody>
@@ -689,8 +792,10 @@ export default function CampaignsPage() {
                     <td>{c.name}</td>
                     <td>{c.status}</td>
                     <td>{c.lead_count}</td>
-                    <td>{c.step_count}</td>
-                    <td>{c.sent_count || 0}</td>
+                    <td>{c.sent_step_1 || 0}</td>
+                    <td>{c.sent_step_2 || 0}</td>
+                    <td>{c.sent_step_3 || 0}</td>
+                    <td>{formatNextSend(c.next_follow_up_at)}</td>
                     <td>
                       {c.opened_count || 0}
                       {c.sent_count ? (
@@ -703,7 +808,6 @@ export default function CampaignsPage() {
                         <span className="stat-hint"> ({c.reply_rate}%)</span>
                       ) : null}
                     </td>
-                    <td>{c.bounced_count || 0}</td>
                   </tr>
                 ))}
               </tbody>
@@ -816,24 +920,76 @@ export default function CampaignsPage() {
               </div>
 
               <h4>Sequence ({(detail.steps || []).length} emails)</h4>
-              <ul style={{ paddingLeft: 18 }}>
-                {(detail.steps || []).map((s, idx) => {
-                  const stepStat = (detail.stats?.byStep || []).find((x) => x.step_id === s.id);
-                  return (
-                    <li key={s.id} style={{ marginBottom: 6 }}>
-                      Email {idx + 1} · send on day {s.delay_days}:{' '}
-                      {s.subject || s.template_id || '(no subject)'}
-                      {stepStat ? (
-                        <span className="stat-hint" style={{ display: 'block' }}>
-                          {stepStat.sent} sent · {stepStat.opened} opened ({stepStat.openRate}%) ·{' '}
-                          {stepStat.replies} replies ({stepStat.replyRate}%) · {stepStat.bounced}{' '}
-                          bounced
+              {(detail.status === 'draft' || detail.status === 'paused') ? (
+                <div style={{ marginBottom: 12 }}>
+                  {(detail.steps || []).map((s, idx) => (
+                    <div
+                      key={s.id || idx}
+                      className="field"
+                      style={{
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        padding: '0.65rem 0.75rem',
+                        marginBottom: 8,
+                      }}
+                    >
+                      <strong>Email {idx + 1}</strong>
+                      <label className="label" style={{ marginTop: 8 }}>
+                        Email format
+                      </label>
+                      <select
+                        className="select"
+                        value={s.content_category || 'plain_text'}
+                        onChange={(e) => {
+                          const next = [...(detail.steps || [])];
+                          next[idx] = { ...next[idx], content_category: e.target.value };
+                          setDetail({ ...detail, steps: next });
+                        }}
+                      >
+                        {EMAIL_FORMATS.map((f) => (
+                          <option key={f.key} value={f.key}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="stat-hint" style={{ margin: '6px 0 0' }}>
+                        Day {s.delay_days} · {s.subject || s.template_id || '(no subject)'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <ul style={{ paddingLeft: 18 }}>
+                  {(detail.steps || []).map((s, idx) => {
+                    const stepStat = (detail.stats?.byStep || []).find((x) => x.step_id === s.id);
+                    return (
+                      <li key={s.id} style={{ marginBottom: 8 }}>
+                        <strong>Email {idx + 1}</strong>
+                        {' · '}
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '1px 8px',
+                            borderRadius: 999,
+                            background: 'color-mix(in srgb, var(--brand-primary) 12%, transparent)',
+                            fontSize: '0.8rem',
+                          }}
+                        >
+                          {formatLabel(s.content_category)}
                         </span>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+                        {' · day '}
+                        {s.delay_days}: {s.subject || s.template_id || '(no subject)'}
+                        {stepStat ? (
+                          <span className="stat-hint" style={{ display: 'block' }}>
+                            {stepStat.sent} sent · {stepStat.opened} opened ({stepStat.openRate}%) ·{' '}
+                            {stepStat.replies} replies ({stepStat.replyRate}%)
+                          </span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
 
               <h4>
                 Leads ({detail.counts?.total ?? detail.leads?.length ?? 0}
@@ -879,6 +1035,7 @@ export default function CampaignsPage() {
               </div>
             </div>
           ) : null}
+        </div>
         </div>
       </div>
     </div>

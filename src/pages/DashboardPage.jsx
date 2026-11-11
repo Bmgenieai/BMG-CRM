@@ -209,7 +209,12 @@ export default function DashboardPage() {
     : funnel?.periodLabel || periodObj.label;
   const totals = bdWork?.totals || {};
   const stages = funnel?.stages || {};
-  const emailsSent = (totals.emails || 0) + (totals.emailFollowups || 0);
+  const firstEmails = totals.crmFirstEmails ?? totals.emails ?? 0;
+  const followupEmails = totals.crmFollowupEmails ?? totals.emailFollowups ?? 0;
+  const emailsSent =
+    totals.crmEmailsSent != null
+      ? totals.crmEmailsSent
+      : (totals.emails || 0) + (totals.emailFollowups || 0);
   const overdueFollowups = reps.reduce((s, r) => s + (Number(r.overdueFollowups) || 0), 0);
   const workingLinkQs = filterQuery;
 
@@ -292,7 +297,7 @@ export default function DashboardPage() {
       ) : null}
 
       {/* 1) Snapshot — team totals once */}
-      <div className="grid grid-5" style={{ marginBottom: '1rem' }}>
+      <div className="grid grid-5" style={{ marginBottom: '0.75rem' }}>
         <SnapshotCard
           label="Leads added"
           value={totals.leadsAdded ?? 0}
@@ -300,10 +305,16 @@ export default function DashboardPage() {
           onClick={() => openDrilldown('leads_added', `Leads added (${periodLabel})`)}
         />
         <SnapshotCard
-          label="Emails sent"
-          value={emailsSent}
-          hint={`${periodLabel}`}
-          onClick={() => openDrilldown('emails_sent', `Emails sent (${periodLabel})`)}
+          label="First emails"
+          value={firstEmails}
+          hint="New / email 1"
+          onClick={() => openDrilldown('emails_sent', `First emails (${periodLabel})`)}
+        />
+        <SnapshotCard
+          label="Follow-up emails"
+          value={followupEmails}
+          hint="Email 2, 3, …"
+          onClick={() => openDrilldown('email_followups', `Follow-up emails (${periodLabel})`)}
         />
         <SnapshotCard
           label="Replies got"
@@ -317,14 +328,24 @@ export default function DashboardPage() {
           hint={`${periodLabel}`}
           onClick={() => openDrilldown('paid', `Paid (${periodLabel})`)}
         />
-        <SnapshotCard
-          label="Overdue follow-ups"
-          value={overdueFollowups}
-          danger
-          hint="Needs action now"
-          onClick={() => openDrilldown('followups_overdue', 'Overdue follow-ups')}
-        />
       </div>
+      <p className="stat-hint" style={{ marginTop: 0, marginBottom: '1rem' }}>
+        Total emails sent: <strong>{emailsSent}</strong>
+        {` (${firstEmails} first + ${followupEmails} follow-up)`}
+        {overdueFollowups > 0 ? (
+          <>
+            {' · '}
+            <button
+              type="button"
+              className="table-num-btn"
+              style={{ color: 'var(--danger)' }}
+              onClick={() => openDrilldown('followups_overdue', 'Overdue follow-ups')}
+            >
+              {overdueFollowups} overdue follow-ups
+            </button>
+          </>
+        ) : null}
+      </p>
 
       {/* 2) BD table — by person only */}
       <div className="card" style={{ marginBottom: '1rem' }}>
@@ -375,7 +396,8 @@ export default function DashboardPage() {
               <tr>
                 <th>BD</th>
                 <th>Leads added</th>
-                <th>Emails</th>
+                <th>First emails</th>
+                <th>Follow-ups</th>
                 <th>Calls</th>
                 <th>LinkedIn</th>
                 <th>Replies</th>
@@ -425,10 +447,23 @@ export default function DashboardPage() {
                         type="button"
                         className="table-num-btn"
                         onClick={() =>
-                          openDrilldown('emails_sent', `${r.name} — emails`, { userId: r.id })
+                          openDrilldown('emails_sent', `${r.name} — first emails`, { userId: r.id })
                         }
                       >
-                        {(r.emails || 0) + (r.emailFollowups || 0)}
+                        {r.crmFirstEmails ?? r.emails ?? 0}
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="table-num-btn"
+                        onClick={() =>
+                          openDrilldown('email_followups', `${r.name} — follow-ups`, {
+                            userId: r.id,
+                          })
+                        }
+                      >
+                        {r.crmFollowupEmails ?? r.emailFollowups ?? 0}
                       </button>
                     </td>
                     <td>
@@ -475,7 +510,7 @@ export default function DashboardPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="empty">
+                  <td colSpan={8} className="empty">
                     No BD activity in this period
                   </td>
                 </tr>

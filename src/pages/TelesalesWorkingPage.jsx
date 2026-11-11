@@ -16,7 +16,9 @@ const PERIODS = [
 const COLUMNS = [
   { key: 'prospectsScraped', label: 'Prospects Scraped / Researched', metric: 'prospects_scraped' },
   { key: 'emailsUploaded', label: 'Emails Uploaded to CRM', metric: 'emails_uploaded' },
-  { key: 'crmEmailsSent', label: 'CRM Emails Sent', metric: 'crm_emails_sent' },
+  { key: 'crmFirstEmails', label: 'First emails', metric: 'emails_sent' },
+  { key: 'crmFollowupEmails', label: 'Follow-up emails', metric: 'email_followups' },
+  { key: 'crmEmailsSent', label: 'CRM Emails Sent (total)', metric: 'crm_emails_sent' },
   { key: 'manualEmailsSent', label: 'Manual Emails Sent', metric: 'manual_emails_sent' },
   {
     key: 'linkedinConnectionSent',
