@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { fmtPktDate } from '../components/Badges.jsx';
+import { fmtInTz, fmtNowInTz } from '../components/Badges.jsx';
 
 const EMAIL_FORMATS = [
   { key: 'plain_text', label: 'Plain text' },
@@ -12,12 +12,30 @@ const EMAIL_FORMATS = [
 ];
 const VARIANT_LETTERS = ['A', 'B', 'C', 'D'];
 
+const CAMPAIGN_TIMEZONES = [
+  { value: 'America/New_York', label: 'US Eastern (New York)', short: 'ET' },
+  { value: 'America/Chicago', label: 'US Central (Chicago)', short: 'CT' },
+  { value: 'America/Denver', label: 'US Mountain (Denver)', short: 'MT' },
+  { value: 'America/Los_Angeles', label: 'US Pacific (Los Angeles)', short: 'PT' },
+  { value: 'America/Phoenix', label: 'US Arizona (no DST)', short: 'MST' },
+  { value: 'Europe/London', label: 'UK (London)', short: 'UK' },
+  { value: 'Europe/Dublin', label: 'Ireland (Dublin)', short: 'IST' },
+  { value: 'Asia/Karachi', label: 'Pakistan (Karachi)', short: 'PKT' },
+  { value: 'UTC', label: 'UTC', short: 'UTC' },
+];
+
+function tzMeta(value) {
+  return CAMPAIGN_TIMEZONES.find((t) => t.value === value) || CAMPAIGN_TIMEZONES[0];
+}
+
 function formatLabel(key) {
   return EMAIL_FORMATS.find((f) => f.key === key)?.label || key || '—';
 }
 
-function formatNextSend(iso) {
-  return fmtPktDate(iso);
+function formatNextSend(iso, timeZone = 'America/New_York') {
+  if (!iso) return '—';
+  const meta = tzMeta(timeZone);
+  return `${fmtInTz(iso, timeZone || 'America/New_York')} ${meta.short}`;
 }
 
 function emptyVariant(key = 'A') {
@@ -81,6 +99,9 @@ export default function CampaignsPage() {
   const [leads, setLeads] = useState([]);
   const [name, setName] = useState('');
   const [emailAccountId, setEmailAccountId] = useState('');
+  const [timezone, setTimezone] = useState('America/New_York');
+  const [tzClock, setTzClock] = useState(() => fmtNowInTz('America/New_York'));
+  const [detailTzClock, setDetailTzClock] = useState('');
   const [steps, setSteps] = useState([emptyStep()]);
   const [pickLeads, setPickLeads] = useState([]);
   const [leadFilter, setLeadFilter] = useState('');
@@ -228,6 +249,21 @@ export default function CampaignsPage() {
     else setDetail(null);
   }, [selectedId]);
 
+  useEffect(() => {
+    const tick = () => setTzClock(fmtNowInTz(timezone));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [timezone]);
+
+  useEffect(() => {
+    const tz = detail?.timezone || 'America/New_York';
+    const tick = () => setDetailTzClock(fmtNowInTz(tz));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [detail?.timezone]);
+
   const filteredLeads = useMemo(() => {
     const q = leadFilter.trim().toLowerCase();
     return leads.filter((l) => {
@@ -311,6 +347,7 @@ export default function CampaignsPage() {
       const body = {
         name,
         emailAccountId,
+        timezone,
         steps: steps.map((s, i) => ({
           stepOrder: i + 1,
           delayDays: Number(s.delayDays) || 0,
@@ -360,6 +397,7 @@ export default function CampaignsPage() {
         body: {
           name: detail.name,
           emailAccountId: detail.email_account_id,
+          timezone: detail.timezone || 'America/New_York',
           steps: (detail.steps || []).map((s, i) => ({
             stepOrder: i + 1,
             delayDays: Number(s.delay_days) || 0,
@@ -425,6 +463,17 @@ export default function CampaignsPage() {
     setBusy(true);
     setError('');
     try {
+      // Persist timezone / from account / steps before scheduling
+      if (detail.status === 'draft' || detail.status === 'paused') {
+        await api(`/email/campaigns/${detail.id}`, {
+          method: 'PATCH',
+          body: {
+            name: detail.name,
+            emailAccountId: detail.email_account_id,
+            timezone: detail.timezone || 'America/New_York',
+          },
+        });
+      }
       const r = await api(`/email/campaigns/${detail.id}/launch`, { method: 'POST', body: {} });
       setMessage(`Launched · ${r.scheduled} scheduled send(s)`);
       await loadList();
@@ -536,6 +585,26 @@ export default function CampaignsPage() {
               </select>
             </div>
 
+            <div className="field">
+              <label className="label">Audience timezone</label>
+              <select
+                className="select"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+              >
+                {CAMPAIGN_TIMEZONES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <p className="stat-hint" style={{ margin: '6px 0 0' }}>
+                Now there: <strong>{tzClock}</strong>
+                <br />
+                Email 1 + all follow-ups send Mon–Fri, 9:00 AM–2:00 PM in this timezone.
+              </p>
+            </div>
+
             {(() => {
               const variantCount = steps[0]?.variants?.length || 1;
               const hint = splitHint(pickLeads.length, variantCount);
@@ -607,7 +676,8 @@ export default function CampaignsPage() {
                       }
                     />
                     <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
-                      Sat/Sun are skipped. Sends go out Mon–Fri, 7:00 PM–12:00 AM PKT.
+                      Sat/Sun skipped. Sends Mon–Fri, 9:00 AM–2:00 PM in the campaign audience
+                      timezone ({tzMeta(timezone).short}).
                     </p>
                   </div>
 
@@ -1005,7 +1075,7 @@ export default function CampaignsPage() {
                       <td>{numBtn('step_2', 'Email 2', c.sent_step_2 || 0)}</td>
                       <td>{numBtn('step_3', 'Email 3', c.sent_step_3 || 0)}</td>
                       <td>{numBtn('step_4', 'Email 4', c.sent_step_4 || 0)}</td>
-                      <td>{formatNextSend(c.next_follow_up_at)}</td>
+                      <td>{formatNextSend(c.next_follow_up_at, c.timezone)}</td>
                       <td>
                         {numBtn(
                           'opened',
@@ -1112,27 +1182,55 @@ export default function CampaignsPage() {
               ) : null}
 
               {(detail.status === 'draft' || detail.status === 'paused') && (
-                <div className="field">
-                  <label className="label">From account</label>
-                  <select
-                    className="select"
-                    value={detail.email_account_id || ''}
-                    onChange={(e) =>
-                      setDetail({ ...detail, email_account_id: e.target.value || null })
-                    }
-                    required
-                  >
-                    <option value="" disabled>
-                      Select email account…
-                    </option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.label} · {a.email}
+                <>
+                  <div className="field">
+                    <label className="label">From account</label>
+                    <select
+                      className="select"
+                      value={detail.email_account_id || ''}
+                      onChange={(e) =>
+                        setDetail({ ...detail, email_account_id: e.target.value || null })
+                      }
+                      required
+                    >
+                      <option value="" disabled>
+                        Select email account…
                       </option>
-                    ))}
-                  </select>
-                </div>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label} · {a.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="label">Audience timezone</label>
+                    <select
+                      className="select"
+                      value={detail.timezone || 'America/New_York'}
+                      onChange={(e) => setDetail({ ...detail, timezone: e.target.value })}
+                    >
+                      {CAMPAIGN_TIMEZONES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="stat-hint" style={{ margin: '6px 0 0' }}>
+                      Now there: <strong>{detailTzClock}</strong>
+                      <br />
+                      Launch + every follow-up uses Mon–Fri 9:00 AM–2:00 PM in this zone. Save
+                      before launch if you change it.
+                    </p>
+                  </div>
+                </>
               )}
+              {detail.status === 'active' || detail.status === 'completed' || detail.status === 'cancelled' ? (
+                <p className="stat-hint" style={{ marginTop: 0 }}>
+                  Audience timezone: <strong>{tzMeta(detail.timezone).label}</strong>
+                  {detailTzClock ? <> · now {detailTzClock}</> : null}
+                </p>
+              ) : null}
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                 {(detail.status === 'draft' || detail.status === 'paused') && (

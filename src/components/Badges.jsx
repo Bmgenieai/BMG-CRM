@@ -112,12 +112,12 @@ export function parseUtcDate(iso) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Format an instant in Asia/Karachi (office / campaign schedule TZ). */
-export function fmtPktDate(iso, opts = {}) {
+/** Format an instant in a given IANA timezone (default Asia/Karachi). */
+export function fmtInTz(iso, timeZone = 'Asia/Karachi', opts = {}) {
   const d = parseUtcDate(iso);
   if (!d) return iso ? String(iso).slice(0, 16) : '—';
   return d.toLocaleString(undefined, {
-    timeZone: 'Asia/Karachi',
+    timeZone: timeZone || 'Asia/Karachi',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -125,6 +125,24 @@ export function fmtPktDate(iso, opts = {}) {
     second: opts.withSeconds ? '2-digit' : undefined,
     hour12: true,
     ...opts,
+  });
+}
+
+/** Format an instant in Asia/Karachi (office TZ). */
+export function fmtPktDate(iso, opts = {}) {
+  return fmtInTz(iso, 'Asia/Karachi', opts);
+}
+
+export function fmtNowInTz(timeZone = 'America/New_York') {
+  return new Date().toLocaleString(undefined, {
+    timeZone: timeZone || 'America/New_York',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
   });
 }
 

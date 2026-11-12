@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Mail, RefreshCw, Send, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { SourceBadge, fmtDate, fmtPktDate } from '../components/Badges.jsx';
+import { SourceBadge, fmtDate, fmtInTz, fmtPktDate } from '../components/Badges.jsx';
 
 function toLocalInputValue() {
   const d = new Date(Date.now() + 60 * 60 * 1000);
@@ -543,14 +543,14 @@ export default function EmailPage() {
         <div className="card" style={{ marginTop: '1rem' }}>
           <h3 style={{ marginTop: 0 }}>Upcoming scheduled sends</h3>
           <p className="stat-hint" style={{ marginTop: 0 }}>
-            Campaign sends go out Mon–Fri, 7:00 PM–12:00 AM PKT (≈ 9:00 AM–2:00 PM US Eastern).
-            Times below are Pakistan time. Click a recipient count to see every lead.
+            Campaign sends: Mon–Fri, 9:00 AM–2:00 PM in each campaign’s audience timezone. Click a
+            recipient count to see every lead.
           </p>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>When (PKT)</th>
+                  <th>When (audience TZ)</th>
                   <th>Campaign</th>
                   <th>Step</th>
                   <th>Subject</th>
@@ -562,7 +562,20 @@ export default function EmailPage() {
               <tbody>
                 {scheduledBatches.map((b) => (
                   <tr key={b.id || b.batchId}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{fmtPktDate(b.scheduledAt)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {b.timezone
+                        ? fmtInTz(b.scheduledAt, b.timezone)
+                        : fmtPktDate(b.scheduledAt)}
+                      {b.timezone ? (
+                        <span className="stat-hint" style={{ display: 'block' }}>
+                          {b.timezone.replace(/_/g, ' ').split('/').pop()}
+                        </span>
+                      ) : (
+                        <span className="stat-hint" style={{ display: 'block' }}>
+                          PKT
+                        </span>
+                      )}
+                    </td>
                     <td>{b.campaignName || '— (cold email)'}</td>
                     <td>
                       {b.stepLabel || '—'}
@@ -656,7 +669,9 @@ export default function EmailPage() {
                       ? ' · first email'
                       : ''}
                   {' · '}
-                  {fmtPktDate(recipientsModal.scheduledAt)} PKT
+                  {recipientsModal.timezone
+                    ? `${fmtInTz(recipientsModal.scheduledAt, recipientsModal.timezone)} (${recipientsModal.timezone})`
+                    : `${fmtPktDate(recipientsModal.scheduledAt)} PKT`}
                 </p>
                 <p style={{ margin: '6px 0 0', fontWeight: 600 }}>
                   {recipientsModal.subject || recipientsModal.templateId || '—'}
