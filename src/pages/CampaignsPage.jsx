@@ -24,8 +24,25 @@ const CAMPAIGN_TIMEZONES = [
   { value: 'UTC', label: 'UTC', short: 'UTC' },
 ];
 
+const SEND_HOUR_OPTIONS = [
+  { value: 9, label: '9:00 AM' },
+  { value: 10, label: '10:00 AM' },
+  { value: 11, label: '11:00 AM' },
+  { value: 12, label: '12:00 PM' },
+  { value: 13, label: '1:00 PM' },
+  { value: 14, label: '2:00 PM' },
+  { value: 15, label: '3:00 PM' },
+  { value: 16, label: '4:00 PM' },
+];
+
 function tzMeta(value) {
   return CAMPAIGN_TIMEZONES.find((t) => t.value === value) || CAMPAIGN_TIMEZONES[0];
+}
+
+function formatSendHour(hour) {
+  const h = Number(hour);
+  const opt = SEND_HOUR_OPTIONS.find((o) => o.value === h);
+  return opt?.label || `${h}:00`;
 }
 
 function formatLabel(key) {
@@ -100,6 +117,7 @@ export default function CampaignsPage() {
   const [name, setName] = useState('');
   const [emailAccountId, setEmailAccountId] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
+  const [sendHour, setSendHour] = useState(9);
   const [tzClock, setTzClock] = useState(() => fmtNowInTz('America/New_York'));
   const [detailTzClock, setDetailTzClock] = useState('');
   const [steps, setSteps] = useState([emptyStep()]);
@@ -348,6 +366,7 @@ export default function CampaignsPage() {
         name,
         emailAccountId,
         timezone,
+        sendHour: Number(sendHour) || 9,
         steps: steps.map((s, i) => ({
           stepOrder: i + 1,
           delayDays: Number(s.delayDays) || 0,
@@ -398,6 +417,7 @@ export default function CampaignsPage() {
           name: detail.name,
           emailAccountId: detail.email_account_id,
           timezone: detail.timezone || 'America/New_York',
+          sendHour: Number(detail.send_hour) || 9,
           steps: (detail.steps || []).map((s, i) => ({
             stepOrder: i + 1,
             delayDays: Number(s.delay_days) || 0,
@@ -471,6 +491,7 @@ export default function CampaignsPage() {
             name: detail.name,
             emailAccountId: detail.email_account_id,
             timezone: detail.timezone || 'America/New_York',
+            sendHour: Number(detail.send_hour) || 9,
           },
         });
       }
@@ -600,8 +621,24 @@ export default function CampaignsPage() {
               </select>
               <p className="stat-hint" style={{ margin: '6px 0 0' }}>
                 Now there: <strong>{tzClock}</strong>
-                <br />
-                Email 1 + all follow-ups send Mon–Fri, 9:00 AM–2:00 PM in this timezone.
+              </p>
+            </div>
+            <div className="field">
+              <label className="label">Preferred send time (local)</label>
+              <select
+                className="select"
+                value={sendHour}
+                onChange={(e) => setSendHour(Number(e.target.value))}
+              >
+                {SEND_HOUR_OPTIONS.map((h) => (
+                  <option key={h.value} value={h.value}>
+                    {h.label}
+                  </option>
+                ))}
+              </select>
+              <p className="stat-hint" style={{ margin: '6px 0 0' }}>
+                Business hours window: Mon–Fri <strong>9:00 AM–5:00 PM</strong> in the selected
+                timezone. Pick the best time for this list/state — Email 1 + all follow-ups use it.
               </p>
             </div>
 

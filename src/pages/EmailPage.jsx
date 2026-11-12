@@ -543,8 +543,8 @@ export default function EmailPage() {
         <div className="card" style={{ marginTop: '1rem' }}>
           <h3 style={{ marginTop: 0 }}>Upcoming scheduled sends</h3>
           <p className="stat-hint" style={{ marginTop: 0 }}>
-            Campaign sends: Mon–Fri, 9:00 AM–2:00 PM in each campaign’s audience timezone. Click a
-            recipient count to see every lead.
+            Campaign sends: Mon–Fri, 9:00 AM–5:00 PM in each campaign’s audience timezone (at the
+            preferred send time). Click a recipient count to see every lead.
           </p>
           <div className="table-wrap">
             <table>
