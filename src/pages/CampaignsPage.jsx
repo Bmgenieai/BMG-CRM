@@ -101,6 +101,43 @@ export default function CampaignsPage() {
   const [leadSheetId, setLeadSheetId] = useState('');
   const [stepPreviews, setStepPreviews] = useState({});
   const [categoryStats, setCategoryStats] = useState(null);
+  const [drilldown, setDrilldown] = useState(null); // { title, metric, campaignId, loading, items, error }
+
+  const openCampaignDrilldown = async (campaignId, metric, title) => {
+    setDrilldown({
+      campaignId,
+      metric,
+      title,
+      loading: true,
+      items: [],
+      error: '',
+      count: 0,
+    });
+    try {
+      const data = await api(
+        `/email/campaigns/${campaignId}/drilldown?metric=${encodeURIComponent(metric)}`,
+      );
+      setDrilldown({
+        campaignId,
+        metric,
+        title: data.title || title,
+        loading: false,
+        items: data.items || [],
+        error: '',
+        count: data.count || (data.items || []).length,
+      });
+    } catch (e) {
+      setDrilldown({
+        campaignId,
+        metric,
+        title,
+        loading: false,
+        items: [],
+        error: e.message || 'Failed to load',
+        count: 0,
+      });
+    }
+  };
 
   if (!can('email:manage_campaigns')) return <Navigate to="/" replace />;
 
@@ -921,8 +958,7 @@ export default function CampaignsPage() {
         <div className="card" style={{ margin: 0 }}>
           <h3 style={{ marginTop: 0 }}>Campaigns</h3>
           <p className="stat-hint" style={{ marginTop: 0 }}>
-            Email 1 / 2 / 3 = how many of each sequence email were sent. Next follow-up = when the
-            next scheduled send goes out.
+            Click a campaign to open details below. Click any number to see the full list in a popup.
           </p>
           <div className="table-wrap">
             <table>
@@ -934,45 +970,72 @@ export default function CampaignsPage() {
                   <th title="First email in the sequence">Email 1</th>
                   <th title="Second email (follow-up)">Email 2</th>
                   <th title="Third email (follow-up)">Email 3</th>
+                  <th title="Fourth email (follow-up)">Email 4</th>
                   <th>Next follow-up</th>
                   <th>Opened</th>
                   <th>Replies</th>
                 </tr>
               </thead>
               <tbody>
-                {campaigns.map((c) => (
-                  <tr
-                    key={c.id}
-                    style={{
-                      cursor: 'pointer',
-                      background:
-                        selectedId === c.id
-                          ? 'color-mix(in srgb, var(--brand-primary) 10%, transparent)'
-                          : undefined,
-                    }}
-                    onClick={() => setSelectedId(c.id)}
-                  >
-                    <td>{c.name}</td>
-                    <td>{c.status}</td>
-                    <td>{c.lead_count}</td>
-                    <td>{c.sent_step_1 || 0}</td>
-                    <td>{c.sent_step_2 || 0}</td>
-                    <td>{c.sent_step_3 || 0}</td>
-                    <td>{formatNextSend(c.next_follow_up_at)}</td>
-                    <td>
-                      {c.opened_count || 0}
-                      {c.sent_count ? (
-                        <span className="stat-hint"> ({c.open_rate}%)</span>
-                      ) : null}
-                    </td>
-                    <td>
-                      {c.reply_count || 0}
-                      {c.sent_count ? (
-                        <span className="stat-hint"> ({c.reply_rate}%)</span>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
+                {campaigns.map((c) => {
+                  const numBtn = (metric, label, value, extra = null) => (
+                    <button
+                      type="button"
+                      className="table-num-btn"
+                      title={`View ${label}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(c.id);
+                        openCampaignDrilldown(c.id, metric, `${c.name} — ${label}`);
+                      }}
+                    >
+                      {value ?? 0}
+                      {extra}
+                    </button>
+                  );
+                  return (
+                    <tr
+                      key={c.id}
+                      style={{
+                        cursor: 'pointer',
+                        background:
+                          selectedId === c.id
+                            ? 'color-mix(in srgb, var(--brand-primary) 10%, transparent)'
+                            : undefined,
+                      }}
+                      onClick={() => setSelectedId(c.id)}
+                    >
+                      <td>{c.name}</td>
+                      <td>{c.status}</td>
+                      <td>{numBtn('leads', 'Leads', c.lead_count)}</td>
+                      <td>{numBtn('step_1', 'Email 1', c.sent_step_1 || 0)}</td>
+                      <td>{numBtn('step_2', 'Email 2', c.sent_step_2 || 0)}</td>
+                      <td>{numBtn('step_3', 'Email 3', c.sent_step_3 || 0)}</td>
+                      <td>{numBtn('step_4', 'Email 4', c.sent_step_4 || 0)}</td>
+                      <td>{formatNextSend(c.next_follow_up_at)}</td>
+                      <td>
+                        {numBtn(
+                          'opened',
+                          'Opened',
+                          c.opened_count || 0,
+                          c.sent_count ? (
+                            <span className="stat-hint"> ({c.open_rate}%)</span>
+                          ) : null,
+                        )}
+                      </td>
+                      <td>
+                        {numBtn(
+                          'replies',
+                          'Replies',
+                          c.reply_count || 0,
+                          c.sent_count ? (
+                            <span className="stat-hint"> ({c.reply_rate}%)</span>
+                          ) : null,
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -994,24 +1057,51 @@ export default function CampaignsPage() {
                   style={{ marginBottom: '0.85rem', gap: 8 }}
                 >
                   {[
-                    { label: 'Sent', value: detail.stats.sent },
+                    { label: 'Sent', value: detail.stats.sent, metric: 'sent' },
                     {
                       label: 'Opened',
                       value: detail.stats.opened,
                       hint: detail.stats.sent ? `${detail.stats.openRate}%` : null,
+                      metric: 'opened',
                     },
                     {
                       label: 'Replies',
                       value: detail.stats.replies,
                       hint: detail.stats.sent ? `${detail.stats.replyRate}%` : null,
+                      metric: 'replies',
                     },
                     {
                       label: 'Bounces',
                       value: detail.stats.bounced,
                       hint: detail.stats.sent ? `${detail.stats.bounceRate}%` : null,
+                      metric: 'bounced',
                     },
                   ].map((card) => (
-                    <div key={card.label} className="card" style={{ margin: 0, padding: '0.65rem 0.75rem' }}>
+                    <div
+                      key={card.label}
+                      className="card"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        openCampaignDrilldown(
+                          detail.id,
+                          card.metric,
+                          `${detail.name} — ${card.label}`,
+                        )
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openCampaignDrilldown(
+                            detail.id,
+                            card.metric,
+                            `${detail.name} — ${card.label}`,
+                          );
+                        }
+                      }}
+                      style={{ margin: 0, padding: '0.65rem 0.75rem', cursor: 'pointer' }}
+                      title={`View ${card.label}`}
+                    >
                       <p className="stat-label" style={{ margin: 0 }}>
                         {card.label}
                       </p>
@@ -1125,6 +1215,7 @@ export default function CampaignsPage() {
                 {(detail.steps || []).map((s, idx) => {
                   const stepStat = (detail.stats?.byStep || []).find((x) => x.step_id === s.id);
                   const variants = s.variants || [];
+                  const stepMetric = `step_${idx + 1}`;
                   return (
                     <li key={s.id} style={{ marginBottom: 10 }}>
                       <strong>Email {idx + 1}</strong>
@@ -1133,8 +1224,22 @@ export default function CampaignsPage() {
                       {stepStat ? (
                         <span className="stat-hint">
                           {' '}
-                          · {stepStat.sent} sent · {stepStat.openRate}% open · {stepStat.replyRate}%
-                          reply
+                          ·{' '}
+                          <button
+                            type="button"
+                            className="table-num-btn"
+                            onClick={() =>
+                              openCampaignDrilldown(
+                                detail.id,
+                                stepMetric,
+                                `${detail.name} — Email ${idx + 1}`,
+                              )
+                            }
+                          >
+                            {stepStat.sent} sent
+                          </button>
+                          {' · '}
+                          {stepStat.openRate}% open · {stepStat.replyRate}% reply
                         </span>
                       ) : null}
                       <ul style={{ paddingLeft: 16, marginTop: 4 }}>
@@ -1197,6 +1302,106 @@ export default function CampaignsPage() {
         </div>
         </div>
       </div>
+
+      {drilldown ? (
+        <div
+          role="presentation"
+          onClick={() => setDrilldown(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            zIndex: 80,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            className="card"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(860px, 100%)',
+              maxHeight: '85vh',
+              overflow: 'auto',
+              margin: 0,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                alignItems: 'flex-start',
+              }}
+            >
+              <div>
+                <h3 style={{ marginTop: 0, marginBottom: 4 }}>{drilldown.title}</h3>
+                <p className="stat-hint" style={{ margin: 0 }}>
+                  {drilldown.loading
+                    ? 'Loading…'
+                    : `${drilldown.count} record${drilldown.count === 1 ? '' : 's'}`}
+                </p>
+              </div>
+              <button type="button" className="btn btn-ghost" onClick={() => setDrilldown(null)}>
+                Close
+              </button>
+            </div>
+            {drilldown.error ? (
+              <div className="login-error" style={{ marginTop: 12 }}>
+                {drilldown.error}
+              </div>
+            ) : null}
+            <div className="table-wrap" style={{ marginTop: 12 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lead</th>
+                    <th>Email</th>
+                    <th>Subject / note</th>
+                    <th>Step</th>
+                    <th>Variant</th>
+                    <th>Status</th>
+                    <th>When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drilldown.loading ? (
+                    <tr>
+                      <td colSpan={7} className="empty">
+                        Loading…
+                      </td>
+                    </tr>
+                  ) : (drilldown.items || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="empty">
+                        No records for this count.
+                      </td>
+                    </tr>
+                  ) : (
+                    drilldown.items.map((it) => (
+                      <tr key={it.id || `${it.lead_id}-${it.date}`}>
+                        <td>{it.lead_name || '—'}</td>
+                        <td>{it.lead_email || it.to_email || '—'}</td>
+                        <td>{it.subject || '—'}</td>
+                        <td>{it.step_order ? `Email ${it.step_order}` : '—'}</td>
+                        <td>{it.variant_key || '—'}</td>
+                        <td>{it.status || it.lead_status || '—'}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {it.date ? formatNextSend(it.date) : '—'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
