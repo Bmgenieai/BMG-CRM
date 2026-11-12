@@ -143,8 +143,23 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
   const [liType, setLiType] = useState('linkedin_connection_sent');
   const [liNote, setLiNote] = useState('');
   const [fuDateField, setFuDateField] = useState('');
+  const [callBookWhen, setCallBookWhen] = useState('');
+  const [callBookTz, setCallBookTz] = useState('America/Los_Angeles');
+  const [callBookPhone, setCallBookPhone] = useState('');
+  const [callBookNotes, setCallBookNotes] = useState('');
+  const [callBookMsg, setCallBookMsg] = useState('');
   const outreachCfg = platformOutreachConfig(lead?.source);
   const OutreachIcon = outreachCfg.Icon;
+
+  const CALL_BOOK_TIMEZONES = [
+    { value: 'America/Los_Angeles', label: 'US Pacific' },
+    { value: 'America/Denver', label: 'US Mountain' },
+    { value: 'America/Phoenix', label: 'US Arizona' },
+    { value: 'America/Chicago', label: 'US Central' },
+    { value: 'America/New_York', label: 'US Eastern' },
+    { value: 'Europe/London', label: 'UK' },
+    { value: 'Asia/Karachi', label: 'Pakistan' },
+  ];
 
   const load = async () => {
     if (!leadId) return;
@@ -153,6 +168,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
       const data = await api(`/leads/${leadId}`);
       setLead(data);
       setLiType(platformOutreachConfig(data?.source).defaultType);
+      setCallBookPhone(data?.phone || '');
     } catch (e) {
       setLead(null);
       setError(e.message || 'Could not load lead');
@@ -180,6 +196,11 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
     setLiType(platformOutreachConfig(null).defaultType);
     setLiNote('');
     setFuDateField('');
+    setCallBookWhen('');
+    setCallBookTz('America/Los_Angeles');
+    setCallBookPhone('');
+    setCallBookNotes('');
+    setCallBookMsg('');
     load();
   }, [leadId]);
 
@@ -458,6 +479,41 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
       notifyChanged();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const bookCallMeeting = async (e) => {
+    e.preventDefault();
+    if (!callBookWhen) {
+      setCallBookMsg('Pick date and time');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setCallBookMsg('');
+    try {
+      const result = await api(`/call-bookings/leads/${leadId}`, {
+        method: 'POST',
+        body: {
+          scheduledAt: callBookWhen,
+          timezone: callBookTz,
+          phone: callBookPhone || undefined,
+          notes: callBookNotes || undefined,
+        },
+      });
+      setCallBookNotes('');
+      setCallBookMsg(
+        result.notifySent
+          ? 'Call booked · team notified from magic.retouching@ · see Call bookings'
+          : `Call booked · notify issue: ${(result.notifyErrors || []).join('; ') || 'check Brevo'}`,
+      );
+      await load();
+      notifyChanged();
+    } catch (err) {
+      setError(err.message);
+      setCallBookMsg(err.message || 'Failed to book call');
     } finally {
       setBusy(false);
     }
@@ -1567,6 +1623,79 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   </>
                 ) : (
                   <p className="stat-hint">View only — BDs log calls and notes from their account</p>
+                )}
+              </section>
+
+              <section className="lead-drawer-section">
+                <h3 className="lead-drawer-h3">
+                  <Phone size={16} /> Book call / meeting
+                </h3>
+                {canEditLead ? (
+                  <>
+                    <p className="stat-hint" style={{ marginTop: 0 }}>
+                      Moves lead to <strong>Call bookings</strong> and emails Sajid, Asbah &amp;
+                      Musayyab from <strong>magic.retouching@</strong> only.
+                    </p>
+                    <form onSubmit={bookCallMeeting}>
+                      <div className="field">
+                        <label className="label">Date &amp; time (lead’s local)</label>
+                        <input
+                          className="input"
+                          type="datetime-local"
+                          value={callBookWhen}
+                          onChange={(e) => setCallBookWhen(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="field">
+                        <label className="label">Timezone</label>
+                        <select
+                          className="select"
+                          value={callBookTz}
+                          onChange={(e) => setCallBookTz(e.target.value)}
+                        >
+                          {CALL_BOOK_TIMEZONES.map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label className="label">Phone</label>
+                        <input
+                          className="input"
+                          value={callBookPhone}
+                          onChange={(e) => setCallBookPhone(e.target.value)}
+                          placeholder="916-266-3061"
+                        />
+                      </div>
+                      <div className="field">
+                        <label className="label">Notes (optional)</label>
+                        <input
+                          className="input"
+                          value={callBookNotes}
+                          onChange={(e) => setCallBookNotes(e.target.value)}
+                          placeholder="LinkedIn — next Tuesday 10:15am PT…"
+                        />
+                      </div>
+                      {callBookMsg ? (
+                        <p className="stat-hint" style={{ marginTop: 0 }}>
+                          {callBookMsg}
+                        </p>
+                      ) : null}
+                      <button
+                        className="btn btn-primary"
+                        type="submit"
+                        disabled={busy}
+                        style={{ width: '100%' }}
+                      >
+                        Book call &amp; notify team
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <p className="stat-hint">View only — BDs book calls from their account</p>
                 )}
               </section>
 

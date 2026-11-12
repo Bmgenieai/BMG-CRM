@@ -9,6 +9,7 @@ import {
   Inbox,
   BarChart3,
   CalendarDays,
+  Phone,
   MessageCircle,
   ClipboardList,
   ChevronDown,
@@ -31,7 +32,7 @@ const TOOL_LINKS = [
   { to: '/admin', label: 'Employees', icon: Shield, perm: 'admin:employees' },
 ];
 
-const INBOUND_PATHS = new Set(['/demos', '/chats', '/email-replies']);
+const INBOUND_PATHS = new Set(['/demos', '/call-bookings', '/chats', '/email-replies']);
 const TOOL_PATHS = new Set(TOOL_LINKS.map((l) => l.to));
 
 function NavSection({ label, open, onToggle, children, forceOpen = false }) {
@@ -301,6 +302,14 @@ export default function AppLayout({ children }) {
                 >
                   <CalendarDays size={16} />
                   <span className="nav-label">Book a demo</span>
+                </NavLink>
+                <NavLink
+                  to="/call-bookings"
+                  title="Call bookings"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <Phone size={16} />
+                  <span className="nav-label">Call bookings</span>
                 </NavLink>
                 <NavLink
                   to="/email-replies"

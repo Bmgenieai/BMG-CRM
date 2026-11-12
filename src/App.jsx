@@ -15,6 +15,7 @@ import EmailAccountsPage from './pages/EmailAccountsPage.jsx';
 import CampaignsPage from './pages/CampaignsPage.jsx';
 import EmailPerformancePage from './pages/EmailPerformancePage.jsx';
 import DemosPage from './pages/DemosPage.jsx';
+import CallBookingsPage from './pages/CallBookingsPage.jsx';
 import ChatsPage from './pages/ChatsPage.jsx';
 import FromBmgeniePage from './pages/FromBmgeniePage.jsx';
 
@@ -52,6 +53,7 @@ function ProtectedLayout() {
             <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
             <Route path="/bd-working" element={<Navigate to="/telesales-working" replace />} />
             <Route path="/demos" element={<DemosPage />} />
+            <Route path="/call-bookings" element={<CallBookingsPage />} />
             <Route path="/chats" element={<ChatsPage />} />
             <Route path="/email-replies" element={<EmailRepliesPage />} />
             <Route path="/leads" element={<LeadsPage />} />
