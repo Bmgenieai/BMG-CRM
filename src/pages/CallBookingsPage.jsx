@@ -32,10 +32,6 @@ export default function CallBookingsPage() {
   return (
     <div>
       <h1 className="page-title">Call bookings</h1>
-      <p className="page-sub" style={{ marginTop: 0 }}>
-        Meetings booked from lead details (LinkedIn / outreach). Team is notified from
-        magic.retouching@.
-      </p>
 
       <div className="grid grid-3" style={{ marginBottom: '1rem' }}>
         <div className="card">
