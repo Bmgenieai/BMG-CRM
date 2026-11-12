@@ -45,6 +45,7 @@ export default function EmailPage() {
   const [scheduledBatches, setScheduledBatches] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [emailAccountId, setEmailAccountId] = useState('');
+  const [recipientsModal, setRecipientsModal] = useState(null);
 
   const load = async () => {
     setError('');
@@ -252,13 +253,17 @@ export default function EmailPage() {
     }
   };
 
-  const cancelBatch = async (batchId) => {
+  const cancelBatch = async (batch) => {
     setBusy(true);
     setError('');
     setMessage('');
     try {
-      const data = await api(`/email/scheduled/${batchId}/cancel`, { method: 'POST' });
+      const ids = (batch.recipients || []).map((r) => r.id).filter(Boolean);
+      const data = ids.length
+        ? await api('/email/scheduled/cancel', { method: 'POST', body: { ids } })
+        : await api(`/email/scheduled/${batch.batchId}/cancel`, { method: 'POST' });
       setMessage(`Cancelled ${data.cancelled} scheduled email(s)`);
+      setRecipientsModal(null);
       load();
     } catch (e) {
       setError(e.message);
@@ -537,12 +542,18 @@ export default function EmailPage() {
       {canBulk && scheduledBatches.length ? (
         <div className="card" style={{ marginTop: '1rem' }}>
           <h3 style={{ marginTop: 0 }}>Upcoming scheduled sends</h3>
+          <p className="stat-hint" style={{ marginTop: 0 }}>
+            Campaign sends go out Mon–Fri, 7:00 PM–12:00 AM PKT (US peak window). Click a recipient
+            count to see every lead.
+          </p>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>When</th>
-                  <th>Subject / template</th>
+                  <th>When (PKT)</th>
+                  <th>Campaign</th>
+                  <th>Step</th>
+                  <th>Subject</th>
                   <th>Recipients</th>
                   <th>By</th>
                   <th />
@@ -550,17 +561,39 @@ export default function EmailPage() {
               </thead>
               <tbody>
                 {scheduledBatches.map((b) => (
-                  <tr key={b.batchId}>
+                  <tr key={b.id || b.batchId}>
                     <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(b.scheduledAt)}</td>
+                    <td>{b.campaignName || '— (cold email)'}</td>
+                    <td>
+                      {b.stepLabel || '—'}
+                      {b.emailType && b.emailType !== 'cold' ? (
+                        <span className="stat-hint">
+                          {' '}
+                          · {b.emailType === 'new' ? 'first email' : 'follow-up'}
+                        </span>
+                      ) : null}
+                      {b.variantKey ? (
+                        <span className="stat-hint"> · var {b.variantKey}</span>
+                      ) : null}
+                    </td>
                     <td>{b.subject || b.templateId || '—'}</td>
-                    <td>{b.count}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="table-num-btn"
+                        onClick={() => setRecipientsModal(b)}
+                        title="View all recipients"
+                      >
+                        {b.count}
+                      </button>
+                    </td>
                     <td>{b.scheduledByName || '—'}</td>
                     <td>
                       <button
                         type="button"
                         className="btn btn-ghost"
                         disabled={busy}
-                        onClick={() => cancelBatch(b.batchId)}
+                        onClick={() => cancelBatch(b)}
                       >
                         Cancel
                       </button>
@@ -569,6 +602,104 @@ export default function EmailPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      ) : null}
+
+      {recipientsModal ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setRecipientsModal(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            zIndex: 80,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            className="card"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(720px, 100%)',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              margin: 0,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                alignItems: 'flex-start',
+              }}
+            >
+              <div>
+                <h3 style={{ marginTop: 0, marginBottom: 4 }}>
+                  {recipientsModal.campaignName || 'Scheduled send'} ·{' '}
+                  {recipientsModal.count} recipient
+                  {recipientsModal.count === 1 ? '' : 's'}
+                </h3>
+                <p className="stat-hint" style={{ margin: 0 }}>
+                  {recipientsModal.stepLabel || 'Cold email'}
+                  {recipientsModal.emailType === 'follow-up'
+                    ? ' · follow-up'
+                    : recipientsModal.emailType === 'new'
+                      ? ' · first email'
+                      : ''}
+                  {' · '}
+                  {fmtDate(recipientsModal.scheduledAt)}
+                </p>
+                <p style={{ margin: '6px 0 0', fontWeight: 600 }}>
+                  {recipientsModal.subject || recipientsModal.templateId || '—'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setRecipientsModal(null)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="table-wrap" style={{ marginTop: 12 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lead</th>
+                    <th>Email</th>
+                    <th>Variant</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(recipientsModal.recipients || []).length ? (
+                    recipientsModal.recipients.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.leadName || '—'}</td>
+                        <td>{r.leadEmail || '—'}</td>
+                        <td>{r.variantKey || '—'}</td>
+                        <td>{r.status}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="empty">
+                        No recipients loaded.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : null}

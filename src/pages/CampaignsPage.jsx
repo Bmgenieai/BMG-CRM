@@ -562,7 +562,7 @@ export default function CampaignsPage() {
                   </div>
 
                   <div className="field">
-                    <label className="label">Delay (days after launch)</label>
+                    <label className="label">Delay (business days after launch)</label>
                     <input
                       className="input"
                       type="number"
@@ -576,6 +576,9 @@ export default function CampaignsPage() {
                         })
                       }
                     />
+                    <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+                      Sat/Sun are skipped. Sends go out Mon–Fri, 7:00 PM–12:00 AM PKT.
+                    </p>
                   </div>
 
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
