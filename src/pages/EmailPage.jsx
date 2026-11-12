@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Mail, RefreshCw, Send, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { SourceBadge, fmtDate } from '../components/Badges.jsx';
+import { SourceBadge, fmtDate, fmtPktDate } from '../components/Badges.jsx';
 
 function toLocalInputValue() {
   const d = new Date(Date.now() + 60 * 60 * 1000);
@@ -543,8 +543,8 @@ export default function EmailPage() {
         <div className="card" style={{ marginTop: '1rem' }}>
           <h3 style={{ marginTop: 0 }}>Upcoming scheduled sends</h3>
           <p className="stat-hint" style={{ marginTop: 0 }}>
-            Campaign sends go out Mon–Fri, 7:00 PM–12:00 AM PKT (US peak window). Click a recipient
-            count to see every lead.
+            Campaign sends go out Mon–Fri, 7:00 PM–12:00 AM PKT (≈ 9:00 AM–2:00 PM US Eastern).
+            Times below are Pakistan time. Click a recipient count to see every lead.
           </p>
           <div className="table-wrap">
             <table>
@@ -562,7 +562,7 @@ export default function EmailPage() {
               <tbody>
                 {scheduledBatches.map((b) => (
                   <tr key={b.id || b.batchId}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(b.scheduledAt)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{fmtPktDate(b.scheduledAt)}</td>
                     <td>{b.campaignName || '— (cold email)'}</td>
                     <td>
                       {b.stepLabel || '—'}
@@ -656,7 +656,7 @@ export default function EmailPage() {
                       ? ' · first email'
                       : ''}
                   {' · '}
-                  {fmtDate(recipientsModal.scheduledAt)}
+                  {fmtPktDate(recipientsModal.scheduledAt)} PKT
                 </p>
                 <p style={{ margin: '6px 0 0', fontWeight: 600 }}>
                   {recipientsModal.subject || recipientsModal.templateId || '—'}

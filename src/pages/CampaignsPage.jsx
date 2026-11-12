@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { fmtPktDate } from '../components/Badges.jsx';
 
 const EMAIL_FORMATS = [
   { key: 'plain_text', label: 'Plain text' },
@@ -16,15 +17,7 @@ function formatLabel(key) {
 }
 
 function formatNextSend(iso) {
-  if (!iso) return '—';
-  const d = new Date(String(iso).includes('T') ? iso : `${iso.replace(' ', 'T')}Z`);
-  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 16);
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return fmtPktDate(iso);
 }
 
 function emptyVariant(key = 'A') {

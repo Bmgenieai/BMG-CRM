@@ -97,6 +97,37 @@ export function fmtDate(iso) {
   }
 }
 
+/** Parse API/SQLite datetimes that are UTC without a Z suffix. */
+export function parseUtcDate(iso) {
+  if (!iso) return null;
+  const raw = String(iso).trim();
+  if (!raw) return null;
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const normalized = hasZone
+    ? raw
+    : raw.includes('T')
+      ? `${raw}Z`
+      : `${raw.replace(' ', 'T')}Z`;
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Format an instant in Asia/Karachi (office / campaign schedule TZ). */
+export function fmtPktDate(iso, opts = {}) {
+  const d = parseUtcDate(iso);
+  if (!d) return iso ? String(iso).slice(0, 16) : '—';
+  return d.toLocaleString(undefined, {
+    timeZone: 'Asia/Karachi',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: opts.withSeconds ? '2-digit' : undefined,
+    hour12: true,
+    ...opts,
+  });
+}
+
 export const FUNNEL_STATUSES = [
   { key: 'uncontacted', label: 'New / Uncontacted' },
   { key: 'contacted', label: 'Contacted' },
