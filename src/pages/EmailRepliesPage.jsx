@@ -141,7 +141,8 @@ export default function EmailRepliesPage() {
       });
       setSelected(result.reply);
       setReplyDraft('');
-      setSendOk('Reply sent from your Brevo mailbox.');
+      const from = result.sender?.email || result.reply?.replySender?.email;
+      setSendOk(from ? `Reply sent from ${from}.` : 'Reply sent.');
       load();
     } catch (e) {
       setSendError(e.message || 'Failed to send reply');
@@ -157,6 +158,10 @@ export default function EmailRepliesPage() {
   const crmReplies = selected?.crmReplies || [];
   const recipient =
     selected?.from_email || selected?.lead_email || null;
+  const replyFrom =
+    selected?.replySender?.email ||
+    selected?.replySender?.name ||
+    null;
 
   return (
     <div>
@@ -467,7 +472,14 @@ export default function EmailRepliesPage() {
               <div style={{ marginTop: '1.25rem' }}>
                 <h4 style={{ margin: '0 0 6px', fontSize: '0.95rem' }}>Reply from CRM</h4>
                 <p className="stat-hint" style={{ margin: '0 0 8px' }}>
-                  Sends from your Brevo mailbox to {recipient}. Their next reply still lands here.
+                  Sends as a reply
+                  {replyFrom ? (
+                    <>
+                      {' '}
+                      from <strong>{replyFrom}</strong>
+                    </>
+                  ) : null}{' '}
+                  to {recipient} (same mailbox as this thread). Their next reply still lands here.
                 </p>
                 <textarea
                   className="input"
