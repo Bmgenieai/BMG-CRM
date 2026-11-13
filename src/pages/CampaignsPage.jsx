@@ -533,6 +533,23 @@ export default function CampaignsPage() {
     }
   };
 
+  const sendNow = async () => {
+    if (!detail) return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api(`/email/campaigns/${detail.id}/send-now`, { method: 'POST', body: {} });
+      const count = typeof res?.processed === 'object' ? res.processed.sent ?? 0 : (res?.processed || 0);
+      setMessage(`Dispatched ${count} campaign email(s) immediately!`);
+      await loadList();
+      await loadDetail(detail.id);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const cancel = async () => {
     if (!detail) return;
     setBusy(true);
@@ -1349,9 +1366,20 @@ export default function CampaignsPage() {
                   </>
                 )}
                 {detail.status === 'active' ? (
-                  <button type="button" className="btn btn-secondary" disabled={busy} onClick={pause}>
-                    Pause
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy}
+                      onClick={sendNow}
+                      title="Immediately trigger sending for due or pending emails right now"
+                    >
+                      ⚡ Send now
+                    </button>
+                    <button type="button" className="btn btn-secondary" disabled={busy} onClick={pause}>
+                      Pause
+                    </button>
+                  </>
                 ) : null}
                 {detail.status !== 'cancelled' && detail.status !== 'completed' ? (
                   <button type="button" className="btn btn-ghost" disabled={busy} onClick={cancel}>
@@ -1359,6 +1387,68 @@ export default function CampaignsPage() {
                   </button>
                 ) : null}
               </div>
+
+              {(() => {
+                const sends = detail.scheduledSends || [];
+                const pending = sends.filter((s) => s.status === 'pending');
+                const sending = sends.filter((s) => s.status === 'sending');
+                const failed = sends.filter((s) => s.status === 'failed');
+                const sent = sends.filter((s) => s.status === 'sent');
+
+                if (detail.status === 'active' && sends.length > 0) {
+                  const nextPending = pending[0];
+                  let nextDateStr = '';
+                  if (nextPending?.scheduled_at) {
+                    try {
+                      const raw = nextPending.scheduled_at;
+                      const d = new Date(raw.endsWith('Z') ? raw : raw.replace(' ', 'T') + 'Z');
+                      nextDateStr = d.toLocaleString();
+                    } catch {
+                      nextDateStr = nextPending.scheduled_at;
+                    }
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: 8,
+                        marginBottom: 14,
+                        background: failed.length ? '#fef2f2' : pending.length ? '#eff6ff' : '#f0fdf4',
+                        border: `1px solid ${failed.length ? '#fecaca' : pending.length ? '#bfdbfe' : '#bbf7d0'}`,
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        color: failed.length ? '#991b1b' : pending.length ? '#1e40af' : '#166534',
+                      }}
+                    >
+                      <strong>Email Queue Status:</strong>{' '}
+                      {pending.length > 0 ? (
+                        <>
+                          <span>{pending.length} email(s) queued. </span>
+                          {nextDateStr && (
+                            <span>
+                              Next send scheduled for: <strong>{nextDateStr}</strong> ({detail.timezone || 'Audience local time'}).
+                            </span>
+                          )}
+                          <span style={{ marginLeft: 8 }}>
+                            Click <strong>⚡ Send now</strong> above to bypass the schedule and dispatch immediately.
+                          </span>
+                        </>
+                      ) : sending.length > 0 ? (
+                        <span>Sending {sending.length} email(s) currently...</span>
+                      ) : (
+                        <span>All queued emails have been sent ({sent.length} sent).</span>
+                      )}
+                      {failed.length > 0 && (
+                        <div style={{ marginTop: 4, color: '#dc2626' }}>
+                          ⚠️ {failed.length} email(s) encountered an error during dispatch.
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <h4>Sequence ({(detail.steps || []).length} emails)</h4>
               {(detail.stats?.byVariant || []).length ? (
@@ -1463,24 +1553,71 @@ export default function CampaignsPage() {
                     <tr>
                       <th>Name</th>
                       <th>Email</th>
-                      <th>Status</th>
+                      <th>Lead status</th>
+                      <th>Email delivery</th>
                     </tr>
                   </thead>
                   <tbody>
                     {detailLeads.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="empty">
+                        <td colSpan={4} className="empty">
                           No leads match.
                         </td>
                       </tr>
                     ) : (
-                      detailLeads.map((l) => (
-                        <tr key={l.id}>
-                          <td>{displayCampaignLeadName(l)}</td>
-                          <td>{l.lead_email}</td>
-                          <td>{l.status}</td>
-                        </tr>
-                      ))
+                      detailLeads.map((l) => {
+                        let deliveryBadge = null;
+                        if (l.scheduled_status === 'sent') {
+                          deliveryBadge = (
+                            <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                              ✓ Sent (Email {l.scheduled_step || 1})
+                            </span>
+                          );
+                        } else if (l.scheduled_status === 'failed') {
+                          deliveryBadge = (
+                            <span style={{ color: '#dc2626', fontWeight: 600 }} title={l.scheduled_error || 'Error'}>
+                              ❌ Failed: {l.scheduled_error || 'Delivery failed'}
+                            </span>
+                          );
+                        } else if (l.scheduled_status === 'sending') {
+                          deliveryBadge = (
+                            <span style={{ color: '#2563eb', fontWeight: 600 }}>
+                              ⏳ Sending now...
+                            </span>
+                          );
+                        } else if (l.scheduled_status === 'pending') {
+                          let timeLabel = '';
+                          if (l.scheduled_at) {
+                            try {
+                              const raw = l.scheduled_at;
+                              const d = new Date(raw.endsWith('Z') ? raw : raw.replace(' ', 'T') + 'Z');
+                              timeLabel = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+                            } catch {
+                              timeLabel = l.scheduled_at;
+                            }
+                          }
+                          deliveryBadge = (
+                            <span style={{ color: '#0284c7', fontWeight: 500 }}>
+                              ⏳ Email {l.scheduled_step || 1} scheduled for {timeLabel || 'soon'}
+                            </span>
+                          );
+                        } else {
+                          deliveryBadge = <span style={{ color: '#64748b' }}>—</span>;
+                        }
+
+                        return (
+                          <tr key={l.id}>
+                            <td>{displayCampaignLeadName(l)}</td>
+                            <td>{l.lead_email}</td>
+                            <td>
+                              <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>
+                                {l.status}
+                              </span>
+                            </td>
+                            <td>{deliveryBadge}</td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
