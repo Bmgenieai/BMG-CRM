@@ -24,25 +24,32 @@ const CAMPAIGN_TIMEZONES = [
   { value: 'UTC', label: 'UTC', short: 'UTC' },
 ];
 
-const SEND_HOUR_OPTIONS = [
-  { value: 9, label: '9:00 AM' },
-  { value: 10, label: '10:00 AM' },
-  { value: 11, label: '11:00 AM' },
-  { value: 12, label: '12:00 PM' },
-  { value: 13, label: '1:00 PM' },
-  { value: 14, label: '2:00 PM' },
-  { value: 15, label: '3:00 PM' },
-  { value: 16, label: '4:00 PM' },
-];
+const SEND_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const ampm = i >= 12 ? 'PM' : 'AM';
+  const displayHour = i % 12 === 0 ? 12 : i % 12;
+  return { value: i, label: `${displayHour}:00 ${ampm}` };
+});
+
+const SEND_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => ({
+  value: i,
+  label: `:${String(i).padStart(2, '0')}`,
+}));
 
 function tzMeta(value) {
   return CAMPAIGN_TIMEZONES.find((t) => t.value === value) || CAMPAIGN_TIMEZONES[0];
 }
 
-function formatSendHour(hour) {
-  const h = Number(hour);
-  const opt = SEND_HOUR_OPTIONS.find((o) => o.value === h);
-  return opt?.label || `${h}:00`;
+function formatSendTime(hour, minute = 0) {
+  const h = Number(hour) || 0;
+  const m = Number(minute) || 0;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const displayHour = h % 12 === 0 ? 12 : h % 12;
+  const displayMinute = String(m).padStart(2, '0');
+  return `${displayHour}:${displayMinute} ${ampm}`;
+}
+
+function formatSendHour(hour, minute = 0) {
+  return formatSendTime(hour, minute);
 }
 
 function formatLabel(key) {
@@ -118,6 +125,7 @@ export default function CampaignsPage() {
   const [emailAccountId, setEmailAccountId] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
   const [sendHour, setSendHour] = useState(9);
+  const [sendMinute, setSendMinute] = useState(0);
   const [tzClock, setTzClock] = useState(() => fmtNowInTz('America/New_York'));
   const [detailTzClock, setDetailTzClock] = useState('');
   const [steps, setSteps] = useState([emptyStep()]);
@@ -366,7 +374,8 @@ export default function CampaignsPage() {
         name,
         emailAccountId,
         timezone,
-        sendHour: Number(sendHour) || 9,
+        sendHour: Number(sendHour) || 0,
+        sendMinute: Number(sendMinute) || 0,
         steps: steps.map((s, i) => ({
           stepOrder: i + 1,
           delayDays: Number(s.delayDays) || 0,
@@ -417,7 +426,8 @@ export default function CampaignsPage() {
           name: detail.name,
           emailAccountId: detail.email_account_id,
           timezone: detail.timezone || 'America/New_York',
-          sendHour: Number(detail.send_hour) || 9,
+          sendHour: Number(detail.send_hour) || 0,
+          sendMinute: Number(detail.send_minute) || 0,
           steps: (detail.steps || []).map((s, i) => ({
             stepOrder: i + 1,
             delayDays: Number(s.delay_days) || 0,
@@ -491,7 +501,8 @@ export default function CampaignsPage() {
             name: detail.name,
             emailAccountId: detail.email_account_id,
             timezone: detail.timezone || 'America/New_York',
-            sendHour: Number(detail.send_hour) || 9,
+            sendHour: Number(detail.send_hour) || 0,
+            sendMinute: Number(detail.send_minute) || 0,
           },
         });
       }
@@ -625,20 +636,35 @@ export default function CampaignsPage() {
             </div>
             <div className="field">
               <label className="label">Preferred send time (local)</label>
-              <select
-                className="select"
-                value={sendHour}
-                onChange={(e) => setSendHour(Number(e.target.value))}
-              >
-                {SEND_HOUR_OPTIONS.map((h) => (
-                  <option key={h.value} value={h.value}>
-                    {h.label}
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  className="select"
+                  style={{ flex: 1 }}
+                  value={sendHour}
+                  onChange={(e) => setSendHour(Number(e.target.value))}
+                >
+                  {SEND_HOUR_OPTIONS.map((h) => (
+                    <option key={h.value} value={h.value}>
+                      {h.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="select"
+                  style={{ width: 110 }}
+                  value={sendMinute}
+                  onChange={(e) => setSendMinute(Number(e.target.value))}
+                >
+                  {SEND_MINUTE_OPTIONS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label} min
+                    </option>
+                  ))}
+                </select>
+              </div>
               <p className="stat-hint" style={{ margin: '6px 0 0' }}>
-                Business hours window: Mon–Fri <strong>9:00 AM–5:00 PM</strong> in the selected
-                timezone. Pick the best time for this list/state — Email 1 + all follow-ups use it.
+                Scheduled at <strong>{formatSendTime(sendHour, sendMinute)}</strong> in audience timezone ({tzMeta(timezone).short}). 
+                Applies to Email 1 and all follow-ups.
               </p>
             </div>
 
@@ -713,8 +739,7 @@ export default function CampaignsPage() {
                       }
                     />
                     <p className="stat-hint" style={{ marginTop: 6, marginBottom: 0 }}>
-                      Sat/Sun skipped. Sends Mon–Fri, 9:00 AM–2:00 PM in the campaign audience
-                      timezone ({tzMeta(timezone).short}).
+                      Sat/Sun skipped. Scheduled at {formatSendTime(sendHour, sendMinute)} ({tzMeta(timezone).short}).
                     </p>
                   </div>
 
@@ -1255,16 +1280,51 @@ export default function CampaignsPage() {
                     </select>
                     <p className="stat-hint" style={{ margin: '6px 0 0' }}>
                       Now there: <strong>{detailTzClock}</strong>
-                      <br />
-                      Launch + every follow-up uses Mon–Fri 9:00 AM–2:00 PM in this zone. Save
-                      before launch if you change it.
+                    </p>
+                  </div>
+                  <div className="field">
+                    <label className="label">Preferred send time (local)</label>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <select
+                        className="select"
+                        style={{ flex: 1 }}
+                        value={Number(detail.send_hour) || 0}
+                        onChange={(e) =>
+                          setDetail({ ...detail, send_hour: Number(e.target.value) })
+                        }
+                      >
+                        {SEND_HOUR_OPTIONS.map((h) => (
+                          <option key={h.value} value={h.value}>
+                            {h.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className="select"
+                        style={{ width: 110 }}
+                        value={Number(detail.send_minute) || 0}
+                        onChange={(e) =>
+                          setDetail({ ...detail, send_minute: Number(e.target.value) })
+                        }
+                      >
+                        {SEND_MINUTE_OPTIONS.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label} min
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="stat-hint" style={{ margin: '6px 0 0' }}>
+                      Scheduled at <strong>{formatSendTime(detail.send_hour, detail.send_minute)}</strong> ({tzMeta(detail.timezone).short}).
+                      Applies to Email 1 and all follow-ups.
                     </p>
                   </div>
                 </>
               )}
               {detail.status === 'active' || detail.status === 'completed' || detail.status === 'cancelled' ? (
                 <p className="stat-hint" style={{ marginTop: 0 }}>
-                  Audience timezone: <strong>{tzMeta(detail.timezone).label}</strong>
+                  Audience: <strong>{tzMeta(detail.timezone).label}</strong> · send at{' '}
+                  <strong>{formatSendTime(detail.send_hour, detail.send_minute)}</strong>
                   {detailTzClock ? <> · now {detailTzClock}</> : null}
                 </p>
               ) : null}
