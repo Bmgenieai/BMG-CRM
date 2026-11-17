@@ -34,23 +34,28 @@ export default function EmailRepliesPage() {
   const [rows, setRows] = useState(null);
   const [counts, setCounts] = useState(null);
   const [selected, setSelected] = useState(null);
+  // Default: Campaign replies only — Instantly warm-up lives in its own tab
+  const [bucket, setBucket] = useState('campaign');
   const [status, setStatus] = useState('all');
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [inboundReady, setInboundReady] = useState(null);
   const [mailboxSync, setMailboxSync] = useState(null);
   const [mailboxBusy, setMailboxBusy] = useState(false);
+  const [warmupBusy, setWarmupBusy] = useState(false);
   const [replyDraft, setReplyDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [sendOk, setSendOk] = useState('');
 
-  const load = (statusOverride) => {
-    const filter = statusOverride ?? status;
+  const load = (overrides = {}) => {
+    const filter = overrides.status ?? status;
+    const kind = overrides.bucket ?? bucket;
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (filter === 'unread') params.set('unread', '1');
-    const qs = params.toString() ? `?${params}` : '';
+    params.set('bucket', kind);
+    const qs = `?${params}`;
     Promise.all([
       api(`/email/replies${qs}`),
       api('/email/replies/counts'),
@@ -88,7 +93,7 @@ export default function EmailRepliesPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, bucket]);
 
   const openReply = async (row) => {
     try {
@@ -129,6 +134,56 @@ export default function EmailRepliesPage() {
     }
   };
 
+  const markAsRead = async () => {
+    if (!selected?.id) return;
+    try {
+      const updated = await api(`/email/replies/${selected.id}/read`, {
+        method: 'POST',
+        body: { read: true },
+      });
+      setSelected(updated);
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const moveThread = async (kind) => {
+    if (!selected?.id) return;
+    try {
+      const updated = await api(`/email/replies/${selected.id}/inbox-kind`, {
+        method: 'POST',
+        body: { kind },
+      });
+      setSelected(updated);
+      setSendOk(
+        kind === 'warmup'
+          ? 'Moved to Warm-up emails section.'
+          : 'Moved to Campaign replies section.',
+      );
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const markAllWarmupRead = async () => {
+    setWarmupBusy(true);
+    setError('');
+    try {
+      const result = await api('/email/replies/mark-warmup-read', {
+        method: 'POST',
+        body: {},
+      });
+      setSendOk(`Marked ${result?.marked ?? 0} warm-up message(s) as read.`);
+      await load();
+    } catch (e) {
+      setError(e.message || 'Failed to mark warm-up as read');
+    } finally {
+      setWarmupBusy(false);
+    }
+  };
+
   const sendCrmReply = async () => {
     if (!selected?.id || !replyDraft.trim()) return;
     setSending(true);
@@ -163,9 +218,15 @@ export default function EmailRepliesPage() {
     selected?.replySender?.name ||
     null;
 
+  const selectedKind = selected?.inbox_kind || 'warmup';
+
   return (
     <div>
       <h1 className="page-title">Email replies</h1>
+      <p className="page-sub" style={{ marginTop: 0 }}>
+        Campaign prospect replies are separate from Instantly warm-up send/receive noise. Default view
+        is <strong>Campaign replies</strong>.
+      </p>
 
       {inboundReady === false ? (
         <div className="card" style={{ marginBottom: '1rem', borderColor: 'var(--warn, #c9a227)' }}>
@@ -178,14 +239,72 @@ export default function EmailRepliesPage() {
         </div>
       ) : null}
 
+      <div
+        style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: '0.85rem' }}
+        role="tablist"
+        aria-label="Reply sections"
+      >
+        {[
+          {
+            key: 'campaign',
+            label: 'Campaign replies',
+            count: counts?.campaign ?? 0,
+            unread: counts?.campaignUnread ?? 0,
+          },
+          {
+            key: 'warmup',
+            label: 'Warm-up emails',
+            count: counts?.warmup ?? 0,
+            unread: counts?.warmupUnread ?? 0,
+          },
+          {
+            key: 'all',
+            label: 'All',
+            count: counts?.total ?? 0,
+            unread: counts?.unread ?? 0,
+          },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={bucket === tab.key}
+            className={`btn ${bucket === tab.key ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setBucket(tab.key)}
+          >
+            {tab.label}
+            <span style={{ marginLeft: 6, opacity: 0.85 }}>
+              {tab.count}
+              {tab.unread ? ` · ${tab.unread} unread` : ''}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-4" style={{ marginBottom: '1rem' }}>
         <div className="card">
-          <p className="stat-label">Total</p>
-          <p className="stat-value">{counts?.total ?? 0}</p>
+          <p className="stat-label">Campaign replies</p>
+          <p className="stat-value">{counts?.campaign ?? 0}</p>
+          <p className="stat-hint" style={{ margin: '0.35rem 0 0' }}>
+            {counts?.campaignUnread ?? 0} unread
+          </p>
         </div>
         <div className="card">
-          <p className="stat-label">Unread</p>
-          <p className="stat-value">{counts?.unread ?? 0}</p>
+          <p className="stat-label">Warm-up emails</p>
+          <p className="stat-value">{counts?.warmup ?? 0}</p>
+          <p className="stat-hint" style={{ margin: '0.35rem 0 0' }}>
+            Instantly auto send/receive · {counts?.warmupUnread ?? 0} unread
+          </p>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ marginTop: 8, fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+            disabled={warmupBusy || !(counts?.warmupUnread > 0)}
+            onClick={markAllWarmupRead}
+            title="Mark all Instantly warm-up messages as read"
+          >
+            {warmupBusy ? 'Marking…' : 'Mark all warm-up as read'}
+          </button>
         </div>
         <div className="card">
           <p className="stat-label">Inbound parsing</p>
@@ -239,9 +358,9 @@ export default function EmailRepliesPage() {
             onChange={(e) => setStatus(e.target.value)}
           >
             <option value="unread">Unread</option>
-            <option value="all">All replies</option>
+            <option value="all">All in this section</option>
           </select>
-          <button type="button" className="btn btn-primary" onClick={load}>
+          <button type="button" className="btn btn-primary" onClick={() => load()}>
             Search
           </button>
         </div>
@@ -250,11 +369,21 @@ export default function EmailRepliesPage() {
       <div className="card">
         {rows.length === 0 ? (
           <p>
-            {status === 'unread' && (counts?.total ?? 0) > 0 ? (
+            {status === 'unread' ? (
               <>
-                No <strong>unread</strong> replies right now. Threads stay in CRM — switch the filter to{' '}
-                <strong>All replies</strong> to open them again and reply from CRM.
+                No <strong>unread</strong> messages in this section. Switch to{' '}
+                <strong>All in this section</strong> to reopen threads.
               </>
+            ) : bucket === 'campaign' ? (
+              <>
+                No campaign replies yet. Instantly warm-up traffic is under{' '}
+                <button type="button" className="table-num-btn" onClick={() => setBucket('warmup')}>
+                  Warm-up emails
+                </button>
+                . After campaigns start sending, prospect replies appear here.
+              </>
+            ) : bucket === 'warmup' ? (
+              <>No warm-up emails in this view right now.</>
             ) : (
               <>
                 No replies yet. After BD sends cold email, inbound replies appear here. Confirm Brevo
@@ -268,6 +397,7 @@ export default function EmailRepliesPage() {
             <thead>
               <tr>
                 <th>Received</th>
+                <th>Section</th>
                 <th>From</th>
                 <th>Lead</th>
                 <th>State</th>
@@ -286,6 +416,17 @@ export default function EmailRepliesPage() {
                   title="Click to open conversation thread"
                 >
                   <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.received_at)}</td>
+                  <td>
+                    {r.inbox_kind === 'campaign' ? (
+                      <span className="badge badge-blue" style={{ fontSize: '0.7rem' }}>
+                        Campaign
+                      </span>
+                    ) : (
+                      <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
+                        Warm-up
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {r.from_name ? <span>{r.from_name} </span> : null}
                     {r.from_email ? (
@@ -520,7 +661,28 @@ export default function EmailRepliesPage() {
                 <button type="button" className="btn btn-ghost" onClick={markUnread}>
                   Mark unread
                 </button>
-              ) : null}
+              ) : (
+                <button type="button" className="btn btn-secondary" onClick={markAsRead}>
+                  Mark as read
+                </button>
+              )}
+              {selectedKind === 'warmup' ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => moveThread('campaign')}
+                >
+                  Move to Campaign replies
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => moveThread('warmup')}
+                >
+                  Move to Warm-up
+                </button>
+              )}
             </div>
           </div>
         </div>
