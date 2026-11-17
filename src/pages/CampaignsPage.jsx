@@ -130,6 +130,7 @@ export default function CampaignsPage() {
   const [detailTzClock, setDetailTzClock] = useState('');
   const [steps, setSteps] = useState([emptyStep()]);
   const [pickLeads, setPickLeads] = useState([]);
+  const [manualEmails, setManualEmails] = useState('');
   const [leadFilter, setLeadFilter] = useState('');
   const [leadStatus, setLeadStatus] = useState('');
   const [leadSource, setLeadSource] = useState('');
@@ -390,16 +391,21 @@ export default function CampaignsPage() {
         })),
       };
       const created = await api('/email/campaigns', { method: 'POST', body });
-      if (pickLeads.length) {
+      const emailsText = manualEmails.trim();
+      if (pickLeads.length || emailsText) {
         await api(`/email/campaigns/${created.id}/leads`, {
           method: 'POST',
-          body: { leadIds: pickLeads },
+          body: {
+            leadIds: pickLeads,
+            ...(emailsText ? { emails: emailsText } : {}),
+          },
         });
       }
       setMessage('Campaign created');
       setName('');
       setSteps([emptyStep()]);
       setPickLeads([]);
+      setManualEmails('');
       setSelectedId(created.id);
       await loadList();
       await loadDetail(created.id);
@@ -465,16 +471,26 @@ export default function CampaignsPage() {
   };
 
   const addLeadsToCampaign = async () => {
-    if (!detail || !pickLeads.length) return;
+    if (!detail) return;
+    const emailsText = manualEmails.trim();
+    if (!pickLeads.length && !emailsText) return;
     setBusy(true);
     setError('');
     try {
       const r = await api(`/email/campaigns/${detail.id}/leads`, {
         method: 'POST',
-        body: { leadIds: pickLeads },
+        body: {
+          leadIds: pickLeads,
+          ...(emailsText ? { emails: emailsText } : {}),
+        },
       });
-      setMessage(`Added ${r.added} lead(s)`);
+      const extra =
+        r.createdLeads || r.reusedLeads
+          ? ` (${r.createdLeads || 0} new · ${r.reusedLeads || 0} existing from typed emails)`
+          : '';
+      setMessage(`Added ${r.added} lead(s)${extra}`);
       setPickLeads([]);
+      setManualEmails('');
       await loadDetail(detail.id);
       await loadList();
     } catch (err) {
@@ -535,12 +551,34 @@ export default function CampaignsPage() {
 
   const sendNow = async () => {
     if (!detail) return;
+    if (!detail.email_account_id) {
+      setError('Select a From account (email) before sending');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
+      // Persist draft settings before launch+send
+      if (detail.status === 'draft' || detail.status === 'paused') {
+        await api(`/email/campaigns/${detail.id}`, {
+          method: 'PATCH',
+          body: {
+            name: detail.name,
+            emailAccountId: detail.email_account_id,
+            timezone: detail.timezone || 'America/New_York',
+            sendHour: Number(detail.send_hour) || 0,
+            sendMinute: Number(detail.send_minute) || 0,
+          },
+        });
+      }
       const res = await api(`/email/campaigns/${detail.id}/send-now`, { method: 'POST', body: {} });
-      const count = typeof res?.processed === 'object' ? res.processed.sent ?? 0 : (res?.processed || 0);
-      setMessage(`Dispatched ${count} campaign email(s) immediately!`);
+      const count =
+        typeof res?.processed === 'object' ? res.processed.sent ?? 0 : res?.processed || 0;
+      const launchedNote = res?.launched ? 'Launched and ' : '';
+      setMessage(
+        `${launchedNote}dispatched ${count} campaign email(s) immediately` +
+          (res?.bumped ? ` · ${res.bumped} queued as due now` : ''),
+      );
       await loadList();
       await loadDetail(detail.id);
     } catch (err) {
@@ -904,8 +942,24 @@ export default function CampaignsPage() {
             </button>
 
             <div className="field">
+              <label className="label">Type or paste emails (for testing)</label>
+              <textarea
+                className="input"
+                rows={3}
+                value={manualEmails}
+                onChange={(e) => setManualEmails(e.target.value)}
+                placeholder="one@example.com, two@example.com&#10;or one address per line — no CSV needed"
+                style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }}
+              />
+              <p className="stat-hint" style={{ margin: '6px 0 0' }}>
+                Existing leads are reused by email; new addresses become manual leads automatically.
+              </p>
+            </div>
+
+            <div className="field">
               <label className="label">
-                Leads ({pickLeads.length} selected · {filteredLeads.length} shown · {leads.length} with email)
+                Or pick CRM leads ({pickLeads.length} selected · {filteredLeads.length} shown ·{' '}
+                {leads.length} with email)
               </label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
                 <input
@@ -1346,22 +1400,52 @@ export default function CampaignsPage() {
                 </p>
               ) : null}
 
+              {(detail.status === 'draft' || detail.status === 'paused' || detail.status === 'active') && (
+                <div className="field" style={{ marginBottom: 12 }}>
+                  <label className="label">Type or paste emails to add</label>
+                  <textarea
+                    className="input"
+                    rows={2}
+                    value={manualEmails}
+                    onChange={(e) => setManualEmails(e.target.value)}
+                    placeholder="test1@example.com, test2@example.com"
+                    style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }}
+                    disabled={detail.status === 'cancelled' || detail.status === 'completed'}
+                  />
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                 {(detail.status === 'draft' || detail.status === 'paused') && (
                   <>
                     <button type="button" className="btn btn-secondary" disabled={busy} onClick={saveDraft}>
                       Save
                     </button>
-                    <button type="button" className="btn btn-primary" disabled={busy} onClick={launch}>
-                      Launch
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy}
+                      onClick={sendNow}
+                      title="Launch and send the first email wave immediately"
+                    >
+                      ⚡ Send now
                     </button>
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      disabled={busy || !pickLeads.length}
+                      disabled={busy}
+                      onClick={launch}
+                      title="Launch and schedule sends for the preferred time"
+                    >
+                      Launch (schedule)
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={busy || (!pickLeads.length && !manualEmails.trim())}
                       onClick={addLeadsToCampaign}
                     >
-                      Add selected leads
+                      Add recipients
                     </button>
                   </>
                 )}
@@ -1372,9 +1456,17 @@ export default function CampaignsPage() {
                       className="btn btn-primary"
                       disabled={busy}
                       onClick={sendNow}
-                      title="Immediately trigger sending for due or pending emails right now"
+                      title="Send the next queued email wave immediately"
                     >
                       ⚡ Send now
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={busy || (!pickLeads.length && !manualEmails.trim())}
+                      onClick={addLeadsToCampaign}
+                    >
+                      Add recipients
                     </button>
                     <button type="button" className="btn btn-secondary" disabled={busy} onClick={pause}>
                       Pause
