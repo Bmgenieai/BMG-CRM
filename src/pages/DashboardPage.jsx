@@ -215,7 +215,6 @@ export default function DashboardPage() {
     totals.crmEmailsSent != null
       ? totals.crmEmailsSent
       : (totals.emails || 0) + (totals.emailFollowups || 0);
-  const overdueFollowups = reps.reduce((s, r) => s + (Number(r.overdueFollowups) || 0), 0);
   const workingLinkQs = filterQuery;
 
   if (error) return <div className="card">{error}</div>;
@@ -330,19 +329,12 @@ export default function DashboardPage() {
       <p className="stat-hint" style={{ marginTop: 0, marginBottom: '1rem' }}>
         Total emails sent: <strong>{emailsSent}</strong>
         {` (${firstEmails} first + ${followupEmails} follow-up)`}
-        {overdueFollowups > 0 ? (
-          <>
-            {' · '}
-            <button
-              type="button"
-              className="table-num-btn"
-              style={{ color: 'var(--danger)' }}
-              onClick={() => openDrilldown('followups_overdue', 'Overdue follow-ups')}
-            >
-              {overdueFollowups} overdue follow-ups
-            </button>
-          </>
-        ) : null}
+        {' · '}
+        Campaign sequences and follow-ups are managed under{' '}
+        <Link to="/campaigns" style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
+          Campaigns
+        </Link>
+        .
       </p>
 
       {/* 2) BD table — by person only */}

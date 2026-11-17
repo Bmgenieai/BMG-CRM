@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
-  CalendarClock,
   Shield,
   LogOut,
   Mail,
@@ -245,14 +244,6 @@ export default function AppLayout({ children }) {
                 {sidebarCollapsed ? <List size={18} /> : null}
                 <span className="nav-label" style={{ flex: 1 }}>Leads</span>
                 {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
-              </NavLink>
-              <NavLink
-                to="/follow-ups"
-                title="Follow-ups"
-                className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
-              >
-                <CalendarClock size={16} />
-                <span className="nav-label" style={{ flex: 1 }}>Follow-ups</span>
               </NavLink>
               {(can('analytics:view_own') ||
                 can('analytics:view_team') ||

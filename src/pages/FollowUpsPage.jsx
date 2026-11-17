@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { fmtDate, StatusBadge } from '../components/Badges.jsx';
@@ -65,6 +66,13 @@ export default function FollowUpsPage() {
   return (
     <div>
       <h1 className="page-title">Follow-ups</h1>
+      <p className="page-sub" style={{ marginTop: 0 }}>
+        Legacy manual tasks only. Current campaign sequences and follow-ups are managed under{' '}
+        <Link to="/campaigns" style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
+          Campaigns
+        </Link>
+        .
+      </p>
 
       {error ? <div className="login-error">{error}</div> : null}
 

@@ -53,7 +53,7 @@ export default function WorkingTreePage() {
             : 'Click your bucket counts to see matching leads.'}
       </p>
 
-      <div className="grid grid-4" style={{ marginBottom: '1rem' }}>
+      <div className="grid grid-3" style={{ marginBottom: '1rem' }}>
         <div className="card">
           <p className="stat-label">People in scope</p>
           <p className="stat-value">{tree.summary.people}</p>
@@ -65,15 +65,6 @@ export default function WorkingTreePage() {
         >
           <p className="stat-label">Open leads</p>
           <p className="stat-value">{tree.summary.openLeads}</p>
-          <p className="stat-hint">Click to view list</p>
-        </button>
-        <button
-          type="button"
-          className="card tree-stat-click"
-          onClick={() => openBucket({ bucket: 'followups_overdue', titleHint: 'Overdue follow-ups' })}
-        >
-          <p className="stat-label">Overdue follow-ups</p>
-          <p className="stat-value">{tree.summary.overdueFollowUps}</p>
           <p className="stat-hint">Click to view list</p>
         </button>
         <button
@@ -91,6 +82,9 @@ export default function WorkingTreePage() {
           )}
         </button>
       </div>
+      <p className="stat-hint" style={{ marginTop: 0, marginBottom: '1rem' }}>
+        Campaign email follow-ups are managed under Campaigns (not legacy overdue tasks).
+      </p>
 
       {tree.people.map((p) => (
         <div key={p.user.id} className="card tree-person">
@@ -109,37 +103,17 @@ export default function WorkingTreePage() {
               >
                 Open {p.totals.open}
               </button>
-              <button
-                type="button"
-                className="tree-inline-link"
-                onClick={() =>
-                  openBucket({
-                    bucket: 'followups_overdue',
-                    userId: p.user.id,
-                    titleHint: `${p.user.name} · overdue FU`,
-                  })
-                }
-              >
-                Overdue FU {p.totals.overdue}
-              </button>
-              <button
-                type="button"
-                className="tree-inline-link"
-                onClick={() =>
-                  openBucket({
-                    bucket: 'followups_today',
-                    userId: p.user.id,
-                    titleHint: `${p.user.name} · due today`,
-                  })
-                }
-              >
-                Due today {p.totals.today}
-              </button>
             </div>
           </div>
           <div className="tree-buckets">
             {p.buckets
-              .filter((b) => b.count > 0)
+              .filter(
+                (b) =>
+                  b.count > 0 &&
+                  b.key !== 'followups_overdue' &&
+                  b.key !== 'followups_today' &&
+                  b.key !== 'followups_pending',
+              )
               .map((b) => (
                 <button
                   key={b.key}

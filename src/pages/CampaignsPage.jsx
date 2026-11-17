@@ -138,6 +138,7 @@ export default function CampaignsPage() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [detailLeadFilter, setDetailLeadFilter] = useState('');
+  const [detailLeadScope, setDetailLeadScope] = useState('all'); // all | pending | active | completed | stopped | replied
   const [importBatches, setImportBatches] = useState([]);
   const [leadSheetId, setLeadSheetId] = useState('');
   const [stepPreviews, setStepPreviews] = useState({});
@@ -272,6 +273,7 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     setDetailLeadFilter('');
+    setDetailLeadScope('all');
     if (selectedId) loadDetail(selectedId).catch((e) => setError(e.message));
     else setDetail(null);
   }, [selectedId]);
@@ -609,7 +611,12 @@ export default function CampaignsPage() {
   };
 
   const detailLeads = useMemo(() => {
-    const rows = detail?.leads || [];
+    let rows = detail?.leads || [];
+    if (detailLeadScope === 'replied') {
+      rows = rows.filter((l) => l.replied);
+    } else if (detailLeadScope !== 'all') {
+      rows = rows.filter((l) => l.status === detailLeadScope);
+    }
     const q = detailLeadFilter.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((l) => {
@@ -621,14 +628,14 @@ export default function CampaignsPage() {
         (l.status || '').toLowerCase().includes(q)
       );
     });
-  }, [detail, detailLeadFilter]);
+  }, [detail, detailLeadFilter, detailLeadScope]);
 
   return (
     <div>
       <h1 className="page-title">Campaigns</h1>
       <p className="page-sub" style={{ marginTop: 0 }}>
-        Add variants A/B/C/D inside each email (like Instantly). Leads are split evenly across
-        variants — each group gets a different email from the same campaign.
+        Primary place for cold-email sequences and follow-ups. Open a campaign to see Email 1,
+        Follow-up 1/2+, scheduled dates, pending/completed sends, replies, and paused/stopped leads.
       </p>
       {error ? <div className="login-error">{error}</div> : null}
       {message ? (
@@ -1542,7 +1549,98 @@ export default function CampaignsPage() {
                 return null;
               })()}
 
-              <h4>Sequence ({(detail.steps || []).length} emails)</h4>
+              <h4>Sequence & follow-ups ({(detail.steps || []).length} emails)</h4>
+              <p className="stat-hint" style={{ marginTop: 0 }}>
+                Initial email + follow-ups for this campaign only (not legacy manual overdue tasks).
+                Sequence status:{' '}
+                <strong>{detail.counts?.active || 0}</strong> active ·{' '}
+                <strong>{detail.counts?.pending || 0}</strong> pending ·{' '}
+                <strong>{detail.counts?.completed || 0}</strong> completed ·{' '}
+                <strong>{detail.counts?.stopped || 0}</strong> paused/stopped ·{' '}
+                <strong>{detail.counts?.replied || 0}</strong> replied
+              </p>
+              <div className="table-wrap" style={{ marginBottom: 12 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Step</th>
+                      <th>Delay</th>
+                      <th>Pending</th>
+                      <th>Sent</th>
+                      <th>Replies</th>
+                      <th>Next scheduled</th>
+                      <th>Subject / variants</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detail.sequenceSummary || detail.steps || []).map((row, idx) => {
+                      const step = detail.steps?.[idx] || detail.steps?.find((s) => s.id === row.stepId || s.id === row.id);
+                      const summary = detail.sequenceSummary?.[idx] || {
+                        label: idx === 0 ? 'Initial email' : `Follow-up ${idx}`,
+                        delayDays: step?.delay_days ?? row.delay_days ?? 0,
+                        pending: 0,
+                        sent: 0,
+                        replies: 0,
+                        nextScheduledAt: null,
+                        subject: step?.subject || step?.variants?.[0]?.subject,
+                      };
+                      const variants = step?.variants || [];
+                      const stepMetric = `step_${idx + 1}`;
+                      let nextLabel = '—';
+                      if (summary.nextScheduledAt) {
+                        try {
+                          const raw = summary.nextScheduledAt;
+                          const d = new Date(raw.endsWith('Z') ? raw : `${raw.replace(' ', 'T')}Z`);
+                          nextLabel = d.toLocaleString();
+                        } catch {
+                          nextLabel = summary.nextScheduledAt;
+                        }
+                      }
+                      return (
+                        <tr key={step?.id || summary.stepId || idx}>
+                          <td>
+                            <button
+                              type="button"
+                              className="table-num-btn"
+                              onClick={() =>
+                                openCampaignDrilldown(
+                                  detail.id,
+                                  stepMetric,
+                                  `${detail.name} — ${summary.label}`,
+                                )
+                              }
+                            >
+                              {summary.label}
+                            </button>
+                          </td>
+                          <td>
+                            {Number(summary.delayDays) === 0
+                              ? 'At launch'
+                              : `${summary.delayDays} business day(s)`}
+                          </td>
+                          <td>{summary.pending ?? 0}</td>
+                          <td>{summary.sent ?? 0}</td>
+                          <td>{summary.replies ?? 0}</td>
+                          <td>{nextLabel}</td>
+                          <td className="stat-hint">
+                            {summary.subject || variants[0]?.subject || '(no subject)'}
+                            {variants.length > 1
+                              ? ` · ${variants.map((v) => v.variant_key).join('/')}`
+                              : ''}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!(detail.steps || []).length ? (
+                      <tr>
+                        <td colSpan={7} className="empty">
+                          No sequence emails yet.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
               {(detail.stats?.byVariant || []).length ? (
                 <div className="table-wrap" style={{ marginBottom: 12 }}>
                   <table>
@@ -1581,78 +1679,51 @@ export default function CampaignsPage() {
                   </table>
                 </div>
               ) : null}
-              <ul style={{ paddingLeft: 18 }}>
-                {(detail.steps || []).map((s, idx) => {
-                  const stepStat = (detail.stats?.byStep || []).find((x) => x.step_id === s.id);
-                  const variants = s.variants || [];
-                  const stepMetric = `step_${idx + 1}`;
-                  return (
-                    <li key={s.id} style={{ marginBottom: 10 }}>
-                      <strong>Email {idx + 1}</strong>
-                      {' · day '}
-                      {s.delay_days}
-                      {stepStat ? (
-                        <span className="stat-hint">
-                          {' '}
-                          ·{' '}
-                          <button
-                            type="button"
-                            className="table-num-btn"
-                            onClick={() =>
-                              openCampaignDrilldown(
-                                detail.id,
-                                stepMetric,
-                                `${detail.name} — Email ${idx + 1}`,
-                              )
-                            }
-                          >
-                            {stepStat.sent} sent
-                          </button>
-                          {' · '}
-                          {stepStat.openRate}% open · {stepStat.replyRate}% reply
-                        </span>
-                      ) : null}
-                      <ul style={{ paddingLeft: 16, marginTop: 4 }}>
-                        {variants.map((v) => (
-                          <li key={v.id || v.variant_key} className="stat-hint">
-                            Variant {v.variant_key} · {formatLabel(v.content_category)} ·{' '}
-                            {v.subject || '(no subject)'}
-                          </li>
-                        ))}
-                      </ul>
-                    </li>
-                  );
-                })}
-              </ul>
 
               <h4>
                 Leads ({detail.counts?.total ?? detail.leads?.length ?? 0}
-                {detailLeadFilter.trim()
-                  ? ` · ${detailLeads.length} match`
+                {detailLeadFilter.trim() || detailLeadScope !== 'all'
+                  ? ` · ${detailLeads.length} shown`
                   : ''}
                 )
               </h4>
-              <input
-                className="input"
-                placeholder="Search name, email, company, status"
-                value={detailLeadFilter}
-                onChange={(e) => setDetailLeadFilter(e.target.value)}
-                style={{ marginBottom: 8 }}
-              />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                <select
+                  className="select"
+                  value={detailLeadScope}
+                  onChange={(e) => setDetailLeadScope(e.target.value)}
+                  style={{ minWidth: 160 }}
+                >
+                  <option value="all">All sequence statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="active">Active</option>
+                  <option value="completed">Completed</option>
+                  <option value="stopped">Paused / stopped</option>
+                  <option value="replied">Replied</option>
+                </select>
+                <input
+                  className="input"
+                  placeholder="Search name, email, company, status"
+                  value={detailLeadFilter}
+                  onChange={(e) => setDetailLeadFilter(e.target.value)}
+                  style={{ flex: 1, minWidth: 160 }}
+                />
+              </div>
               <div className="table-wrap" style={{ maxHeight: 420, overflow: 'auto' }}>
                 <table>
                   <thead>
                     <tr>
                       <th>Name</th>
                       <th>Email</th>
-                      <th>Lead status</th>
+                      <th>Sequence status</th>
+                      <th>Reply</th>
                       <th>Email delivery</th>
                     </tr>
                   </thead>
                   <tbody>
                     {detailLeads.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="empty">
+                        <td colSpan={5} className="empty">
                           No leads match.
                         </td>
                       </tr>
@@ -1703,8 +1774,20 @@ export default function CampaignsPage() {
                             <td>{l.lead_email}</td>
                             <td>
                               <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>
-                                {l.status}
+                                {l.status === 'stopped' ? 'Paused / stopped' : l.status}
                               </span>
+                              {l.stopped_reason ? (
+                                <span className="stat-hint" style={{ display: 'block' }}>
+                                  {l.stopped_reason}
+                                </span>
+                              ) : null}
+                            </td>
+                            <td>
+                              {l.replied ? (
+                                <span style={{ color: '#16a34a', fontWeight: 600 }}>Replied</span>
+                              ) : (
+                                <span style={{ color: '#64748b' }}>—</span>
+                              )}
                             </td>
                             <td>{deliveryBadge}</td>
                           </tr>
