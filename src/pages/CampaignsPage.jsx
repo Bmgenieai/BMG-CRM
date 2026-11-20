@@ -62,6 +62,12 @@ function formatNextSend(iso, timeZone = 'America/New_York') {
   return `${fmtInTz(iso, timeZone || 'America/New_York')} ${meta.short}`;
 }
 
+function defaultScheduleInput(minutesAhead = 15) {
+  const d = new Date(Date.now() + minutesAhead * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function emptyVariant(key = 'A') {
   return {
     key,
@@ -143,6 +149,9 @@ export default function CampaignsPage() {
   const [leadSheetId, setLeadSheetId] = useState('');
   const [stepPreviews, setStepPreviews] = useState({});
   const [categoryStats, setCategoryStats] = useState(null);
+  const [failedSummary, setFailedSummary] = useState({ totalFailed: 0, groups: [] });
+  const [selectedFailedStep, setSelectedFailedStep] = useState(null);
+  const [stepScheduleAt, setStepScheduleAt] = useState(() => defaultScheduleInput(15));
   const [drilldown, setDrilldown] = useState(null); // { title, metric, campaignId, loading, items, error }
 
   const openCampaignDrilldown = async (campaignId, metric, title) => {
@@ -184,12 +193,143 @@ export default function CampaignsPage() {
   if (!can('email:manage_campaigns')) return <Navigate to="/" replace />;
 
   const loadList = async () => {
-    const [d, cat] = await Promise.all([
+    const [d, cat, failed] = await Promise.all([
       api('/email/campaigns'),
       api('/email/campaigns/category-stats?period=overall').catch(() => null),
+      api('/email/campaigns/failed-summary').catch(() => null),
     ]);
     setCampaigns(d.campaigns || []);
     if (cat) setCategoryStats(cat);
+    if (failed) setFailedSummary(failed);
+  };
+
+  const selectFailedStepForAction = (item) => {
+    if (!item?.campaignId || !item?.stepId) return;
+    setSelectedFailedStep(item);
+    setStepScheduleAt(defaultScheduleInput(15));
+    setSelectedId(item.campaignId);
+  };
+
+  const retryStep = async (campaignId, stepId, mode) => {
+    if (!campaignId || !stepId) return;
+    if (mode === 'schedule' && !stepScheduleAt) {
+      setError('Select a date and time to schedule this step');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const body =
+        mode === 'schedule'
+          ? { mode: 'schedule', scheduledAt: new Date(stepScheduleAt).toISOString() }
+          : { mode: 'now' };
+      const res = await api(`/email/campaigns/${campaignId}/steps/${stepId}/retry`, {
+        method: 'POST',
+        body,
+      });
+      if (mode === 'schedule') {
+        const whenStr = res.scheduledAt ? new Date(res.scheduledAt).toLocaleString() : stepScheduleAt;
+        setMessage(`Scheduled ${res.queued} failed ${res.stepLabel} email(s) for ${whenStr}`);
+      } else {
+        const sentNow = Number(res.processed) || 0;
+        const remaining = Math.max(0, (Number(res.queued) || 0) - sentNow);
+        setMessage(
+          `Queued ${res.queued} failed ${res.stepLabel} email(s) for immediate send` +
+            (sentNow ? ` (${sentNow} dispatched now${remaining ? `, ${remaining} sending every 30s` : ''})` : ''),
+        );
+      }
+      setSelectedFailedStep(null);
+      await loadList();
+      if (res.campaign && selectedId === campaignId) {
+        setDetail(res.campaign);
+      } else if (selectedId) {
+        await loadDetail(selectedId);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renderStepRetryControls = (stepItem) => {
+    if (!stepItem) return null;
+    return (
+      <div
+        style={{
+          marginTop: 10,
+          padding: '10px 12px',
+          borderRadius: 8,
+          background: '#fff',
+          border: '1px solid #fca5a5',
+          color: '#0f172a',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ fontSize: 13 }}>
+            <strong>{stepItem.campaignName}</strong> → <strong>{stepItem.stepLabel}</strong>{' '}
+            <span style={{ color: '#dc2626', fontWeight: 700 }}>
+              ({stepItem.failedCount} failed)
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ padding: '2px 8px', fontSize: 12 }}
+            onClick={() => setSelectedFailedStep(null)}
+          >
+            Close
+          </button>
+        </div>
+        {stepItem.error ? (
+          <p
+            className="stat-hint"
+            style={{ margin: '4px 0 8px', color: '#991b1b', wordBreak: 'break-word' }}
+          >
+            {stepItem.error}
+          </p>
+        ) : null}
+        {stepItem.campaignStatus === 'cancelled' ? (
+          <p className="stat-hint" style={{ margin: 0, color: '#991b1b' }}>
+            This campaign is cancelled and cannot be resent.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() => retryStep(stepItem.campaignId, stepItem.stepId, 'now')}
+            >
+              ⚡ Send now ({stepItem.stepLabel})
+            </button>
+            <input
+              type="datetime-local"
+              className="input"
+              style={{ width: 'auto' }}
+              value={stepScheduleAt}
+              onChange={(e) => setStepScheduleAt(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy || !stepScheduleAt}
+              onClick={() => retryStep(stepItem.campaignId, stepItem.stepId, 'schedule')}
+            >
+              Schedule ({stepItem.stepLabel})
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   const updateVariant = (stepIdx, patch) => {
@@ -1158,6 +1298,107 @@ export default function CampaignsPage() {
           ) : null}
         </div>
 
+        <div
+          className="card"
+          style={{
+            margin: 0,
+            background: (failedSummary?.totalFailed || 0) > 0 ? '#fef2f2' : '#f0fdf4',
+            borderColor: (failedSummary?.totalFailed || 0) > 0 ? '#fecaca' : '#bbf7d0',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div>
+              <h3
+                style={{
+                  margin: 0,
+                  color: (failedSummary?.totalFailed || 0) > 0 ? '#991b1b' : '#166534',
+                }}
+              >
+                {(failedSummary?.totalFailed || 0) > 0
+                  ? `⚠️ Failed Campaign Emails (${failedSummary.totalFailed})`
+                  : 'Failed Campaign Emails (0)'}
+              </h3>
+              <p className="stat-hint" style={{ margin: '4px 0 0', color: (failedSummary?.totalFailed || 0) > 0 ? '#7f1d1d' : undefined }}>
+                {(failedSummary?.groups || []).length > 0
+                  ? 'Click any failed step below to inspect it and send immediately or schedule a retry for that specific step.'
+                  : 'All campaign steps dispatched with no failed queue items.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={() => loadList().catch((e) => setError(e.message))}
+            >
+              Refresh
+            </button>
+          </div>
+
+          {(failedSummary?.groups || []).length > 0 ? (
+            <div className="table-wrap" style={{ marginTop: 10, maxHeight: 260, overflow: 'auto', background: '#fff', borderRadius: 8 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Campaign</th>
+                    <th>Failed step</th>
+                    <th>Failed</th>
+                    <th>Error</th>
+                    <th>Last failed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {failedSummary.groups.map((g) => {
+                    const isPicked =
+                      selectedFailedStep?.campaignId === g.campaignId &&
+                      selectedFailedStep?.stepId === g.stepId;
+                    let whenStr = '—';
+                    if (g.lastFailedAt) {
+                      try {
+                        const raw = g.lastFailedAt;
+                        const d = new Date(raw.endsWith('Z') ? raw : `${raw.replace(' ', 'T')}Z`);
+                        whenStr = d.toLocaleString();
+                      } catch {
+                        whenStr = g.lastFailedAt;
+                      }
+                    }
+                    return (
+                      <tr
+                        key={`${g.campaignId}-${g.stepId || 'none'}`}
+                        onClick={() => selectFailedStepForAction(g)}
+                        style={{
+                          cursor: 'pointer',
+                          background: isPicked ? '#fee2e2' : undefined,
+                        }}
+                        title="Click to select this failed step and Send now or Schedule"
+                      >
+                        <td>
+                          <strong>{g.campaignName}</strong>
+                          <div className="stat-hint">{g.campaignStatus}</div>
+                        </td>
+                        <td>
+                          <strong>{g.stepLabel}</strong>
+                          {g.subject ? <div className="stat-hint">{g.subject}</div> : null}
+                        </td>
+                        <td style={{ color: '#dc2626', fontWeight: 700 }}>{g.failedCount}</td>
+                        <td
+                          className="stat-hint"
+                          style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          title={g.error || ''}
+                        >
+                          {g.error || 'Delivery failed'}
+                        </td>
+                        <td className="stat-hint">{whenStr}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {selectedFailedStep ? renderStepRetryControls(selectedFailedStep) : null}
+        </div>
+
         <div className="card" style={{ margin: 0 }}>
           <h3 style={{ marginTop: 0 }}>Campaigns</h3>
           <p className="stat-hint" style={{ marginTop: 0 }}>
@@ -1493,8 +1734,9 @@ export default function CampaignsPage() {
                 const sending = sends.filter((s) => s.status === 'sending');
                 const failed = sends.filter((s) => s.status === 'failed');
                 const sent = sends.filter((s) => s.status === 'sent');
+                const failedSteps = (detail.sequenceSummary || []).filter((s) => (s.failed || 0) > 0);
 
-                if (detail.status === 'active' && sends.length > 0) {
+                if ((detail.status === 'active' || failed.length > 0) && sends.length > 0) {
                   const nextPending = pending[0];
                   let nextDateStr = '';
                   if (nextPending?.scheduled_at) {
@@ -1539,8 +1781,42 @@ export default function CampaignsPage() {
                         <span>All queued emails have been sent ({sent.length} sent).</span>
                       )}
                       {failed.length > 0 && (
-                        <div style={{ marginTop: 4, color: '#dc2626' }}>
-                          ⚠️ {failed.length} email(s) encountered an error during dispatch.
+                        <div style={{ marginTop: 6, color: '#dc2626' }}>
+                          <div>⚠️ {failed.length} email(s) encountered an error during dispatch:</div>
+                          {failedSteps.length > 0 && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                              {failedSteps.map((fs) => (
+                                <button
+                                  key={fs.stepId}
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{
+                                    borderColor: '#fca5a5',
+                                    background: '#fff',
+                                    color: '#991b1b',
+                                    fontSize: 12,
+                                    padding: '4px 10px',
+                                  }}
+                                  onClick={() =>
+                                    selectFailedStepForAction({
+                                      campaignId: detail.id,
+                                      campaignName: detail.name,
+                                      campaignStatus: detail.status,
+                                      stepId: fs.stepId,
+                                      stepLabel: fs.label,
+                                      failedCount: fs.failed,
+                                      error: fs.failedError || failed[0]?.error || null,
+                                    })
+                                  }
+                                >
+                                  {fs.label}: {fs.failed} failed (click to Send now / Schedule)
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {selectedFailedStep?.campaignId === detail.id
+                            ? renderStepRetryControls(selectedFailedStep)
+                            : null}
                         </div>
                       )}
                     </div>
@@ -1567,6 +1843,7 @@ export default function CampaignsPage() {
                       <th>Delay</th>
                       <th>Pending</th>
                       <th>Sent</th>
+                      <th>Failed</th>
                       <th>Replies</th>
                       <th>Next scheduled</th>
                       <th>Subject / variants</th>
@@ -1620,6 +1897,31 @@ export default function CampaignsPage() {
                           </td>
                           <td>{summary.pending ?? 0}</td>
                           <td>{summary.sent ?? 0}</td>
+                          <td>
+                            {(summary.failed || 0) > 0 ? (
+                              <button
+                                type="button"
+                                className="table-num-btn"
+                                style={{ color: '#dc2626', fontWeight: 700 }}
+                                title="Click to Send now or Schedule failed emails for this step"
+                                onClick={() =>
+                                  selectFailedStepForAction({
+                                    campaignId: detail.id,
+                                    campaignName: detail.name,
+                                    campaignStatus: detail.status,
+                                    stepId: summary.stepId || step?.id,
+                                    stepLabel: summary.label,
+                                    failedCount: summary.failed,
+                                    error: summary.failedError || null,
+                                  })
+                                }
+                              >
+                                {summary.failed}
+                              </button>
+                            ) : (
+                              0
+                            )}
+                          </td>
                           <td>{summary.replies ?? 0}</td>
                           <td>{nextLabel}</td>
                           <td className="stat-hint">
@@ -1633,7 +1935,7 @@ export default function CampaignsPage() {
                     })}
                     {!(detail.steps || []).length ? (
                       <tr>
-                        <td colSpan={7} className="empty">
+                        <td colSpan={8} className="empty">
                           No sequence emails yet.
                         </td>
                       </tr>
