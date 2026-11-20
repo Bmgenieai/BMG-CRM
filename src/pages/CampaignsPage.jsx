@@ -149,7 +149,7 @@ export default function CampaignsPage() {
   const [leadSheetId, setLeadSheetId] = useState('');
   const [stepPreviews, setStepPreviews] = useState({});
   const [categoryStats, setCategoryStats] = useState(null);
-  const [failedSummary, setFailedSummary] = useState({ totalFailed: 0, groups: [] });
+  const [failedSummary, setFailedSummary] = useState({ totalFailed: 0, groups: [], error: '' });
   const [selectedFailedStep, setSelectedFailedStep] = useState(null);
   const [stepScheduleAt, setStepScheduleAt] = useState(() => defaultScheduleInput(15));
   const [drilldown, setDrilldown] = useState(null); // { title, metric, campaignId, loading, items, error }
@@ -196,11 +196,15 @@ export default function CampaignsPage() {
     const [d, cat, failed] = await Promise.all([
       api('/email/campaigns'),
       api('/email/campaigns/category-stats?period=overall').catch(() => null),
-      api('/email/campaigns/failed-summary').catch(() => null),
+      api('/email/campaigns/failed-summary').catch((err) => ({
+        totalFailed: 0,
+        groups: [],
+        error: err?.message || 'Failed to load failed campaign summary',
+      })),
     ]);
     setCampaigns(d.campaigns || []);
     if (cat) setCategoryStats(cat);
-    if (failed) setFailedSummary(failed);
+    if (failed) setFailedSummary({ totalFailed: 0, groups: [], error: '', ...failed });
   };
 
   const selectFailedStepForAction = (item) => {
@@ -1302,8 +1306,10 @@ export default function CampaignsPage() {
           className="card"
           style={{
             margin: 0,
-            background: (failedSummary?.totalFailed || 0) > 0 ? '#fef2f2' : '#f0fdf4',
-            borderColor: (failedSummary?.totalFailed || 0) > 0 ? '#fecaca' : '#bbf7d0',
+            background:
+              failedSummary?.error || (failedSummary?.totalFailed || 0) > 0 ? '#fef2f2' : '#f0fdf4',
+            borderColor:
+              failedSummary?.error || (failedSummary?.totalFailed || 0) > 0 ? '#fecaca' : '#bbf7d0',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1311,17 +1317,33 @@ export default function CampaignsPage() {
               <h3
                 style={{
                   margin: 0,
-                  color: (failedSummary?.totalFailed || 0) > 0 ? '#991b1b' : '#166534',
+                  color:
+                    failedSummary?.error || (failedSummary?.totalFailed || 0) > 0
+                      ? '#991b1b'
+                      : '#166534',
                 }}
               >
-                {(failedSummary?.totalFailed || 0) > 0
-                  ? `⚠️ Failed Campaign Emails (${failedSummary.totalFailed})`
-                  : 'Failed Campaign Emails (0)'}
+                {failedSummary?.error
+                  ? '⚠️ Failed Campaign Emails (unable to load)'
+                  : (failedSummary?.totalFailed || 0) > 0
+                    ? `⚠️ Failed Campaign Emails (${failedSummary.totalFailed})`
+                    : 'Failed Campaign Emails (0)'}
               </h3>
-              <p className="stat-hint" style={{ margin: '4px 0 0', color: (failedSummary?.totalFailed || 0) > 0 ? '#7f1d1d' : undefined }}>
-                {(failedSummary?.groups || []).length > 0
-                  ? 'Click any failed step below to inspect it and send immediately or schedule a retry for that specific step.'
-                  : 'All campaign steps dispatched with no failed queue items.'}
+              <p
+                className="stat-hint"
+                style={{
+                  margin: '4px 0 0',
+                  color:
+                    failedSummary?.error || (failedSummary?.totalFailed || 0) > 0
+                      ? '#7f1d1d'
+                      : undefined,
+                }}
+              >
+                {failedSummary?.error
+                  ? `Backend API error: ${failedSummary.error} (pull & restart CRM API on Windows if you just deployed).`
+                  : (failedSummary?.groups || []).length > 0
+                    ? 'Click any failed step below to inspect it and send immediately or schedule a retry for that specific step.'
+                    : 'All campaign steps dispatched with no failed queue items.'}
               </p>
             </div>
             <button
