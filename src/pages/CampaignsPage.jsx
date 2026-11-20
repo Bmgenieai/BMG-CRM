@@ -231,15 +231,20 @@ export default function CampaignsPage() {
         method: 'POST',
         body,
       });
+      const followUpNote =
+        Number(res.followUpsScheduled) > 0
+          ? ` · ${res.followUpsScheduled} next follow-up(s) auto-scheduled`
+          : '';
       if (mode === 'schedule') {
         const whenStr = res.scheduledAt ? new Date(res.scheduledAt).toLocaleString() : stepScheduleAt;
-        setMessage(`Scheduled ${res.queued} failed ${res.stepLabel} email(s) for ${whenStr}`);
+        setMessage(`Scheduled ${res.queued} failed ${res.stepLabel} email(s) for ${whenStr}${followUpNote}`);
       } else {
         const sentNow = Number(res.processed) || 0;
         const remaining = Math.max(0, (Number(res.queued) || 0) - sentNow);
         setMessage(
           `Queued ${res.queued} failed ${res.stepLabel} email(s) for immediate send` +
-            (sentNow ? ` (${sentNow} dispatched now${remaining ? `, ${remaining} sending every 30s` : ''})` : ''),
+            (sentNow ? ` (${sentNow} dispatched now${remaining ? `, ${remaining} sending every 30s` : ''})` : '') +
+            followUpNote,
         );
       }
       setSelectedFailedStep(null);
