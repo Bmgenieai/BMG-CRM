@@ -180,15 +180,42 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     return 'All leads';
   }, [filter]);
 
+  const BD_ALLOWED_SOURCES = ['telesales', 'linkedin', 'facebook', 'instagram'];
+  const FALLBACK_CREATE_SOURCES = [
+    { key: 'telesales', label: 'BD' },
+    { key: 'linkedin', label: 'LinkedIn' },
+    { key: 'facebook', label: 'Facebook' },
+    { key: 'instagram', label: 'Instagram' },
+    { key: 'manual', label: 'Manual' },
+    { key: 'csv_import', label: 'CSV / Google Sheet' },
+  ];
+
   const createSources = useMemo(() => {
-    const all = meta.sources || [];
-    const allowed = ['telesales', 'linkedin', 'facebook', 'instagram', 'manual', 'csv_import'];
-    return all.filter((s) => allowed.includes(s.key) || s.key === form.source);
-  }, [meta.sources, form.source]);
+    const all = meta.sources?.length ? meta.sources : FALLBACK_CREATE_SOURCES;
+    const allowed =
+      user?.role === 'telesales'
+        ? BD_ALLOWED_SOURCES
+        : ['telesales', 'linkedin', 'facebook', 'instagram', 'manual', 'csv_import'];
+    const byKey = new Map(all.map((s) => [s.key, s]));
+    for (const fb of FALLBACK_CREATE_SOURCES) {
+      if (!byKey.has(fb.key)) byKey.set(fb.key, fb);
+    }
+    const ordered = allowed.map((k) => byKey.get(k)).filter(Boolean);
+    if (form.source && !ordered.some((s) => s.key === form.source) && byKey.has(form.source)) {
+      ordered.push(byKey.get(form.source));
+    }
+    return ordered;
+  }, [meta.sources, form.source, user?.role]);
 
   const handleOpenCreate = () => {
-    const defaultSource =
-      preset.source || (user?.role === 'telesales' ? 'telesales' : 'manual');
+    const isBd = user?.role === 'telesales';
+    const presetValid =
+      preset.source && (!isBd || BD_ALLOWED_SOURCES.includes(preset.source));
+    const defaultSource = presetValid
+      ? preset.source
+      : isBd
+        ? 'telesales'
+        : 'manual';
     setForm({
       ...EMPTY_FORM,
       source: defaultSource,
@@ -824,7 +851,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
                 />
               </div>
               <div className="field">
-                <label className="label">Source</label>
+                <label className="label">Lead source</label>
                 <select
                   className="select"
                   value={form.source}
