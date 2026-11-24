@@ -161,6 +161,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [dateAddedFrom, setDateAddedFrom] = useState('');
   const [dateAddedTo, setDateAddedTo] = useState('');
   const [followUpDue, setFollowUpDue] = useState(followUpDueParam);
+  const [hasPhoneOnly, setHasPhoneOnly] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkFuDate, setBulkFuDate] = useState('');
@@ -169,7 +170,12 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   const [showCsvImport, setShowCsvImport] = useState(false);
   const [form, setForm] = useState(() => ({
     ...EMPTY_FORM,
-    source: user?.role === 'telesales' ? 'telesales' : 'manual',
+    source:
+      user?.role === 'telesales'
+        ? 'telesales'
+        : user?.role === 'caller'
+          ? 'cold_call'
+          : 'manual',
   }));
   const [error, setError] = useState('');
   const [dupWarning, setDupWarning] = useState(null);
@@ -181,8 +187,10 @@ export default function LeadsPage({ refreshSidebarCounts }) {
   }, [filter]);
 
   const BD_ALLOWED_SOURCES = ['telesales', 'linkedin', 'facebook', 'instagram'];
+  const CALLER_ALLOWED_SOURCES = ['cold_call', 'manual'];
   const FALLBACK_CREATE_SOURCES = [
     { key: 'telesales', label: 'BD' },
+    { key: 'cold_call', label: 'Cold call' },
     { key: 'linkedin', label: 'LinkedIn' },
     { key: 'facebook', label: 'Facebook' },
     { key: 'instagram', label: 'Instagram' },
@@ -195,7 +203,9 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     const allowed =
       user?.role === 'telesales'
         ? BD_ALLOWED_SOURCES
-        : ['telesales', 'linkedin', 'facebook', 'instagram', 'manual', 'csv_import'];
+        : user?.role === 'caller'
+          ? CALLER_ALLOWED_SOURCES
+          : ['telesales', 'cold_call', 'linkedin', 'facebook', 'instagram', 'manual', 'csv_import'];
     const byKey = new Map(all.map((s) => [s.key, s]));
     for (const fb of FALLBACK_CREATE_SOURCES) {
       if (!byKey.has(fb.key)) byKey.set(fb.key, fb);
@@ -209,13 +219,18 @@ export default function LeadsPage({ refreshSidebarCounts }) {
 
   const handleOpenCreate = () => {
     const isBd = user?.role === 'telesales';
+    const isCaller = user?.role === 'caller';
     const presetValid =
-      preset.source && (!isBd || BD_ALLOWED_SOURCES.includes(preset.source));
+      preset.source &&
+      (!isBd || BD_ALLOWED_SOURCES.includes(preset.source)) &&
+      (!isCaller || CALLER_ALLOWED_SOURCES.includes(preset.source));
     const defaultSource = presetValid
       ? preset.source
       : isBd
         ? 'telesales'
-        : 'manual';
+        : isCaller
+          ? 'cold_call'
+          : 'manual';
     setForm({
       ...EMPTY_FORM,
       source: defaultSource,
@@ -275,6 +290,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     if (dateAddedFrom) params.set('dateAddedFrom', dateAddedFrom);
     if (dateAddedTo) params.set('dateAddedTo', dateAddedTo);
     if (followUpDue) params.set('followUpDue', followUpDue);
+    if (hasPhoneOnly) params.set('hasPhone', '1');
     api(`/leads?${params}`)
       .then((rows) => {
         setLeads(rows);
@@ -305,6 +321,7 @@ export default function LeadsPage({ refreshSidebarCounts }) {
     dateAddedFrom,
     dateAddedTo,
     followUpDue,
+    hasPhoneOnly,
   ]);
 
   const allSelected = leads.length > 0 && selected.size === leads.length;
@@ -473,6 +490,25 @@ export default function LeadsPage({ refreshSidebarCounts }) {
               </option>
             ))}
           </select>
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: '0.84rem',
+              padding: '0 0.5rem',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+            title="Show only leads with a phone number"
+          >
+            <input
+              type="checkbox"
+              checked={hasPhoneOnly}
+              onChange={(e) => setHasPhoneOnly(e.target.checked)}
+            />
+            <span>Has phone</span>
+          </label>
           <select
             className="select"
             value={stateFilter}

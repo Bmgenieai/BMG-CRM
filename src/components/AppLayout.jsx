@@ -69,6 +69,7 @@ export default function AppLayout({ children }) {
   });
   const profileRef = useRef(null);
   const isChatSupport = user?.role === 'chat_support';
+  const isCaller = user?.role === 'caller';
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
@@ -173,7 +174,9 @@ export default function AppLayout({ children }) {
           ? 'Manager'
           : user?.role === 'chat_support'
             ? 'Chat Support'
-            : user?.role;
+            : user?.role === 'caller'
+              ? 'Caller'
+              : user?.role;
 
   const sidebarToggleBtn = (
     <button
@@ -203,17 +206,40 @@ export default function AppLayout({ children }) {
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto' }}>
-          <NavLink
-            to="/"
-            end
-            title="Dashboard"
-            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-          >
-            <LayoutDashboard size={18} />
-            <span className="nav-label">Dashboard</span>
-          </NavLink>
+          {!isCaller ? (
+            <NavLink
+              to="/"
+              end
+              title="Dashboard"
+              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+            >
+              <LayoutDashboard size={18} />
+              <span className="nav-label">Dashboard</span>
+            </NavLink>
+          ) : null}
 
-          {isChatSupport ? (
+          {isCaller ? (
+            <>
+              <div className="nav-section-label">Calling</div>
+              <NavLink
+                to="/leads"
+                title="Leads"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                <List size={18} />
+                <span className="nav-label" style={{ flex: 1 }}>Leads</span>
+                {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
+              </NavLink>
+              <NavLink
+                to="/caller-working"
+                title="Caller Working"
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                <Phone size={18} />
+                <span className="nav-label" style={{ flex: 1 }}>Caller Working</span>
+              </NavLink>
+            </>
+          ) : isChatSupport ? (
             <NavLink
               to="/chats"
               title="Chats"
@@ -255,6 +281,16 @@ export default function AppLayout({ children }) {
                 >
                   <ClipboardList size={16} />
                   <span className="nav-label" style={{ flex: 1 }}>BD Working</span>
+                </NavLink>
+              )}
+              {(can('analytics:view_team') || can('analytics:view_all')) && (
+                <NavLink
+                  to="/caller-working"
+                  title="Caller Working"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <Phone size={16} />
+                  <span className="nav-label" style={{ flex: 1 }}>Caller Working</span>
                 </NavLink>
               )}
               <NavLink

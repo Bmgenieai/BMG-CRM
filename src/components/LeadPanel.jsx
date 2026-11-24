@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Phone, MessageSquare, CalendarPlus, X, Mail, Linkedin, Facebook, Instagram, Trash2 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { CALL_OUTCOMES, CALL_OUTCOME_MAP, formatCallOutcome } from '../lib/callOutcomes.js';
 import {
   fmtDate,
   money,
@@ -107,15 +108,22 @@ const REPLY_OUTCOMES = [
 /**
  * Ilaan-style right drawer — list stays visible behind the dimmed backdrop.
  */
-export default function LeadPanel({ leadId, onClose, onChanged }) {
-  const { can } = useAuth();
+export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
+  const { user, can } = useAuth();
+  const isCaller = user?.role === 'caller';
   const canEditLead = can('leads:update_any') || can('leads:update_own');
-  const canSendEmail = can('email:bulk_send') || can('leads:update_any') || can('leads:update_own');
+  const canSendEmail =
+    !isCaller && (can('email:bulk_send') || can('leads:update_any') || can('leads:update_own'));
   const canManageFollowUps = can('followups:manage_own') || can('followups:manage_team');
   const canDeleteLead = can('leads:delete');
   const [lead, setLead] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [callStatusKey, setCallStatusKey] = useState('no_answer');
+  const [callTalkNotes, setCallTalkNotes] = useState('');
+  const [callCallbackAt, setCallCallbackAt] = useState('');
+  const [callAutoStatus, setCallAutoStatus] = useState(true);
+  const [callLogSuccess, setCallLogSuccess] = useState('');
   const [callOutcome, setCallOutcome] = useState('');
   const [callType, setCallType] = useState('call');
   const [replyOutcome, setReplyOutcome] = useState('positive');
@@ -427,6 +435,42 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
       setFuDateField('');
       await load();
       notifyChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const logStructuredCall = async (e) => {
+    e.preventDefault();
+    const cfg = CALL_OUTCOME_MAP[callStatusKey] || CALL_OUTCOMES[0];
+    const notes = callTalkNotes.trim();
+    if (cfg.requiresNotes && !notes) {
+      setError(`Please add talk / call notes for "${cfg.label}"`);
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setCallLogSuccess('');
+    try {
+      const body = {
+        type: cfg.connected ? 'call_connected' : 'call_attempted',
+        outcome: cfg.key,
+        summary: notes || cfg.label,
+        next_follow_up_at: callCallbackAt ? new Date(callCallbackAt).toISOString() : undefined,
+        status: callAutoStatus ? cfg.defaultStatus : undefined,
+      };
+      await api(`/leads/${leadId}/activities`, {
+        method: 'POST',
+        body,
+      });
+      setCallTalkNotes('');
+      setCallCallbackAt('');
+      setCallLogSuccess(`Logged: ${cfg.label}`);
+      await load();
+      notifyChanged();
+      onUpdated?.();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1549,6 +1593,122 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                 </div>
               </section>
 
+              {canEditLead ? (
+                <section className="lead-drawer-section">
+                  <h3 className="lead-drawer-h3">
+                    <Phone size={16} /> Log call (status &amp; talk)
+                  </h3>
+                  <p className="stat-hint" style={{ marginTop: 0 }}>
+                    Log your call outcome &amp; talk notes here. Counts automatically in{' '}
+                    <strong>Caller Working</strong>.
+                  </p>
+                  {callLogSuccess ? (
+                    <div
+                      style={{
+                        background: 'rgba(22, 163, 74, 0.1)',
+                        color: '#15803d',
+                        padding: '0.45rem 0.65rem',
+                        borderRadius: 6,
+                        fontSize: '0.82rem',
+                        marginBottom: '0.6rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      ✓ {callLogSuccess}
+                    </div>
+                  ) : null}
+                  <form onSubmit={logStructuredCall}>
+                    <div className="field">
+                      <label className="label">Call status</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {CALL_OUTCOMES.map((o) => {
+                          const active = callStatusKey === o.key;
+                          return (
+                            <button
+                              key={o.key}
+                              type="button"
+                              className={`btn ${active ? 'btn-primary' : 'btn-ghost'}`}
+                              style={{
+                                padding: '0.3rem 0.6rem',
+                                fontSize: '0.78rem',
+                                border: active ? '1px solid var(--brand-primary)' : '1px solid var(--border)',
+                              }}
+                              onClick={() => {
+                                setCallStatusKey(o.key);
+                                setCallLogSuccess('');
+                              }}
+                            >
+                              {o.shortLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label className="label">
+                        Talk / call notes{' '}
+                        {CALL_OUTCOME_MAP[callStatusKey]?.requiresNotes ? '(required)' : '(optional)'}
+                      </label>
+                      <textarea
+                        className="textarea"
+                        rows={3}
+                        required={Boolean(CALL_OUTCOME_MAP[callStatusKey]?.requiresNotes)}
+                        placeholder={
+                          CALL_OUTCOME_MAP[callStatusKey]?.connected
+                            ? 'What did you talk about? Objections, interest, next steps…'
+                            : 'Optional note (e.g. rang 5 times, left voicemail)…'
+                        }
+                        value={callTalkNotes}
+                        onChange={(e) => setCallTalkNotes(e.target.value)}
+                      />
+                    </div>
+                    {CALL_OUTCOME_MAP[callStatusKey]?.showCallback ? (
+                      <div className="field">
+                        <label className="label">Callback date &amp; time (optional)</label>
+                        <input
+                          className="input"
+                          type="datetime-local"
+                          value={callCallbackAt}
+                          onChange={(e) => setCallCallbackAt(e.target.value)}
+                        />
+                      </div>
+                    ) : null}
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: '0.8rem',
+                        color: 'var(--muted)',
+                        marginBottom: '0.65rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={callAutoStatus}
+                        onChange={(e) => setCallAutoStatus(e.target.checked)}
+                      />
+                      <span>
+                        Update lead stage to{' '}
+                        <strong>
+                          {String(CALL_OUTCOME_MAP[callStatusKey]?.defaultStatus || '').replace(/_/g, ' ')}
+                        </strong>
+                      </span>
+                    </label>
+                    <button
+                      className="btn btn-primary"
+                      type="submit"
+                      disabled={busy}
+                      style={{ width: '100%' }}
+                    >
+                      Save call log
+                    </button>
+                  </form>
+                </section>
+              ) : null}
+
+              {!isCaller ? (
               <section className="lead-drawer-section">
                 <h3 className="lead-drawer-h3">
                   <MessageSquare size={16} /> Log outreach / reply
@@ -1625,6 +1785,7 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                   <p className="stat-hint">View only — BDs log calls and notes from their account</p>
                 )}
               </section>
+              ) : null}
 
               <section className="lead-drawer-section">
                 <h3 className="lead-drawer-h3">
@@ -1771,13 +1932,28 @@ export default function LeadPanel({ leadId, onClose, onChanged }) {
                       <div style={{ flex: 1 }}>
                         <strong style={{ textTransform: 'capitalize' }}>
                           {String(a.type || '').replace(/_/g, ' ')}
-                        </strong>{' '}
+                        </strong>
+                        {a.outcome ? (
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              padding: '1px 6px',
+                              borderRadius: 999,
+                              fontSize: '0.74rem',
+                              fontWeight: 600,
+                              background: 'rgba(85, 115, 244, 0.12)',
+                              color: 'var(--brand-primary)',
+                            }}
+                          >
+                            {formatCallOutcome(a.outcome)}
+                          </span>
+                        ) : null}{' '}
                         — {a.summary}
                         <div className="muted-line">
                           {a.user_name || 'System'} · {fmtDate(a.created_at)}
                         </div>
                       </div>
-                      {canEditLead && !busy ? (
+                      {canEditLead && !busy && (!isCaller || a.user_id === user?.id) ? (
                         <button
                           type="button"
                           className="btn btn-ghost"

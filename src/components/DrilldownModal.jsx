@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { fmtDate, StatusBadge, BusinessTypeBadge, StateBadge } from './Badges.jsx';
+import { formatCallOutcome } from '../lib/callOutcomes.js';
 
 export default function DrilldownModal({
   title,
@@ -210,6 +211,7 @@ export default function DrilldownModal({
                     const leadId = item.lead_id || item.id;
                     const leadName = item.lead_name || item.name || 'Unnamed Lead';
                     const leadEmail = item.lead_email || item.email || item.to_email || item.from_email;
+                    const leadPhone = item.lead_phone || item.phone;
                     const leadCompany = item.lead_company || item.company;
                     const leadStatus = item.lead_status || item.status;
                     const bType = item.business_type;
@@ -238,6 +240,7 @@ export default function DrilldownModal({
                           </div>
                           <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
                             {leadCompany ? <span>{leadCompany} · </span> : null}
+                            {leadPhone ? <span>{leadPhone} · </span> : null}
                             {leadEmail ? <span>{leadEmail}</span> : null}
                           </div>
                           {leadStatus ? (
@@ -271,7 +274,7 @@ export default function DrilldownModal({
                                   marginRight: 4,
                                 }}
                               >
-                                [{item.outcome}]
+                                [{formatCallOutcome(item.outcome)}]
                               </span>
                             )}
                             {detail}

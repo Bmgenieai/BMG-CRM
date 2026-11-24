@@ -5,6 +5,7 @@ import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import TelesalesWorkingPage from './pages/TelesalesWorkingPage.jsx';
+import CallerWorkingPage from './pages/CallerWorkingPage.jsx';
 import LeadsPage from './pages/LeadsPage.jsx';
 import LeadDetailPage from './pages/LeadDetailPage.jsx';
 import FollowUpsPage from './pages/FollowUpsPage.jsx';
@@ -43,15 +44,29 @@ function ChatSupportGate({ children }) {
   return children;
 }
 
+/** Caller accounts only use Leads + Caller Working (own stats). */
+function CallerGate({ children }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (user?.role === 'caller') {
+    const ok =
+      location.pathname.startsWith('/leads') || location.pathname.startsWith('/caller-working');
+    if (!ok) return <Navigate to="/leads" replace />;
+  }
+  return children;
+}
+
 function ProtectedLayout() {
   return (
     <Protected>
       <ChatSupportGate>
-        <AppLayout>
-          <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
-            <Route path="/bd-working" element={<Navigate to="/telesales-working" replace />} />
+        <CallerGate>
+          <AppLayout>
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/telesales-working" element={<TelesalesWorkingPage />} />
+              <Route path="/caller-working" element={<CallerWorkingPage />} />
+              <Route path="/bd-working" element={<Navigate to="/telesales-working" replace />} />
             <Route path="/demos" element={<DemosPage />} />
             <Route path="/call-bookings" element={<CallBookingsPage />} />
             <Route path="/chats" element={<ChatsPage />} />
@@ -71,9 +86,10 @@ function ProtectedLayout() {
             <Route path="/distribution" element={<Navigate to="/leads" replace />} />
             <Route path="/working-tree" element={<Navigate to="/" replace />} />
             <Route path="/import" element={<Navigate to="/leads" replace />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AppLayout>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </AppLayout>
+        </CallerGate>
       </ChatSupportGate>
     </Protected>
   );

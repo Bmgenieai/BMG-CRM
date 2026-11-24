@@ -109,7 +109,7 @@ export default function AdminPage() {
   return (
     <div>
       <h1 className="page-title">Admin controls</h1>
-      <p className="page-sub">Create and manage CEO / Manager / BD employees.</p>
+      <p className="page-sub">Create and manage CEO / Manager / BD / Caller / Chat Support employees.</p>
 
       {error ? <div className="login-error">{error}</div> : null}
 
@@ -139,6 +139,7 @@ export default function AdminPage() {
                 <option value="ceo">CEO</option>
                 <option value="manager">Manager (view team performance)</option>
                 <option value="telesales">BD</option>
+                <option value="caller">Caller (cold calling &amp; call logs)</option>
                 <option value="chat_support">Chat Support (AI / human chat only)</option>
               </select>
             </div>
@@ -205,7 +206,9 @@ export default function AdminPage() {
                         ? 'Manager'
                         : u.role === 'chat_support'
                           ? 'Chat Support'
-                          : u.role}
+                          : u.role === 'caller'
+                            ? 'Caller'
+                            : u.role}
                 </td>
                 <td>{u.is_active ? 'Active' : 'Inactive'}</td>
                 <td>{fmtDate(u.created_at)}</td>
