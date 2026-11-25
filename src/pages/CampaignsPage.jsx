@@ -129,9 +129,15 @@ export default function CampaignsPage() {
   const [leads, setLeads] = useState([]);
   const [name, setName] = useState('');
   const [emailAccountId, setEmailAccountId] = useState('');
+  const [emailAccountIds, setEmailAccountIds] = useState([]);
   const [timezone, setTimezone] = useState('America/New_York');
   const [sendHour, setSendHour] = useState(9);
   const [sendMinute, setSendMinute] = useState(0);
+  const [sendWindowStart, setSendWindowStart] = useState(9);
+  const [sendWindowEnd, setSendWindowEnd] = useState(17);
+  const [useProspectTimezone, setUseProspectTimezone] = useState(true);
+  const [threadFollowups, setThreadFollowups] = useState(true);
+  const [editingSteps, setEditingSteps] = useState(false);
   const [tzClock, setTzClock] = useState(() => fmtNowInTz('America/New_York'));
   const [detailTzClock, setDetailTzClock] = useState('');
   const [steps, setSteps] = useState([emptyStep()]);
@@ -512,10 +518,154 @@ export default function CampaignsPage() {
     });
   };
 
+  const buildDetailPatchBody = (d) => {
+    const acctIds =
+      Array.isArray(d.accountIds) && d.accountIds.length
+        ? d.accountIds
+        : d.email_account_id
+          ? [d.email_account_id]
+          : [];
+    return {
+      name: d.name,
+      emailAccountId: acctIds[0] || d.email_account_id,
+      emailAccountIds: acctIds,
+      timezone: d.timezone || 'America/New_York',
+      sendHour: Number(d.send_hour ?? 9),
+      sendMinute: Number(d.send_minute ?? 0),
+      sendWindowStart: Number(d.send_window_start ?? 9),
+      sendWindowEnd: Number(d.send_window_end ?? 17),
+      useProspectTimezone: d.use_prospect_timezone !== 0,
+      threadFollowups: d.thread_followups !== 0,
+      steps: (d.steps || []).map((s, i) => ({
+        id: s.id || undefined,
+        stepOrder: i + 1,
+        delayDays: Number(s.delay_days ?? s.delayDays ?? 0) || 0,
+        variants: (s.variants && s.variants.length
+          ? s.variants
+          : [
+              {
+                key: 'A',
+                content_category: s.content_category,
+                subject: s.subject,
+                html_content: s.html_content,
+                text_content: s.text_content,
+                template_id: s.template_id,
+              },
+            ]
+        ).map((v) => ({
+          key: v.variant_key || v.key || 'A',
+          contentCategory: v.content_category || v.contentCategory || 'plain_text',
+          subject: v.subject ?? '',
+          htmlContent: v.html_content ?? v.htmlContent ?? undefined,
+          textContent: v.text_content ?? v.textContent ?? undefined,
+          templateId: v.template_id || v.templateId || undefined,
+        })),
+      })),
+    };
+  };
+
+  const toggleCreateAccount = (id) => {
+    setEmailAccountIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (next.length) setEmailAccountId(next[0]);
+      return next;
+    });
+  };
+
+  const toggleDetailAccount = (id) => {
+    if (!detail) return;
+    const cur =
+      Array.isArray(detail.accountIds) && detail.accountIds.length
+        ? detail.accountIds
+        : detail.email_account_id
+          ? [detail.email_account_id]
+          : [];
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    setDetail({
+      ...detail,
+      accountIds: next,
+      email_account_id: next[0] || null,
+    });
+  };
+
+  const updateDetailStep = (idx, patch) => {
+    setDetail((prev) => {
+      if (!prev) return prev;
+      const nextSteps = (prev.steps || []).map((s, i) => (i === idx ? { ...s, ...patch } : s));
+      return { ...prev, steps: nextSteps };
+    });
+  };
+
+  const updateDetailStepVariant = (stepIdx, varIdx, patch) => {
+    setDetail((prev) => {
+      if (!prev) return prev;
+      const nextSteps = (prev.steps || []).map((s, i) => {
+        if (i !== stepIdx) return s;
+        const vars = (s.variants && s.variants.length
+          ? s.variants
+          : [
+              {
+                variant_key: 'A',
+                subject: s.subject || '',
+                html_content: s.html_content || '',
+                text_content: s.text_content || '',
+                content_category: s.content_category || 'plain_text',
+              },
+            ]
+        ).map((v, vi) => (vi === varIdx ? { ...v, ...patch } : v));
+        const first = vars[0] || {};
+        return {
+          ...s,
+          subject: first.subject ?? s.subject,
+          html_content: first.html_content ?? s.html_content,
+          text_content: first.text_content ?? s.text_content,
+          variants: vars,
+        };
+      });
+      return { ...prev, steps: nextSteps };
+    });
+  };
+
+  const addDetailStep = () => {
+    setDetail((prev) => {
+      if (!prev) return prev;
+      const curSteps = prev.steps || [];
+      const baseKeys = (curSteps[0]?.variants || []).map((v) => v.variant_key || v.key || 'A');
+      const keys = baseKeys.length ? baseKeys : ['A'];
+      const lastDelay = Number(curSteps[curSteps.length - 1]?.delay_days || 0);
+      const firstSubj = curSteps[0]?.subject || curSteps[0]?.variants?.[0]?.subject || '';
+      const defaultSubj = firstSubj
+        ? firstSubj.toLowerCase().startsWith('re:')
+          ? firstSubj
+          : `Re: ${firstSubj}`
+        : `Follow-up ${curSteps.length}`;
+      const newStep = {
+        step_order: curSteps.length + 1,
+        delay_days: lastDelay + 3,
+        subject: defaultSubj,
+        html_content: '',
+        text_content: '',
+        variants: keys.map((k) => ({
+          variant_key: k,
+          content_category: 'plain_text',
+          subject: defaultSubj,
+          html_content: '',
+          text_content: '',
+        })),
+      };
+      return { ...prev, steps: [...curSteps, newStep] };
+    });
+  };
+
   const create = async (e) => {
     e.preventDefault();
-    if (!emailAccountId) {
-      setError('Select a From account (email) for this campaign');
+    const chosenAccounts = emailAccountIds.length
+      ? emailAccountIds
+      : emailAccountId
+        ? [emailAccountId]
+        : [];
+    if (!chosenAccounts.length) {
+      setError('Select at least one From account (email) for this campaign');
       return;
     }
     setBusy(true);
@@ -524,10 +674,15 @@ export default function CampaignsPage() {
     try {
       const body = {
         name,
-        emailAccountId,
+        emailAccountId: chosenAccounts[0],
+        emailAccountIds: chosenAccounts,
         timezone,
-        sendHour: Number(sendHour) || 0,
+        sendHour: Number(sendHour) || 9,
         sendMinute: Number(sendMinute) || 0,
+        sendWindowStart: Number(sendWindowStart) || 9,
+        sendWindowEnd: Number(sendWindowEnd) || 17,
+        useProspectTimezone,
+        threadFollowups,
         steps: steps.map((s, i) => ({
           stepOrder: i + 1,
           delayDays: Number(s.delayDays) || 0,
@@ -569,8 +724,14 @@ export default function CampaignsPage() {
 
   const saveDraft = async () => {
     if (!detail || detail.status === 'active') return;
-    if (!detail.email_account_id) {
-      setError('Select a From account (email) before saving');
+    const acctIds =
+      Array.isArray(detail.accountIds) && detail.accountIds.length
+        ? detail.accountIds
+        : detail.email_account_id
+          ? [detail.email_account_id]
+          : [];
+    if (!acctIds.length) {
+      setError('Select at least one From account (email) before saving');
       return;
     }
     setBusy(true);
@@ -579,39 +740,10 @@ export default function CampaignsPage() {
     try {
       await api(`/email/campaigns/${detail.id}`, {
         method: 'PATCH',
-        body: {
-          name: detail.name,
-          emailAccountId: detail.email_account_id,
-          timezone: detail.timezone || 'America/New_York',
-          sendHour: Number(detail.send_hour) || 0,
-          sendMinute: Number(detail.send_minute) || 0,
-          steps: (detail.steps || []).map((s, i) => ({
-            stepOrder: i + 1,
-            delayDays: Number(s.delay_days) || 0,
-            variants: (s.variants && s.variants.length
-              ? s.variants
-              : [
-                  {
-                    key: 'A',
-                    content_category: s.content_category,
-                    subject: s.subject,
-                    html_content: s.html_content,
-                    text_content: s.text_content,
-                    template_id: s.template_id,
-                  },
-                ]
-            ).map((v) => ({
-              key: v.variant_key || v.key || 'A',
-              contentCategory: v.content_category || v.contentCategory || 'plain_text',
-              subject: v.subject || undefined,
-              htmlContent: v.html_content || v.htmlContent || undefined,
-              textContent: v.text_content || v.textContent || undefined,
-              templateId: v.template_id || v.templateId || undefined,
-            })),
-          })),
-        },
+        body: buildDetailPatchBody(detail),
       });
-      setMessage('Saved');
+      setMessage('Campaign settings & steps saved (previous stats preserved)');
+      setEditingSteps(false);
       await loadList();
       await loadDetail(detail.id);
     } catch (err) {
@@ -653,28 +785,35 @@ export default function CampaignsPage() {
 
   const launch = async () => {
     if (!detail) return;
-    if (!detail.email_account_id) {
-      setError('Select a From account (email) before launching');
+    const acctIds =
+      Array.isArray(detail.accountIds) && detail.accountIds.length
+        ? detail.accountIds
+        : detail.email_account_id
+          ? [detail.email_account_id]
+          : [];
+    if (!acctIds.length) {
+      setError('Select at least one From account (email) before launching');
       return;
     }
+    const isResume = detail.status === 'paused';
     setBusy(true);
     setError('');
     try {
-      // Persist timezone / from account / steps before scheduling
       if (detail.status === 'draft' || detail.status === 'paused') {
         await api(`/email/campaigns/${detail.id}`, {
           method: 'PATCH',
-          body: {
-            name: detail.name,
-            emailAccountId: detail.email_account_id,
-            timezone: detail.timezone || 'America/New_York',
-            sendHour: Number(detail.send_hour) || 0,
-            sendMinute: Number(detail.send_minute) || 0,
-          },
+          body: buildDetailPatchBody(detail),
         });
       }
-      const r = await api(`/email/campaigns/${detail.id}/launch`, { method: 'POST', body: {} });
-      setMessage(`Launched · ${r.scheduled} scheduled send(s)`);
+      const endpoint = isResume
+        ? `/email/campaigns/${detail.id}/resume`
+        : `/email/campaigns/${detail.id}/launch`;
+      const r = await api(endpoint, { method: 'POST', body: {} });
+      setMessage(
+        `${isResume ? 'Resumed' : 'Launched'} · ${r.scheduled} scheduled send(s) for ${r.leads} eligible lead(s)` +
+          (r.skippedExcluded ? ` · ${r.skippedExcluded} excluded (replied/bounced/suppressed)` : ''),
+      );
+      setEditingSteps(false);
       await loadList();
       await loadDetail(detail.id);
     } catch (err) {
@@ -709,17 +848,10 @@ export default function CampaignsPage() {
     setBusy(true);
     setError('');
     try {
-      // Persist draft settings before launch+send
       if (detail.status === 'draft' || detail.status === 'paused') {
         await api(`/email/campaigns/${detail.id}`, {
           method: 'PATCH',
-          body: {
-            name: detail.name,
-            emailAccountId: detail.email_account_id,
-            timezone: detail.timezone || 'America/New_York',
-            sendHour: Number(detail.send_hour) || 0,
-            sendMinute: Number(detail.send_minute) || 0,
-          },
+          body: buildDetailPatchBody(detail),
         });
       }
       const res = await api(`/email/campaigns/${detail.id}/send-now`, { method: 'POST', body: {} });
@@ -810,26 +942,44 @@ export default function CampaignsPage() {
               />
             </div>
             <div className="field">
-              <label className="label">From account</label>
-              <select
-                className="select"
-                value={emailAccountId}
-                onChange={(e) => setEmailAccountId(e.target.value)}
-                required
-              >
-                <option value="" disabled>
-                  Select email account…
-                </option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label} · {a.email}
-                  </option>
-                ))}
-              </select>
+              <label className="label">Sender inbox(es) — select multiple to rotate across new leads</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {accounts.map((a) => {
+                  const activeIds = emailAccountIds.length
+                    ? emailAccountIds
+                    : emailAccountId
+                      ? [emailAccountId]
+                      : [];
+                  const checked = activeIds.includes(a.id);
+                  return (
+                    <label
+                      key={a.id}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCreateAccount(a.id)}
+                      />
+                      <span>
+                        <strong>{a.label}</strong> · {a.email}{' '}
+                        <span className="stat-hint">
+                          ({a.sent_today ?? 0}/{a.daily_limit ?? 50} today)
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {emailAccountIds.length > 1 ? (
+                <p className="stat-hint" style={{ margin: '6px 0 0' }}>
+                  Rotating across {emailAccountIds.length} inboxes. Each lead&apos;s follow-ups stay on their original inbox.
+                </p>
+              ) : null}
             </div>
 
             <div className="field">
-              <label className="label">Audience timezone</label>
+              <label className="label">Audience timezone (fallback when prospect location is unknown)</label>
               <select
                 className="select"
                 value={timezone}
@@ -844,6 +994,54 @@ export default function CampaignsPage() {
               <p className="stat-hint" style={{ margin: '6px 0 0' }}>
                 Now there: <strong>{tzClock}</strong>
               </p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }} className="field">
+              <div>
+                <label className="label">Business hours start (Mon–Fri)</label>
+                <select
+                  className="select"
+                  value={sendWindowStart}
+                  onChange={(e) => setSendWindowStart(Number(e.target.value))}
+                >
+                  {SEND_HOUR_OPTIONS.slice(6, 18).map((h) => (
+                    <option key={h.value} value={h.value}>
+                      {h.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Business hours end (Mon–Fri)</label>
+                <select
+                  className="select"
+                  value={sendWindowEnd}
+                  onChange={(e) => setSendWindowEnd(Number(e.target.value))}
+                >
+                  {SEND_HOUR_OPTIONS.slice(10, 23).map((h) => (
+                    <option key={h.value} value={h.value}>
+                      {h.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="field" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={useProspectTimezone}
+                  onChange={(e) => setUseProspectTimezone(e.target.checked)}
+                />
+                Send during Mon–Fri business hours in each prospect&apos;s local timezone
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={threadFollowups}
+                  onChange={(e) => setThreadFollowups(e.target.checked)}
+                />
+                Keep follow-ups in the same email thread as Email 1 (Re: reply headers)
+              </label>
             </div>
             <div className="field">
               <label className="label">Preferred send time (local)</label>
@@ -1437,13 +1635,17 @@ export default function CampaignsPage() {
                 <tr>
                   <th>Name</th>
                   <th>Status</th>
+                  <th>Audience TZ</th>
                   <th>Leads</th>
-                  <th title="First email in the sequence">Email 1</th>
-                  <th title="Second email (follow-up)">Email 2</th>
-                  <th title="Third email (follow-up)">Email 3</th>
-                  <th title="Fourth email (follow-up)">Email 4</th>
+                  <th title="First email in the sequence">E1</th>
+                  <th title="Second email (follow-up)">E2</th>
+                  <th title="Third email (follow-up)">E3</th>
+                  <th title="Fourth email (follow-up)">E4</th>
+                  <th title="Fifth email (follow-up)">E5</th>
                   <th>Next follow-up</th>
+                  <th>Delivered</th>
                   <th>Opened</th>
+                  <th>Link Clicks</th>
                   <th>Replies</th>
                 </tr>
               </thead>
@@ -1476,14 +1678,33 @@ export default function CampaignsPage() {
                       }}
                       onClick={() => setSelectedId(c.id)}
                     >
-                      <td>{c.name}</td>
+                      <td>
+                        {c.name}
+                        {(c.step_count || 0) > 5 ? (
+                          <span className="stat-hint"> ({c.step_count} steps)</span>
+                        ) : null}
+                      </td>
                       <td>{c.status}</td>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                        {tzMeta(c.timezone).short}
+                      </td>
                       <td>{numBtn('leads', 'Leads', c.lead_count)}</td>
                       <td>{numBtn('step_1', 'Email 1', c.sent_step_1 || 0)}</td>
                       <td>{numBtn('step_2', 'Email 2', c.sent_step_2 || 0)}</td>
                       <td>{numBtn('step_3', 'Email 3', c.sent_step_3 || 0)}</td>
                       <td>{numBtn('step_4', 'Email 4', c.sent_step_4 || 0)}</td>
+                      <td>{numBtn('step_5', 'Email 5', c.sent_step_5 || 0)}</td>
                       <td>{formatNextSend(c.next_follow_up_at, c.timezone)}</td>
+                      <td>
+                        {numBtn(
+                          'delivered',
+                          'Delivered',
+                          c.delivered_count || 0,
+                          c.sent_count ? (
+                            <span className="stat-hint"> ({c.delivery_rate ?? 0}%)</span>
+                          ) : null,
+                        )}
+                      </td>
                       <td>
                         {numBtn(
                           'opened',
@@ -1491,6 +1712,16 @@ export default function CampaignsPage() {
                           c.opened_count || 0,
                           c.sent_count ? (
                             <span className="stat-hint"> ({c.open_rate}%)</span>
+                          ) : null,
+                        )}
+                      </td>
+                      <td>
+                        {numBtn(
+                          'clicked',
+                          'Link Clicks',
+                          c.clicked_count || 0,
+                          c.sent_count ? (
+                            <span className="stat-hint"> ({c.click_rate ?? 0}%)</span>
                           ) : null,
                         )}
                       </td>
@@ -1524,11 +1755,21 @@ export default function CampaignsPage() {
 
               {detail.stats ? (
                 <div
-                  className="grid grid-4"
-                  style={{ marginBottom: '0.85rem', gap: 8 }}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                    marginBottom: '0.85rem',
+                    gap: 8,
+                  }}
                 >
                   {[
                     { label: 'Sent', value: detail.stats.sent, metric: 'sent' },
+                    {
+                      label: 'Delivered',
+                      value: detail.stats.delivered,
+                      hint: detail.stats.sent ? `${detail.stats.deliveryRate}% (excl. bounced)` : null,
+                      metric: 'delivered',
+                    },
                     {
                       label: 'Opened',
                       value: detail.stats.opened,
@@ -1536,15 +1777,23 @@ export default function CampaignsPage() {
                       metric: 'opened',
                     },
                     {
+                      label: 'Link Clicks',
+                      value: detail.stats.clicked ?? 0,
+                      hint: detail.stats.sent ? `${detail.stats.clickRate ?? 0}% click rate` : null,
+                      metric: 'clicked',
+                    },
+                    {
                       label: 'Replies',
                       value: detail.stats.replies,
-                      hint: detail.stats.sent ? `${detail.stats.replyRate}%` : null,
+                      hint: detail.stats.sent ? `${detail.stats.replyRate}% (unique)` : null,
                       metric: 'replies',
                     },
                     {
-                      label: 'Bounces',
+                      label: 'Hard Bounces',
                       value: detail.stats.bounced,
-                      hint: detail.stats.sent ? `${detail.stats.bounceRate}%` : null,
+                      hint: detail.stats.sent
+                        ? `${detail.stats.bounceRate}%${detail.stats.deferred ? ` · ${detail.stats.deferred} delayed` : ''}`
+                        : null,
                       metric: 'bounced',
                     },
                   ].map((card) => (
@@ -1592,24 +1841,43 @@ export default function CampaignsPage() {
               {(detail.status === 'draft' || detail.status === 'paused') && (
                 <>
                   <div className="field">
-                    <label className="label">From account</label>
-                    <select
-                      className="select"
-                      value={detail.email_account_id || ''}
-                      onChange={(e) =>
-                        setDetail({ ...detail, email_account_id: e.target.value || null })
-                      }
-                      required
-                    >
-                      <option value="" disabled>
-                        Select email account…
-                      </option>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.label} · {a.email}
-                        </option>
-                      ))}
-                    </select>
+                    <label className="label">Campaign name</label>
+                    <input
+                      className="input"
+                      value={detail.name || ''}
+                      onChange={(e) => setDetail({ ...detail, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label">Sender inbox(es) — select multiple to rotate across new leads</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {accounts.map((a) => {
+                        const activeIds =
+                          Array.isArray(detail.accountIds) && detail.accountIds.length
+                            ? detail.accountIds
+                            : detail.email_account_id
+                              ? [detail.email_account_id]
+                              : [];
+                        return (
+                          <label
+                            key={a.id}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={activeIds.includes(a.id)}
+                              onChange={() => toggleDetailAccount(a.id)}
+                            />
+                            <span>
+                              <strong>{a.label}</strong> · {a.email}{' '}
+                              <span className="stat-hint">
+                                ({a.sent_today ?? 0}/{a.daily_limit ?? 50} today)
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div className="field">
                     <label className="label">Audience timezone</label>
@@ -1627,6 +1895,62 @@ export default function CampaignsPage() {
                     <p className="stat-hint" style={{ margin: '6px 0 0' }}>
                       Now there: <strong>{detailTzClock}</strong>
                     </p>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }} className="field">
+                    <div>
+                      <label className="label">Business hours start (Mon–Fri)</label>
+                      <select
+                        className="select"
+                        value={Number(detail.send_window_start ?? 9)}
+                        onChange={(e) =>
+                          setDetail({ ...detail, send_window_start: Number(e.target.value) })
+                        }
+                      >
+                        {SEND_HOUR_OPTIONS.slice(6, 18).map((h) => (
+                          <option key={h.value} value={h.value}>
+                            {h.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Business hours end (Mon–Fri)</label>
+                      <select
+                        className="select"
+                        value={Number(detail.send_window_end ?? 17)}
+                        onChange={(e) =>
+                          setDetail({ ...detail, send_window_end: Number(e.target.value) })
+                        }
+                      >
+                        {SEND_HOUR_OPTIONS.slice(10, 23).map((h) => (
+                          <option key={h.value} value={h.value}>
+                            {h.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="field" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={detail.use_prospect_timezone !== 0}
+                        onChange={(e) =>
+                          setDetail({ ...detail, use_prospect_timezone: e.target.checked ? 1 : 0 })
+                        }
+                      />
+                      Send during Mon–Fri business hours in each prospect&apos;s local timezone
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <input
+                        type="checkbox"
+                        checked={detail.thread_followups !== 0}
+                        onChange={(e) =>
+                          setDetail({ ...detail, thread_followups: e.target.checked ? 1 : 0 })
+                        }
+                      />
+                      Keep follow-ups in the same email thread as Email 1
+                    </label>
                   </div>
                   <div className="field">
                     <label className="label">Preferred send time (local)</label>
@@ -1694,26 +2018,47 @@ export default function CampaignsPage() {
                 {(detail.status === 'draft' || detail.status === 'paused') && (
                   <>
                     <button type="button" className="btn btn-secondary" disabled={busy} onClick={saveDraft}>
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={busy}
-                      onClick={sendNow}
-                      title="Launch and send the first email wave immediately"
-                    >
-                      ⚡ Send now
+                      Save changes
                     </button>
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      disabled={busy}
-                      onClick={launch}
-                      title="Launch and schedule sends for the preferred time"
+                      onClick={() => setEditingSteps((v) => !v)}
                     >
-                      Launch (schedule)
+                      {editingSteps ? 'Done editing steps' : 'Edit email copy & delays'}
                     </button>
+                    {detail.status === 'paused' ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={busy}
+                        onClick={launch}
+                        title="Resume safely from each lead's next unsent step (keeps stats and excludes replied/bounced/unsubscribed leads)"
+                      >
+                        Resume campaign
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={busy}
+                          onClick={sendNow}
+                          title="Launch and send the first email wave immediately"
+                        >
+                          ⚡ Send now
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={busy}
+                          onClick={launch}
+                          title="Launch and schedule sends for the preferred time"
+                        >
+                          Launch (schedule)
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       className="btn btn-secondary"
@@ -1852,7 +2197,7 @@ export default function CampaignsPage() {
                 return null;
               })()}
 
-              <h4>Sequence & follow-ups ({(detail.steps || []).length} emails)</h4>
+              <h4>Sequence &amp; follow-ups ({(detail.steps || []).length} emails)</h4>
               <p className="stat-hint" style={{ marginTop: 0 }}>
                 Initial email + follow-ups for this campaign only (not legacy manual overdue tasks).
                 Sequence status:{' '}
@@ -1861,7 +2206,115 @@ export default function CampaignsPage() {
                 <strong>{detail.counts?.completed || 0}</strong> completed ·{' '}
                 <strong>{detail.counts?.stopped || 0}</strong> paused/stopped ·{' '}
                 <strong>{detail.counts?.replied || 0}</strong> replied
+                {detail.thread_followups !== 0 ? ' · Follow-ups sent in same thread' : ''}
               </p>
+
+              {editingSteps && (detail.status === 'draft' || detail.status === 'paused') ? (
+                <div
+                  style={{
+                    marginBottom: 14,
+                    padding: '0.85rem',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: 'var(--brand-soft)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <strong>Edit sequence steps (previous stats &amp; sent history are preserved)</strong>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={addDetailStep}>
+                        + Add follow-up step
+                      </button>
+                      <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={saveDraft}>
+                        Save steps
+                      </button>
+                    </div>
+                  </div>
+                  {(detail.steps || []).map((st, sIdx) => {
+                    const vars =
+                      st.variants && st.variants.length
+                        ? st.variants
+                        : [
+                            {
+                              variant_key: 'A',
+                              subject: st.subject || '',
+                              html_content: st.html_content || '',
+                              text_content: st.text_content || '',
+                            },
+                          ];
+                    return (
+                      <div
+                        key={st.id || sIdx}
+                        style={{
+                          padding: '0.75rem',
+                          borderRadius: 8,
+                          background: 'var(--bg-card, #fff)',
+                          border: '1px solid var(--border)',
+                          marginBottom: 10,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                          <strong>{sIdx === 0 ? 'Email 1 (Initial)' : `Email ${sIdx + 1} (Follow-up ${sIdx})`}</strong>
+                          {sIdx > 0 ? (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                              Delay (business days):
+                              <input
+                                type="number"
+                                className="input"
+                                min={0}
+                                max={90}
+                                style={{ width: 72 }}
+                                value={Number(st.delay_days ?? 0)}
+                                onChange={(e) =>
+                                  updateDetailStep(sIdx, { delay_days: Math.max(0, Number(e.target.value) || 0) })
+                                }
+                              />
+                            </label>
+                          ) : (
+                            <span className="stat-hint">Sent at launch</span>
+                          )}
+                        </div>
+                        {vars.map((v, vIdx) => (
+                          <div key={v.variant_key || vIdx} style={{ marginTop: vIdx > 0 ? 10 : 0 }}>
+                            {vars.length > 1 ? (
+                              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                                Variant {v.variant_key}
+                              </div>
+                            ) : null}
+                            <div className="field" style={{ marginBottom: 6 }}>
+                              <label className="label">
+                                Subject{sIdx > 0 && detail.thread_followups !== 0 ? ' (auto Re: Email 1 when threaded)' : ''}
+                              </label>
+                              <input
+                                className="input"
+                                value={v.subject || ''}
+                                onChange={(e) =>
+                                  updateDetailStepVariant(sIdx, vIdx, { subject: e.target.value })
+                                }
+                              />
+                            </div>
+                            <div className="field" style={{ marginBottom: 6 }}>
+                              <label className="label">HTML / Body</label>
+                              <textarea
+                                className="textarea"
+                                rows={4}
+                                value={v.html_content || v.text_content || ''}
+                                onChange={(e) =>
+                                  updateDetailStepVariant(sIdx, vIdx, {
+                                    html_content: e.target.value,
+                                    text_content: e.target.value.replace(/<[^>]+>/g, ''),
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
               <div className="table-wrap" style={{ marginBottom: 12 }}>
                 <table>
                   <thead>
@@ -1870,8 +2323,12 @@ export default function CampaignsPage() {
                       <th>Delay</th>
                       <th>Pending</th>
                       <th>Sent</th>
-                      <th>Failed</th>
+                      <th>Delivered</th>
+                      <th>Opened</th>
+                      <th>Link Clicks</th>
                       <th>Replies</th>
+                      <th>Bounces</th>
+                      <th>Failed</th>
                       <th>Next scheduled</th>
                       <th>Subject / variants</th>
                     </tr>
@@ -1884,6 +2341,10 @@ export default function CampaignsPage() {
                         delayDays: step?.delay_days ?? row.delay_days ?? 0,
                         pending: 0,
                         sent: 0,
+                        delivered: 0,
+                        opened: 0,
+                        clicked: 0,
+                        bounced: 0,
                         replies: 0,
                         nextScheduledAt: null,
                         subject: step?.subject || step?.variants?.[0]?.subject,
@@ -1924,6 +2385,20 @@ export default function CampaignsPage() {
                           </td>
                           <td>{summary.pending ?? 0}</td>
                           <td>{summary.sent ?? 0}</td>
+                          <td>{summary.delivered ?? 0}</td>
+                          <td>
+                            {summary.opened ?? 0}
+                            {summary.sent ? <span className="stat-hint"> ({summary.openRate ?? 0}%)</span> : null}
+                          </td>
+                          <td>
+                            {summary.clicked ?? 0}
+                            {summary.sent ? <span className="stat-hint"> ({summary.clickRate ?? 0}%)</span> : null}
+                          </td>
+                          <td>
+                            {summary.replies ?? 0}
+                            {summary.sent ? <span className="stat-hint"> ({summary.replyRate ?? 0}%)</span> : null}
+                          </td>
+                          <td>{summary.bounced ?? 0}</td>
                           <td>
                             {(summary.failed || 0) > 0 ? (
                               <button
@@ -1949,7 +2424,6 @@ export default function CampaignsPage() {
                               0
                             )}
                           </td>
-                          <td>{summary.replies ?? 0}</td>
                           <td>{nextLabel}</td>
                           <td className="stat-hint">
                             {summary.subject || variants[0]?.subject || '(no subject)'}
@@ -1962,7 +2436,7 @@ export default function CampaignsPage() {
                     })}
                     {!(detail.steps || []).length ? (
                       <tr>
-                        <td colSpan={8} className="empty">
+                        <td colSpan={12} className="empty">
                           No sequence emails yet.
                         </td>
                       </tr>

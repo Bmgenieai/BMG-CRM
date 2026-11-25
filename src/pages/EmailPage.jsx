@@ -2,7 +2,51 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Mail, RefreshCw, Send, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { SourceBadge, fmtDate, fmtInTz, fmtPktDate } from '../components/Badges.jsx';
+import { FUNNEL_STATUSES, SourceBadge, fmtDate, fmtInTz, fmtPktDate } from '../components/Badges.jsx';
+
+const VALID_MERGE_TAGS = new Set([
+  'name',
+  'first_name',
+  'firstName',
+  'company',
+  'company_name',
+  'companyName',
+  'country',
+  'email',
+  'source',
+  'source_label',
+  'sender_name',
+  'sender_email',
+]);
+
+function findInvalidMergeTags(...texts) {
+  const bad = new Set();
+  const re = /\{\{\s*([^}]+?)\s*\}\}/g;
+  for (const t of texts) {
+    if (!t) continue;
+    let m;
+    while ((m = re.exec(String(t))) !== null) {
+      const key = m[1].trim();
+      if (!VALID_MERGE_TAGS.has(key)) bad.add(`{{${key}}}`);
+    }
+  }
+  return [...bad];
+}
+
+const COLD_EMAIL_STAGES = [
+  ...FUNNEL_STATUSES,
+  { value: 'challenge_offered', label: 'Challenge offered' },
+  { value: 'challenge_accepted', label: 'Challenge accepted' },
+  { value: 'trial', label: 'Trial' },
+];
+
+function chunkArray(arr, size = 25) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
+}
 
 function toLocalInputValue() {
   const d = new Date(Date.now() + 60 * 60 * 1000);
@@ -35,9 +79,10 @@ export default function EmailPage() {
   const [previewLeadId, setPreviewLeadId] = useState('');
   const [preview, setPreview] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('qualified');
+  const [statusFilter, setStatusFilter] = useState('');
   const [emailStatusFilter, setEmailStatusFilter] = useState('not_sent');
   const [busy, setBusy] = useState(false);
+  const [batchProgress, setBatchProgress] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [showSchedule, setShowSchedule] = useState(false);
@@ -46,6 +91,14 @@ export default function EmailPage() {
   const [accounts, setAccounts] = useState([]);
   const [emailAccountId, setEmailAccountId] = useState('');
   const [recipientsModal, setRecipientsModal] = useState(null);
+  const [templateName, setTemplateName] = useState('');
+  const [showTemplateSave, setShowTemplateSave] = useState(false);
+  const [tplBusy, setTplBusy] = useState(false);
+
+  const invalidTags = useMemo(
+    () => findInvalidMergeTags(subject, htmlContent, textContent),
+    [subject, htmlContent, textContent],
+  );
 
   const load = async () => {
     setError('');
@@ -104,10 +157,75 @@ export default function EmailPage() {
   const applyTemplate = (id) => {
     setTemplateId(id);
     const tpl = templates.find((t) => t.id === id);
-    if (!tpl) return;
-    setSubject(tpl.subject);
-    setHtmlContent(tpl.htmlContent);
-    setTextContent(tpl.textContent);
+    if (!tpl) {
+      setTemplateName('');
+      return;
+    }
+    setTemplateName(tpl.name || tpl.label || '');
+    setSubject(tpl.subject || '');
+    setHtmlContent(tpl.htmlContent || '');
+    setTextContent(tpl.textContent || '');
+  };
+
+  const saveTemplate = async (asNew = false) => {
+    const name = templateName.trim();
+    if (!name) {
+      setError('Enter a template name');
+      return;
+    }
+    if (!subject.trim()) {
+      setError('Enter a subject before saving the template');
+      return;
+    }
+    if (!htmlContent.trim() && !textContent.trim()) {
+      setError('Enter an email body before saving the template');
+      return;
+    }
+    setTplBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      let res;
+      if (!asNew && templateId) {
+        res = await api(`/email/templates/${templateId}`, {
+          method: 'PATCH',
+          body: { name, subject, htmlContent, textContent },
+        });
+        setMessage(`Updated template "${res.template?.name || name}"`);
+      } else {
+        res = await api('/email/templates', {
+          method: 'POST',
+          body: { name, subject, htmlContent, textContent },
+        });
+        if (res.template?.id) setTemplateId(res.template.id);
+        setMessage(`Saved new template "${res.template?.name || name}"`);
+      }
+      setShowTemplateSave(false);
+      await load();
+    } catch (e) {
+      setError(e.message || 'Failed to save template');
+    } finally {
+      setTplBusy(false);
+    }
+  };
+
+  const deleteCurrentTemplate = async () => {
+    if (!templateId) return;
+    const tpl = templates.find((t) => t.id === templateId);
+    if (!window.confirm(`Delete template "${tpl?.label || tpl?.name || templateId}"?`)) return;
+    setTplBusy(true);
+    setError('');
+    try {
+      await api(`/email/templates/${templateId}`, { method: 'DELETE' });
+      setTemplateId('');
+      setTemplateName('');
+      setMessage('Template deleted');
+      await load();
+    } catch (e) {
+      setError(e.message || 'Failed to delete template');
+    } finally {
+      setTplBusy(false);
+    }
   };
 
   const toggle = (id) => {
@@ -158,28 +276,64 @@ export default function EmailPage() {
       setError('Select a From account (email) before sending');
       return;
     }
+    if (
+      invalidTags.length &&
+      !window.confirm(
+        `Warning: unknown merge tag(s) detected: ${invalidTags.join(', ')}. They will render blank. Send anyway?`,
+      )
+    ) {
+      return;
+    }
+    const batches = chunkArray(selected, 25);
+    if (
+      batches.length > 1 &&
+      !window.confirm(
+        `You selected ${selected.length} leads. They will be sent in ${batches.length} batches of up to 25 leads. Continue?`,
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setError('');
     setMessage('');
+    let totalSent = 0;
+    let totalFailed = 0;
+    let totalSuppressed = 0;
+    let totalCapped = 0;
     try {
-      const data = await api('/email/bulk-send', {
-        method: 'POST',
-        body: {
-          leadIds: selected,
-          templateId: templateId || undefined,
-          subject,
-          htmlContent,
-          textContent,
-          syncToBrevo: true,
-          emailAccountId,
-        },
-      });
-      setMessage(`Sent ${data.sent} email(s)${data.failed ? ` · ${data.failed} failed` : ''}`);
+      for (let i = 0; i < batches.length; i += 1) {
+        if (batches.length > 1) {
+          setBatchProgress(`Sending batch ${i + 1} of ${batches.length}…`);
+        }
+        const data = await api('/email/bulk-send', {
+          method: 'POST',
+          body: {
+            leadIds: batches[i],
+            templateId: templateId || undefined,
+            subject,
+            htmlContent,
+            textContent,
+            syncToBrevo: true,
+            emailAccountId,
+          },
+        });
+        totalSent += Number(data.sent || 0);
+        totalFailed += Number(data.failed || 0);
+        totalSuppressed += Number(data.skippedSuppressed || 0);
+        totalCapped += Number(data.skippedDailyCap || 0);
+        if (data.skippedDailyCap > 0) break;
+      }
+      const parts = [`Sent ${totalSent} email(s)`];
+      if (totalFailed) parts.push(`${totalFailed} failed`);
+      if (totalSuppressed) parts.push(`${totalSuppressed} suppressed/skipped`);
+      if (totalCapped) parts.push(`${totalCapped} paused (daily cap reached)`);
+      setMessage(parts.join(' · '));
       setSelected([]);
       load();
     } catch (e) {
       setError(e.message);
     } finally {
+      setBatchProgress('');
       setBusy(false);
     }
   };
@@ -223,25 +377,49 @@ export default function EmailPage() {
       setError('Schedule time must be in the future');
       return;
     }
+    if (
+      invalidTags.length &&
+      !window.confirm(
+        `Warning: unknown merge tag(s) detected: ${invalidTags.join(', ')}. They will render blank. Schedule anyway?`,
+      )
+    ) {
+      return;
+    }
+    const batches = chunkArray(selected, 25);
     setBusy(true);
     setError('');
     setMessage('');
+    let totalScheduled = 0;
+    let totalSuppressed = 0;
+    let lastAt = when.toISOString();
     try {
-      const data = await api('/email/schedule', {
-        method: 'POST',
-        body: {
-          leadIds: selected,
-          templateId: templateId || undefined,
-          subject,
-          htmlContent,
-          textContent,
-          syncToBrevo: true,
-          scheduledAt: when.toISOString(),
-          emailAccountId,
-        },
-      });
+      for (let i = 0; i < batches.length; i += 1) {
+        if (batches.length > 1) {
+          setBatchProgress(`Scheduling batch ${i + 1} of ${batches.length}…`);
+        }
+        // Space batches slightly (5 min apart) when scheduling >25 leads
+        const batchTime = new Date(when.getTime() + i * 5 * 60 * 1000);
+        const data = await api('/email/schedule', {
+          method: 'POST',
+          body: {
+            leadIds: batches[i],
+            templateId: templateId || undefined,
+            subject,
+            htmlContent,
+            textContent,
+            syncToBrevo: true,
+            scheduledAt: batchTime.toISOString(),
+            emailAccountId,
+          },
+        });
+        totalScheduled += Number(data.count || 0);
+        totalSuppressed += Number(data.skippedSuppressed || 0);
+        lastAt = data.scheduledAt || lastAt;
+      }
       setMessage(
-        `Scheduled ${data.count} email(s) for ${fmtDate(data.scheduledAt)} (sends automatically)`,
+        `Scheduled ${totalScheduled} email(s) across ${batches.length} batch(es) starting ${fmtDate(when.toISOString())}${
+          totalSuppressed ? ` · ${totalSuppressed} suppressed/skipped` : ''
+        }`,
       );
       setSelected([]);
       setShowSchedule(false);
@@ -249,6 +427,7 @@ export default function EmailPage() {
     } catch (e) {
       setError(e.message);
     } finally {
+      setBatchProgress('');
       setBusy(false);
     }
   };
@@ -305,7 +484,29 @@ export default function EmailPage() {
           </div>
 
           <div className="field">
-            <label className="label">Template</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label className="label" style={{ margin: 0 }}>Template</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setShowTemplateSave((v) => !v)}
+                >
+                  {showTemplateSave ? 'Close template editor' : templateId ? 'Edit / Save template' : 'Save as template'}
+                </button>
+                {templateId ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--danger, #dc2626)' }}
+                    disabled={tplBusy}
+                    onClick={deleteCurrentTemplate}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+            </div>
             <select
               className="select"
               value={templateId}
@@ -314,11 +515,71 @@ export default function EmailPage() {
               <option value="">Custom / pick template…</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.label}
+                  {t.label || t.name}
                 </option>
               ))}
             </select>
+            {showTemplateSave ? (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: '0.65rem',
+                  borderRadius: 8,
+                  background: 'var(--brand-soft)',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <input
+                  className="input"
+                  placeholder="Template name…"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  style={{ flex: '1 1 180px' }}
+                />
+                {templateId ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={tplBusy}
+                    onClick={() => saveTemplate(false)}
+                  >
+                    Update template
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={tplBusy}
+                  onClick={() => saveTemplate(true)}
+                >
+                  Save as new
+                </button>
+              </div>
+            ) : null}
           </div>
+
+          {invalidTags.length ? (
+            <div
+              style={{
+                marginBottom: '0.75rem',
+                padding: '0.65rem 0.75rem',
+                borderRadius: 8,
+                border: '1px solid #f59e0b',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#92400e',
+                fontSize: 13,
+              }}
+            >
+              <strong>Misspelled merge tag(s):</strong> {invalidTags.join(', ')}
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                Valid tags: <code>{'{{first_name}}'}</code>, <code>{'{{name}}'}</code>, <code>{'{{company}}'}</code>,{' '}
+                <code>{'{{country}}'}</code>, <code>{'{{email}}'}</code>, <code>{'{{sender_name}}'}</code>
+              </div>
+            </div>
+          ) : null}
 
           <div className="field">
             <label className="label">Subject</label>
@@ -344,6 +605,29 @@ export default function EmailPage() {
               onChange={(e) => setTextContent(e.target.value)}
             />
           </div>
+
+          {selected.length > 25 ? (
+            <div
+              style={{
+                marginBottom: '0.75rem',
+                padding: '0.6rem 0.75rem',
+                borderRadius: 8,
+                border: '1px solid #f59e0b',
+                background: 'rgba(245, 158, 11, 0.12)',
+                color: '#92400e',
+                fontSize: 13,
+              }}
+            >
+              <strong>{selected.length} leads selected</strong> — will be automatically processed in{' '}
+              <strong>{Math.ceil(selected.length / 25)} batches of 25</strong> (respecting inbox daily cap &amp; suppression list).
+            </div>
+          ) : null}
+
+          {batchProgress ? (
+            <div style={{ marginBottom: '0.75rem', fontSize: 13, fontWeight: 600, color: 'var(--brand)' }}>
+              {batchProgress}
+            </div>
+          ) : null}
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button" className="btn btn-secondary" disabled={busy} onClick={runPreview}>
@@ -404,8 +688,8 @@ export default function EmailPage() {
                 Confirm schedule ({selected.length})
               </button>
               <p className="stat-hint" style={{ margin: 0, flexBasis: '100%' }}>
-                CRM will send via Brevo automatically at that time (checked every ~30s). Max 25 leads per
-                schedule.
+                CRM sends via Brevo automatically at that time (checked every ~30s). Selections over 25 leads
+                are automatically split into batches of 25 spaced 5 minutes apart.
               </p>
             </div>
           ) : null}
@@ -431,11 +715,12 @@ export default function EmailPage() {
 
           <div style={{ display: 'flex', gap: 8, marginBottom: '0.75rem', flexWrap: 'wrap' }}>
             <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ flex: 1, minWidth: 120 }}>
-              <option value="">All statuses</option>
-              <option value="qualified">Qualified</option>
-              <option value="conversation">Conversation</option>
-              <option value="demo_booked">Demo booked</option>
-              <option value="trial">Trial</option>
+              <option value="">All CRM stages</option>
+              {COLD_EMAIL_STAGES.map((st) => (
+                <option key={st.value} value={st.value}>
+                  {st.label}
+                </option>
+              ))}
             </select>
             <select className="select" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ flex: 1, minWidth: 120 }}>
               <option value="">All sources</option>
@@ -443,7 +728,11 @@ export default function EmailPage() {
               <option value="free_credit_no_purchase">Free credit</option>
               <option value="purchased_no_repurchase">Win-back</option>
               <option value="csv_import">CSV / Meta</option>
+              <option value="linkedin">LinkedIn</option>
+              <option value="facebook">Facebook</option>
+              <option value="instagram">Instagram</option>
               <option value="telesales">BD</option>
+              <option value="manual">Manual</option>
             </select>
             <select
               className="select"

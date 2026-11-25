@@ -259,7 +259,14 @@ export default function EmailPerformancePage() {
 
       {error ? <div className="login-error">{error}</div> : null}
 
-      <div className="grid grid-4" style={{ marginBottom: '1rem' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: 12,
+          marginBottom: '1rem',
+        }}
+      >
         <StatCard
           label="Sent"
           value={stats.sent}
@@ -269,7 +276,7 @@ export default function EmailPerformancePage() {
         <StatCard
           label="Delivered"
           value={stats.delivered}
-          hint={stats.sent ? `${stats.deliveryRate}%` : null}
+          hint={stats.sent ? `${stats.deliveryRate}% (excl. bounced)` : null}
           onClick={() => openMetric('email_delivered', 'Emails delivered')}
         />
         <StatCard
@@ -279,10 +286,24 @@ export default function EmailPerformancePage() {
           onClick={() => openMetric('email_opens', 'Email opens')}
         />
         <StatCard
+          label="Link Clicks"
+          value={stats.clicked ?? 0}
+          hint={stats.sent ? `${stats.clickRate ?? 0}% click rate` : null}
+        />
+        <StatCard
           label="Replies"
           value={stats.replies}
-          hint={stats.sent ? `${stats.replyRate}%` : null}
+          hint={stats.sent ? `${stats.replyRate}% (unique)` : null}
           onClick={() => openMetric('email_replies', 'Replies')}
+        />
+        <StatCard
+          label="Hard Bounces"
+          value={stats.bounced ?? 0}
+          hint={
+            stats.sent
+              ? `${stats.bounceRate ?? 0}%${stats.deferred ? ` · ${stats.deferred} delayed` : ''}`
+              : null
+          }
         />
       </div>
 
@@ -300,7 +321,9 @@ export default function EmailPerformancePage() {
                   <th>Date</th>
                   <th>Sent</th>
                   <th>Opened</th>
+                  <th>Link Clicks</th>
                   <th>Replies</th>
+                  <th>Bounces</th>
                 </tr>
               </thead>
               <tbody>
@@ -314,7 +337,9 @@ export default function EmailPerformancePage() {
                     <td>{row.day}</td>
                     <td>{row.sent}</td>
                     <td>{row.opened}</td>
+                    <td>{row.clicked ?? 0}</td>
                     <td>{row.replies}</td>
+                    <td>{row.bounced ?? 0}</td>
                   </tr>
                 ))}
               </tbody>
@@ -337,7 +362,9 @@ export default function EmailPerformancePage() {
                   <th>BD</th>
                   <th>Sent</th>
                   <th>Opened</th>
+                  <th>Link Clicks</th>
                   <th>Replies</th>
+                  <th>Bounces</th>
                 </tr>
               </thead>
               <tbody>
@@ -350,7 +377,9 @@ export default function EmailPerformancePage() {
                     <td>{t.name}</td>
                     <td>{t.sent}</td>
                     <td>{t.opened}</td>
+                    <td>{t.clicked ?? 0}</td>
                     <td>{t.replies}</td>
+                    <td>{t.bounced ?? 0}</td>
                   </tr>
                 ))}
               </tbody>

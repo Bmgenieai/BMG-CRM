@@ -115,8 +115,9 @@ export default function EmailRepliesPage() {
           load();
         }
       }
-    } catch {
+    } catch (e) {
       setSelected(row);
+      setSendError(e?.message || 'Could not load full thread details');
     }
   };
 
@@ -206,7 +207,7 @@ export default function EmailRepliesPage() {
     }
   };
 
-  if (error) return <div className="card">{error}</div>;
+  if (!rows && error) return <div className="card">{error}</div>;
   if (!rows) return <div className="card">Loading email replies…</div>;
 
   const original = selected?.originalMessage || null;
@@ -223,6 +224,17 @@ export default function EmailRepliesPage() {
   return (
     <div>
       <h1 className="page-title">Email replies</h1>
+      {error ? (
+        <div
+          className="login-error"
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}
+        >
+          <span>{error}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setError('')}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <p className="page-sub" style={{ marginTop: 0 }}>
         Campaign prospect replies are separate from Instantly warm-up send/receive noise. Default view
         is <strong>Campaign replies</strong>.

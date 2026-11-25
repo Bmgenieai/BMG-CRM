@@ -10,6 +10,8 @@ const emptyForm = {
   verified: false,
   is_active: true,
   is_default: false,
+  daily_limit: '50',
+  min_delay_seconds: '60',
   imap_enabled: false,
   imap_host: '',
   imap_port: '993',
@@ -25,6 +27,16 @@ export default function EmailAccountsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Global suppression list state
+  const [suppressions, setSuppressions] = useState([]);
+  const [suppCounts, setSuppCounts] = useState([]);
+  const [suppFilter, setSuppFilter] = useState('');
+  const [suppQuery, setSuppQuery] = useState('');
+  const [newSuppEmail, setNewSuppEmail] = useState('');
+  const [newSuppReason, setNewSuppReason] = useState('manual');
+  const [newSuppNotes, setNewSuppNotes] = useState('');
+  const [suppBusy, setSuppBusy] = useState(false);
+
   if (!can('email:manage_accounts')) return <Navigate to="/" replace />;
 
   const load = () =>
@@ -32,8 +44,22 @@ export default function EmailAccountsPage() {
       .then((d) => setAccounts(d.accounts || []))
       .catch((e) => setError(e.message));
 
+  const loadSuppressions = (reason = suppFilter, q = suppQuery) => {
+    const p = new URLSearchParams();
+    if (reason) p.set('reason', reason);
+    if (q) p.set('q', q);
+    return api(`/email/suppressions?${p.toString()}`)
+      .then((d) => {
+        setSuppressions(d.rows || []);
+        setSuppCounts(d.counts || []);
+      })
+      .catch(() => {});
+  };
+
   useEffect(() => {
     load();
+    loadSuppressions('', '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startEdit = (a) => {
@@ -45,6 +71,8 @@ export default function EmailAccountsPage() {
       verified: Boolean(a.verified),
       is_active: Boolean(a.is_active),
       is_default: Boolean(a.is_default),
+      daily_limit: String(a.daily_limit ?? 50),
+      min_delay_seconds: String(a.min_delay_seconds ?? 60),
       imap_enabled: Boolean(a.imap_enabled),
       imap_host: a.imap_host || '',
       imap_port: a.imap_port != null ? String(a.imap_port) : '993',
@@ -71,6 +99,8 @@ export default function EmailAccountsPage() {
         verified: form.verified,
         is_active: form.is_active,
         is_default: form.is_default,
+        daily_limit: Number(form.daily_limit) || 50,
+        min_delay_seconds: Math.max(0, Number(form.min_delay_seconds) || 0),
         imap_enabled: form.imap_enabled,
         imap_host: form.imap_host || null,
         imap_port: form.imap_port ? Number(form.imap_port) : null,
@@ -159,6 +189,30 @@ export default function EmailAccountsPage() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
               />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="field">
+                <label className="label">Daily send cap (emails/day)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  max={5000}
+                  value={form.daily_limit}
+                  onChange={(e) => setForm({ ...form, daily_limit: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label className="label">Min spacing (seconds)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  max={3600}
+                  value={form.min_delay_seconds}
+                  onChange={(e) => setForm({ ...form, min_delay_seconds: e.target.value })}
+                />
+              </div>
             </div>
             <div className="field" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -262,12 +316,17 @@ export default function EmailAccountsPage() {
                   <tr>
                     <th>Label</th>
                     <th>From</th>
+                    <th>Daily Cap</th>
                     <th>Status</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {accounts.map((a) => (
+                  {accounts.map((a) => {
+                    const sentToday = Number(a.sent_today || 0);
+                    const cap = Number(a.daily_limit || 50);
+                    const atCap = sentToday >= cap;
+                    return (
                     <tr key={a.id}>
                       <td>
                         {a.label}
@@ -275,6 +334,14 @@ export default function EmailAccountsPage() {
                       </td>
                       <td>
                         {a.name} &lt;{a.email}&gt;
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <span style={{ fontWeight: 600, color: atCap ? 'var(--danger, #dc2626)' : undefined }}>
+                          {sentToday} / {cap}
+                        </span>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {a.min_delay_seconds ?? 60}s spacing
+                        </div>
                       </td>
                       <td>
                         {a.is_active ? 'Active' : 'Off'}
@@ -305,12 +372,166 @@ export default function EmailAccountsPage() {
                         ) : null}
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
+      </div>
+
+      {/* Global Suppression List (Hard bounces, spam complaints, unsubscribes, manual) */}
+      <div className="card" style={{ marginTop: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Global Suppression List</h3>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              Hard bounces, spam complaints, and unsubscribes are automatically added here and blocked from all future cold emails.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
+            {['hard_bounce', 'spam', 'unsubscribed', 'manual'].map((r) => {
+              const cnt = suppCounts.find((c) => c.reason === r)?.count || 0;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  className={`btn btn-sm ${suppFilter === r ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => {
+                    const next = suppFilter === r ? '' : r;
+                    setSuppFilter(next);
+                    loadSuppressions(next, suppQuery);
+                  }}
+                >
+                  {r.replace('_', ' ')} ({cnt})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!newSuppEmail.trim()) return;
+            setSuppBusy(true);
+            setError('');
+            try {
+              await api('/email/suppressions', {
+                method: 'POST',
+                body: { email: newSuppEmail.trim(), reason: newSuppReason, notes: newSuppNotes.trim() || null },
+              });
+              setNewSuppEmail('');
+              setNewSuppNotes('');
+              await loadSuppressions(suppFilter, suppQuery);
+            } catch (err) {
+              setError(err.message);
+            } finally {
+              setSuppBusy(false);
+            }
+          }}
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, marginBottom: 12 }}
+        >
+          <input
+            className="input"
+            type="email"
+            placeholder="Block email address…"
+            value={newSuppEmail}
+            onChange={(e) => setNewSuppEmail(e.target.value)}
+            style={{ minWidth: 220, flex: '1 1 220px' }}
+          />
+          <select
+            className="select"
+            value={newSuppReason}
+            onChange={(e) => setNewSuppReason(e.target.value)}
+            style={{ width: 160 }}
+          >
+            <option value="manual">Manual block</option>
+            <option value="unsubscribed">Unsubscribed</option>
+            <option value="hard_bounce">Hard bounce</option>
+            <option value="spam">Spam complaint</option>
+          </select>
+          <input
+            className="input"
+            placeholder="Optional note"
+            value={newSuppNotes}
+            onChange={(e) => setNewSuppNotes(e.target.value)}
+            style={{ minWidth: 160, flex: '1 1 160px' }}
+          />
+          <button type="submit" className="btn btn-primary" disabled={suppBusy || !newSuppEmail.trim()}>
+            Add to suppression list
+          </button>
+        </form>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <input
+            className="input"
+            placeholder="Search suppressed emails…"
+            value={suppQuery}
+            onChange={(e) => setSuppQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') loadSuppressions(suppFilter, suppQuery);
+            }}
+            style={{ maxWidth: 300 }}
+          />
+          <button type="button" className="btn btn-secondary" onClick={() => loadSuppressions(suppFilter, suppQuery)}>
+            Search
+          </button>
+        </div>
+
+        {!suppressions.length ? (
+          <p className="empty">No suppressed addresses match this filter.</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Reason</th>
+                  <th>Source</th>
+                  <th>Notes</th>
+                  <th>Added</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {suppressions.map((s) => (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: 500 }}>{s.email}</td>
+                    <td>{String(s.reason || '').replace('_', ' ')}</td>
+                    <td>{s.source || '—'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s.notes || '—'}</td>
+                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                      {s.updated_at ? new Date(s.updated_at).toLocaleDateString() : '—'}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={suppBusy}
+                        onClick={async () => {
+                          if (!window.confirm(`Remove ${s.email} from the suppression list?`)) return;
+                          setSuppBusy(true);
+                          try {
+                            await api(`/email/suppressions/${encodeURIComponent(s.id)}`, { method: 'DELETE' });
+                            await loadSuppressions(suppFilter, suppQuery);
+                          } catch (err) {
+                            setError(err.message);
+                          } finally {
+                            setSuppBusy(false);
+                          }
+                        }}
+                      >
+                        Unblock
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
