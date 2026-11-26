@@ -19,6 +19,7 @@ import DemosPage from './pages/DemosPage.jsx';
 import CallBookingsPage from './pages/CallBookingsPage.jsx';
 import ChatsPage from './pages/ChatsPage.jsx';
 import FromBmgeniePage from './pages/FromBmgeniePage.jsx';
+import ColdCallsPage from './pages/ColdCallsPage.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -44,13 +45,15 @@ function ChatSupportGate({ children }) {
   return children;
 }
 
-/** Caller accounts only use Leads + Caller Working (own stats). */
+/** Caller accounts use Leads, Calling Work Session (BD / SDR / Cold Calls), and Caller Working. */
 function CallerGate({ children }) {
   const { user } = useAuth();
   const location = useLocation();
   if (user?.role === 'caller') {
     const ok =
-      location.pathname.startsWith('/leads') || location.pathname.startsWith('/caller-working');
+      location.pathname.startsWith('/leads') ||
+      location.pathname.startsWith('/calling-session') ||
+      location.pathname.startsWith('/caller-working');
     if (!ok) return <Navigate to="/leads" replace />;
   }
   return children;
@@ -74,6 +77,9 @@ function ProtectedLayout() {
             <Route path="/leads" element={<LeadsPage />} />
             <Route path="/leads/:filter" element={<LeadsPage />} />
             <Route path="/leads/:id" element={<LeadDetailPage />} />
+            <Route path="/calling-session/bd" element={<LeadsPage sessionMode="bd" />} />
+            <Route path="/calling-session/sdr" element={<LeadsPage sessionMode="sdr" />} />
+            <Route path="/calling-session/cold-calls" element={<ColdCallsPage />} />
             <Route path="/from-bmgenie" element={<FromBmgeniePage />} />
             <Route path="/follow-ups" element={<FollowUpsPage />} />
             <Route path="/email" element={<EmailPage />} />

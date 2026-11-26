@@ -17,7 +17,11 @@ import {
   PanelLeftClose,
   PanelLeft,
   List,
+  Menu,
   Sparkles,
+  Users,
+  UserCheck,
+  PhoneCall,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -33,8 +37,13 @@ const TOOL_LINKS = [
 
 const INBOUND_PATHS = new Set(['/demos', '/call-bookings', '/chats', '/email-replies']);
 const TOOL_PATHS = new Set(TOOL_LINKS.map((l) => l.to));
+const CALLING_SESSION_PATHS = new Set([
+  '/calling-session/bd',
+  '/calling-session/sdr',
+  '/calling-session/cold-calls',
+]);
 
-function NavSection({ label, open, onToggle, children, forceOpen = false }) {
+function NavSection({ label, open, onToggle, children, forceOpen = false, icon: Icon = null }) {
   const showBody = open || forceOpen;
   return (
     <div className="nav-section">
@@ -44,6 +53,7 @@ function NavSection({ label, open, onToggle, children, forceOpen = false }) {
         aria-expanded={showBody}
         onClick={onToggle}
       >
+        {Icon ? <Icon size={15} /> : null}
         {showBody ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span>{label}</span>
       </button>
@@ -57,6 +67,7 @@ export default function AppLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [counts, setCounts] = useState(null);
+  const [callingSessionOpen, setCallingSessionOpen] = useState(false);
   const [inboundOpen, setInboundOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -83,8 +94,13 @@ export default function AppLayout({ children }) {
     });
   };
 
+  const callingSessionPathOpen = CALLING_SESSION_PATHS.has(location.pathname);
   const inboundPathOpen = INBOUND_PATHS.has(location.pathname);
   const toolsPathOpen = TOOL_PATHS.has(location.pathname);
+
+  useEffect(() => {
+    if (callingSessionPathOpen) setCallingSessionOpen(true);
+  }, [callingSessionPathOpen]);
 
   useEffect(() => {
     if (inboundPathOpen) setInboundOpen(true);
@@ -220,7 +236,7 @@ export default function AppLayout({ children }) {
 
           {isCaller ? (
             <>
-              <div className="nav-section-label">Calling</div>
+              <div className="nav-section-label">Leads</div>
               <NavLink
                 to="/leads"
                 title="Leads"
@@ -230,6 +246,41 @@ export default function AppLayout({ children }) {
                 <span className="nav-label" style={{ flex: 1 }}>Leads</span>
                 {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
               </NavLink>
+              <NavSection
+                label="Calling Work Session"
+                icon={Menu}
+                open={callingSessionOpen}
+                onToggle={() => setCallingSessionOpen((o) => !o)}
+                forceOpen={sidebarCollapsed}
+              >
+                <NavLink
+                  to="/calling-session/bd"
+                  title="BD Leads"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <Users size={16} />
+                  <span className="nav-label" style={{ flex: 1 }}>BD</span>
+                  {counts?.bdGenerated != null ? <span className="nav-count">{counts.bdGenerated}</span> : null}
+                </NavLink>
+                <NavLink
+                  to="/calling-session/sdr"
+                  title="SDR Leads"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <UserCheck size={16} />
+                  <span className="nav-label" style={{ flex: 1 }}>SDR</span>
+                  {counts?.sdrGenerated != null ? <span className="nav-count">{counts.sdrGenerated}</span> : null}
+                </NavLink>
+                <NavLink
+                  to="/calling-session/cold-calls"
+                  title="Cold Calls"
+                  className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                >
+                  <PhoneCall size={16} />
+                  <span className="nav-label" style={{ flex: 1 }}>Cold Calls</span>
+                  {counts?.coldCalls != null ? <span className="nav-count">{counts.coldCalls}</span> : null}
+                </NavLink>
+              </NavSection>
               <NavLink
                 to="/caller-working"
                 title="Caller Working"
@@ -271,6 +322,43 @@ export default function AppLayout({ children }) {
                 <span className="nav-label" style={{ flex: 1 }}>Leads</span>
                 {counts?.total != null ? <span className="nav-count">{counts.total}</span> : null}
               </NavLink>
+              {(can('analytics:view_team') || can('analytics:view_all')) && (
+                <NavSection
+                  label="Calling Work Session"
+                  icon={Menu}
+                  open={callingSessionOpen}
+                  onToggle={() => setCallingSessionOpen((o) => !o)}
+                  forceOpen={sidebarCollapsed}
+                >
+                  <NavLink
+                    to="/calling-session/bd"
+                    title="BD Leads"
+                    className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                  >
+                    <Users size={16} />
+                    <span className="nav-label" style={{ flex: 1 }}>BD</span>
+                    {counts?.bdGenerated != null ? <span className="nav-count">{counts.bdGenerated}</span> : null}
+                  </NavLink>
+                  <NavLink
+                    to="/calling-session/sdr"
+                    title="SDR Leads"
+                    className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                  >
+                    <UserCheck size={16} />
+                    <span className="nav-label" style={{ flex: 1 }}>SDR</span>
+                    {counts?.sdrGenerated != null ? <span className="nav-count">{counts.sdrGenerated}</span> : null}
+                  </NavLink>
+                  <NavLink
+                    to="/calling-session/cold-calls"
+                    title="Cold Calls"
+                    className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                  >
+                    <PhoneCall size={16} />
+                    <span className="nav-label" style={{ flex: 1 }}>Cold Calls</span>
+                    {counts?.coldCalls != null ? <span className="nav-count">{counts.coldCalls}</span> : null}
+                  </NavLink>
+                </NavSection>
+              )}
               {(can('analytics:view_own') ||
                 can('analytics:view_team') ||
                 can('analytics:view_all')) && (
