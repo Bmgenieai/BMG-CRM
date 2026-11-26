@@ -133,6 +133,7 @@ export default function TelesalesWorkingPage() {
       dateFrom: hasCustomDates ? dateFrom : undefined,
       dateTo: hasCustomDates ? dateTo : undefined,
       userId: repId || userId || (!canViewTeam ? user?.id : undefined),
+      source: sourceFilter || undefined,
     });
   };
 
@@ -426,6 +427,7 @@ export default function TelesalesWorkingPage() {
           dateFrom={drilldown.dateFrom}
           dateTo={drilldown.dateTo}
           userId={drilldown.userId}
+          source={drilldown.source}
           onClose={() => setDrilldown(null)}
           onOpenLead={(id) => {
             setDrilldown(null);

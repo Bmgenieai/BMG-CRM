@@ -124,6 +124,9 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
   const [callCallbackAt, setCallCallbackAt] = useState('');
   const [callEmailRequested, setCallEmailRequested] = useState(false);
   const [callEmailRequestNotes, setCallEmailRequestNotes] = useState('');
+  const [callInterestedNotes, setCallInterestedNotes] = useState('');
+  const [editingHandoffNote, setEditingHandoffNote] = useState(false);
+  const [handoffDraft, setHandoffDraft] = useState('');
   const [callAutoStatus, setCallAutoStatus] = useState(true);
   const [callLogSuccess, setCallLogSuccess] = useState('');
   const [callOutcome, setCallOutcome] = useState('');
@@ -456,6 +459,8 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
     setError('');
     setCallLogSuccess('');
     try {
+      const isInterestedCall =
+        cfg.key === 'connected_interested' || cfg.key === 'demo_booked' || callEmailRequested;
       const body = {
         type: cfg.connected ? 'call_connected' : 'call_attempted',
         outcome: cfg.key,
@@ -464,6 +469,10 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
         status: callAutoStatus ? cfg.defaultStatus : undefined,
         email_details_requested: callEmailRequested ? 1 : 0,
         email_request_notes: callEmailRequested ? callEmailRequestNotes.trim() || notes || 'Requested details by email' : undefined,
+        interested_notes:
+          isInterestedCall && callInterestedNotes.trim()
+            ? callInterestedNotes.trim()
+            : undefined,
       };
       await api(`/leads/${leadId}/activities`, {
         method: 'POST',
@@ -473,6 +482,7 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
       setCallCallbackAt('');
       setCallEmailRequested(false);
       setCallEmailRequestNotes('');
+      setCallInterestedNotes('');
       setCallLogSuccess(`Logged: ${cfg.label}${callEmailRequested ? ' · Email details requested' : ''}`);
       await load();
       notifyChanged();
@@ -1599,6 +1609,85 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
                 </div>
               </section>
 
+              {(lead.interested_notes || editingHandoffNote) ? (
+                <section
+                  className="lead-drawer-section"
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.45)',
+                    borderRadius: 10,
+                    padding: '0.75rem 0.85rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <strong style={{ fontSize: '0.88rem', color: '#92400e' }}>
+                      SDR Interested Prospect Notes (Handoff for BD)
+                    </strong>
+                    {canEditLead && !editingHandoffNote ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          setHandoffDraft(lead.interested_notes || '');
+                          setEditingHandoffNote(true);
+                        }}
+                      >
+                        Edit note
+                      </button>
+                    ) : null}
+                  </div>
+                  {editingHandoffNote ? (
+                    <div>
+                      <textarea
+                        className="textarea"
+                        rows={4}
+                        value={handoffDraft}
+                        onChange={(e) => setHandoffDraft(e.target.value)}
+                        placeholder="What you already explained about BMGenie, what the prospect was interested in, and any questions or details they asked us to send…"
+                      />
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          disabled={busy}
+                          onClick={async () => {
+                            setBusy(true);
+                            setError('');
+                            try {
+                              await api(`/leads/${leadId}/interested-notes`, {
+                                method: 'PATCH',
+                                body: { interested_notes: handoffDraft },
+                              });
+                              setEditingHandoffNote(false);
+                              await load();
+                              notifyChanged();
+                              onUpdated?.();
+                            } catch (err) {
+                              setError(err.message);
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}
+                        >
+                          Save note
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setEditingHandoffNote(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', lineHeight: 1.45 }}>
+                      {lead.interested_notes}
+                    </div>
+                  )}
+                </section>
+              ) : null}
+
               {canEditLead ? (
                 <section className="lead-drawer-section">
                   <h3 className="lead-drawer-h3">
@@ -1676,6 +1765,22 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
                           type="datetime-local"
                           value={callCallbackAt}
                           onChange={(e) => setCallCallbackAt(e.target.value)}
+                        />
+                      </div>
+                    ) : null}
+                    {(callStatusKey === 'connected_interested' ||
+                      callStatusKey === 'demo_booked' ||
+                      callEmailRequested) ? (
+                      <div className="field" style={{ marginBottom: '0.65rem' }}>
+                        <label className="label">
+                          Interested Prospect Handoff Notes (for BD follow-up)
+                        </label>
+                        <textarea
+                          className="textarea"
+                          rows={3}
+                          placeholder="What you already explained about BMGenie, what the prospect was interested in, and any questions or details they asked us to send…"
+                          value={callInterestedNotes}
+                          onChange={(e) => setCallInterestedNotes(e.target.value)}
                         />
                       </div>
                     ) : null}

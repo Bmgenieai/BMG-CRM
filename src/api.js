@@ -81,6 +81,14 @@ export async function api(path, options = {}) {
   }
 
   if (!res.ok) {
+    if (res.status === 401 && !String(path).startsWith('/auth/login')) {
+      clearToken();
+      try {
+        window.dispatchEvent(new CustomEvent('crm:session-expired'));
+      } catch {
+        /* ignore */
+      }
+    }
     const err = new Error(data?.error || `Request failed (${res.status})`);
     err.status = res.status;
     err.data = data;

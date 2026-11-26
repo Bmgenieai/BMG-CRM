@@ -16,6 +16,7 @@ export default function DrilldownModal({
   businessType,
   state,
   reason,
+  source,
   onClose,
   onOpenLead,
 }) {
@@ -44,6 +45,7 @@ export default function DrilldownModal({
     if (businessType) params.set('businessType', businessType);
     if (state) params.set('state', state);
     if (reason) params.set('reason', reason);
+    if (source) params.set('source', source);
 
     api(`/analytics/drilldown?${params}`)
       .then((res) => {
@@ -66,6 +68,7 @@ export default function DrilldownModal({
     businessType,
     state,
     reason,
+    source,
   ]);
 
   const items = data?.items || [];

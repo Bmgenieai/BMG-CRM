@@ -42,8 +42,11 @@ export default function ChatsPage() {
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
   const prevWaitingRef = useRef(null);
   const openIdHandled = useRef(null);
+  const qRef = useRef(q);
+  qRef.current = q;
 
   const setCohort = (next) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -61,9 +64,10 @@ export default function ChatsPage() {
     setSearchParams(nextParams, { replace: true });
   };
 
-  const load = () => {
+  const load = (overrideQ = undefined) => {
+    const activeQ = overrideQ !== undefined ? overrideQ : qRef.current;
     const params = new URLSearchParams();
-    if (q) params.set('q', q);
+    if (activeQ) params.set('q', activeQ);
     if (status) params.set('status', status);
     if (assignee) params.set('assignee', assignee);
     if (cohort && cohort !== 'all') params.set('cohort', cohort);
@@ -187,6 +191,36 @@ export default function ChatsPage() {
       setNotice(e.message || 'Could not release chat');
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const closeChatThread = async (chatId) => {
+    setActionBusy(true);
+    setNotice('');
+    try {
+      const updated = await api(`/chats/${chatId}/close`, { method: 'POST', body: {} });
+      setSelected(updated);
+      setNotice('Chat closed.');
+      load();
+    } catch (e) {
+      setNotice(e.message || 'Could not close chat');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handBackToAi = async (chatId) => {
+    setActionBusy(true);
+    setNotice('');
+    try {
+      const updated = await api(`/chats/${chatId}/hand-back-ai`, { method: 'POST', body: {} });
+      setSelected(updated);
+      setNotice('Chat handed back to AI assistant.');
+      load();
+    } catch (e) {
+      setNotice(e.message || 'Could not hand chat back to AI');
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -423,11 +457,35 @@ export default function ChatsPage() {
             onClick={(e) => e.stopPropagation()}
             role="dialog"
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <h3 style={{ margin: 0 }}>{selected.visitor_name || selected.lead_name || 'Chat'}</h3>
-              <button type="button" className="btn btn-ghost" onClick={() => setSelected(null)}>
-                Close
-              </button>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {selected.mode !== 'ai' || selected.assignedTo ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={actionBusy}
+                    onClick={() => handBackToAi(selected.id)}
+                    title="Return this conversation to the AI assistant"
+                  >
+                    Hand Back to AI
+                  </button>
+                ) : null}
+                {selected.status !== 'closed' ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={actionBusy}
+                    onClick={() => closeChatThread(selected.id)}
+                    style={{ color: 'var(--danger, #dc2626)' }}
+                  >
+                    Close Chat
+                  </button>
+                ) : null}
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>
+                  Dismiss
+                </button>
+              </div>
             </div>
             <p className="stat-hint">
               {selected.visitor_email || 'No email'}

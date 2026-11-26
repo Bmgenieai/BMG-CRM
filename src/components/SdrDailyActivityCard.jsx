@@ -52,6 +52,27 @@ export default function SdrDailyActivityCard({ onOpenLead, refreshTick = 0 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('calls');
+  const [editingLeadId, setEditingLeadId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+
+  const saveInterestedNote = async (leadId) => {
+    setSavingNote(true);
+    setError('');
+    try {
+      await api(`/leads/${leadId}/interested-notes`, {
+        method: 'PATCH',
+        body: { interested_notes: noteDraft },
+      });
+      setEditingLeadId(null);
+      setNoteDraft('');
+      load(date, sdrId);
+    } catch (e) {
+      setError(e.message || 'Failed to save note');
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   const load = (targetDate = date, targetSdrId = sdrId) => {
     setLoading(true);
@@ -197,7 +218,21 @@ export default function SdrDailyActivityCard({ onOpenLead, refreshTick = 0 }) {
         </div>
       </div>
 
-      {error ? <div className="login-error">{error}</div> : null}
+      {error ? (
+        <div
+          className="login-error"
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => load(date, sdrId)}
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       {!data?.sdr && !loading ? (
         <p className="empty">No active SDR / Caller account found.</p>
@@ -283,7 +318,11 @@ export default function SdrDailyActivityCard({ onOpenLead, refreshTick = 0 }) {
                     <th>Type</th>
                     <th>Company</th>
                     <th>Outcome / Stage</th>
-                    <th>Notes &amp; Email Request</th>
+                    <th>
+                      {activeTab === 'interested'
+                        ? 'SDR Handoff Notes (for BD)'
+                        : 'Notes & Email Request'}
+                    </th>
                     <th>Email Status</th>
                     <th>Time</th>
                   </tr>
@@ -336,8 +375,23 @@ export default function SdrDailyActivityCard({ onOpenLead, refreshTick = 0 }) {
                           '—'
                         )}
                       </td>
-                      <td style={{ maxWidth: 320, fontSize: 12 }}>
-                        {row.notes ? <div>{row.notes}</div> : null}
+                      <td style={{ maxWidth: 360, fontSize: 12 }}>
+                        {row.interested_notes ? (
+                          <div
+                            style={{
+                              padding: '5px 8px',
+                              borderRadius: 6,
+                              background: 'rgba(245, 158, 11, 0.1)',
+                              border: '1px solid rgba(245, 158, 11, 0.35)',
+                              marginBottom: 4,
+                              whiteSpace: 'pre-wrap',
+                            }}
+                          >
+                            <strong style={{ color: '#92400e', fontSize: 11 }}>SDR Handoff Note:</strong>
+                            <div style={{ marginTop: 2 }}>{row.interested_notes}</div>
+                          </div>
+                        ) : null}
+                        {row.notes && row.notes !== row.interested_notes ? <div>{row.notes}</div> : null}
                         {row.email_details_requested &&
                         row.email_request_notes &&
                         row.email_request_notes !== row.notes ? (
@@ -345,7 +399,54 @@ export default function SdrDailyActivityCard({ onOpenLead, refreshTick = 0 }) {
                             Requested: {row.email_request_notes}
                           </div>
                         ) : null}
-                        {!row.notes && !row.email_request_notes ? '—' : null}
+                        {row.lead_id &&
+                        (activeTab === 'interested' ||
+                          activeTab === 'pendingEmails' ||
+                          activeTab === 'sentEmails') ? (
+                          editingLeadId === row.lead_id ? (
+                            <div style={{ marginTop: 6 }}>
+                              <textarea
+                                className="textarea"
+                                rows={3}
+                                style={{ fontSize: 12 }}
+                                value={noteDraft}
+                                onChange={(e) => setNoteDraft(e.target.value)}
+                                placeholder="What you already explained about BMGenie, what the prospect was interested in, and any questions or details to send…"
+                              />
+                              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  disabled={savingNote}
+                                  onClick={() => saveInterestedNote(row.lead_id)}
+                                >
+                                  {savingNote ? 'Saving…' : 'Save note'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => setEditingLeadId(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: '2px 6px', fontSize: 11, marginTop: 4 }}
+                              onClick={() => {
+                                setEditingLeadId(row.lead_id);
+                                setNoteDraft(row.interested_notes || row.notes || '');
+                              }}
+                            >
+                              {row.interested_notes ? 'Edit handoff note' : '+ Add handoff note'}
+                            </button>
+                          )
+                        ) : !row.interested_notes && !row.notes && !row.email_request_notes ? (
+                          '—'
+                        ) : null}
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {row.email_status === 'pending' ? (

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 
 export default function LoginPage() {
   const { user, login, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('expired') === '1';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -44,6 +46,21 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {sessionExpired && !error ? (
+          <div
+            style={{
+              marginBottom: '0.85rem',
+              padding: '0.65rem 0.75rem',
+              borderRadius: 8,
+              border: '1px solid #f59e0b',
+              background: 'rgba(245, 158, 11, 0.12)',
+              color: '#92400e',
+              fontSize: 13,
+            }}
+          >
+            Your login session expired. Please sign in again.
+          </div>
+        ) : null}
         {error ? <div className="login-error">{error}</div> : null}
 
         <form onSubmit={onSubmit}>

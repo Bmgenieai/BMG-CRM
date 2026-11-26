@@ -32,6 +32,20 @@ export function AuthProvider({ children }) {
     refresh();
   }, []);
 
+  useEffect(() => {
+    const onExpired = () => {
+      clearToken();
+      setUser(null);
+      setPermissions([]);
+      setLoading(false);
+      if (window.location.pathname !== '/login') {
+        window.location.replace('/login?expired=1');
+      }
+    };
+    window.addEventListener('crm:session-expired', onExpired);
+    return () => window.removeEventListener('crm:session-expired', onExpired);
+  }, []);
+
   const login = async (email, password) => {
     const data = await api('/auth/login', {
       method: 'POST',

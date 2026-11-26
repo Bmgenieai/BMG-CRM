@@ -434,6 +434,27 @@ export default function AppLayout({ children }) {
                   <Inbox size={16} />
                   <span className="nav-label">Email replies</span>
                 </NavLink>
+                {can('chats:view') ? (
+                  <NavLink
+                    to="/chats"
+                    title="Support Chats"
+                    className={({ isActive }) => `nav-link nav-link-sub${isActive ? ' active' : ''}`}
+                  >
+                    <MessageCircle size={16} />
+                    <span className="nav-label" style={{ flex: 1 }}>Support Chats</span>
+                    {Number(counts?.chatsWaitingHuman || 0) > 0 ? (
+                      <span
+                        className="nav-count"
+                        title="Visitors waiting for a human"
+                        style={{ background: '#dc2626', color: '#fff' }}
+                      >
+                        {counts.chatsWaitingHuman}
+                      </span>
+                    ) : counts?.chatsOpen != null ? (
+                      <span className="nav-count">{counts.chatsOpen}</span>
+                    ) : null}
+                  </NavLink>
+                ) : null}
               </NavSection>
 
               <NavSection

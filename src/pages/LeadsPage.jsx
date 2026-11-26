@@ -162,6 +162,9 @@ export default function LeadsPage({ refreshSidebarCounts, sessionMode = null }) 
   const [dateAddedTo, setDateAddedTo] = useState('');
   const [followUpDue, setFollowUpDue] = useState(followUpDueParam);
   const [hasPhoneOnly, setHasPhoneOnly] = useState(false);
+  const [quickFilter, setQuickFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [selected, setSelected] = useState(() => new Set());
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkFuDate, setBulkFuDate] = useState('');
@@ -280,9 +283,10 @@ export default function LeadsPage({ refreshSidebarCounts, sessionMode = null }) 
     setStatus(preset.status || '');
   }, [filter]);
 
-  const load = () => {
+  const load = (overrideQ = undefined) => {
+    const activeQ = overrideQ !== undefined ? overrideQ : q;
     const params = new URLSearchParams();
-    if (q) params.set('q', q);
+    if (activeQ) params.set('q', activeQ);
     if (source) params.set('source', source);
     if (status) params.set('status', status);
     if (businessType) params.set('business_type', businessType);
@@ -293,15 +297,79 @@ export default function LeadsPage({ refreshSidebarCounts, sessionMode = null }) 
     if (dateAddedTo) params.set('dateAddedTo', dateAddedTo);
     if (followUpDue) params.set('followUpDue', followUpDue);
     if (hasPhoneOnly) params.set('hasPhone', '1');
+    if (quickFilter) params.set('quickFilter', quickFilter);
     if (sessionMode === 'bd') params.set('generatedBy', 'bd');
     if (sessionMode === 'sdr') params.set('generatedBy', 'sdr');
     api(`/leads?${params}`)
       .then((rows) => {
         setLeads(rows);
+        setPage(1);
         setSelected(new Set());
       })
       .catch((e) => setError(e.message));
     refreshSidebarCounts?.();
+  };
+
+  const exportCsvAll = () => {
+    if (!leads.length) return;
+    const esc = (v) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = [
+      'Name',
+      'Company',
+      'Email',
+      'Phone',
+      'Status',
+      'Source',
+      'Business Type',
+      'State',
+      'Country',
+      'City',
+      'Owner',
+      'Added By',
+      'Email Opens',
+      'Email Replies',
+      'Last Emailed',
+      'Next Follow-up',
+      'Date Added',
+    ];
+    const lines = [headers.map(esc).join(',')];
+    for (const l of leads) {
+      lines.push(
+        [
+          l.name,
+          l.company,
+          l.email,
+          l.phone,
+          l.status,
+          l.source,
+          l.business_type,
+          l.state,
+          l.country,
+          l.city,
+          l.assigned_name,
+          l.created_by_name,
+          l.email_open_count ?? 0,
+          l.email_reply_count ?? 0,
+          l.last_emailed_at || '',
+          l.next_follow_up_at || '',
+          l.date_added_effective || l.date_added || l.created_at || '',
+        ]
+          .map(esc)
+          .join(','),
+      );
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `leads_export_${new Date().toISOString().slice(0, 10)}_${leads.length}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -326,8 +394,16 @@ export default function LeadsPage({ refreshSidebarCounts, sessionMode = null }) 
     dateAddedTo,
     followUpDue,
     hasPhoneOnly,
+    quickFilter,
     sessionMode,
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(leads.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedLeads = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return leads.slice(start, start + pageSize);
+  }, [leads, safePage, pageSize]);
 
   const allSelected = leads.length > 0 && selected.size === leads.length;
   const toggleAll = () => {
@@ -449,14 +525,45 @@ export default function LeadsPage({ refreshSidebarCounts, sessionMode = null }) 
 
       <div className="leads-toolbar card">
         <div className="leads-toolbar-row leads-toolbar-primary">
-          <input
-            className="input leads-toolbar-search"
-            placeholder="Search name, email, company, industry, state…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && load()}
-          />
+          <div style={{ display: 'flex', gap: 6, flex: 1, minWidth: 240, alignItems: 'center' }}>
+            <input
+              className="input leads-toolbar-search"
+              style={{ flex: 1 }}
+              placeholder="Search name, email, company, industry, state…"
+              value={q}
+              onChange={(e) => {
+                const val = e.target.value;
+                setQ(val);
+                if (val === '') load('');
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && load()}
+            />
+            <button type="button" className="btn btn-secondary" onClick={() => load()}>
+              Search
+            </button>
+            {q ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setQ('');
+                  load('');
+                }}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
           <div className="leads-toolbar-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!leads.length}
+              onClick={exportCsvAll}
+              title={`Export all ${leads.length} matching leads across all pages to CSV`}
+            >
+              Export CSV ({leads.length})
+            </button>
             {can('leads:import') ? (
               <button type="button" className="btn btn-secondary" onClick={() => setShowCsvImport(true)}>
                 CSV upload
@@ -468,6 +575,36 @@ export default function LeadsPage({ refreshSidebarCounts, sessionMode = null }) 
               </button>
             ) : null}
           </div>
+        </div>
+
+        {/* One-click daily BD quick filters */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+          <span className="stat-hint" style={{ fontSize: 12, marginRight: 4 }}>
+            Quick queues:
+          </span>
+          {[
+            { key: 'opened_no_reply', label: 'Opened with no reply yet' },
+            { key: 'hot_opens', label: 'Hot Opens (2+ opens)' },
+            { key: 'replied', label: 'Replied' },
+            { key: 'untouched_today', label: 'Untouched Today' },
+          ].map((item) => {
+            const active = quickFilter === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                className={`btn btn-sm ${active ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setQuickFilter(active ? '' : item.key)}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+          {quickFilter ? (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setQuickFilter('')}>
+              Clear queue
+            </button>
+          ) : null}
         </div>
 
         <div className="leads-toolbar-row leads-toolbar-filters">
@@ -649,7 +786,7 @@ export default function LeadsPage({ refreshSidebarCounts, sessionMode = null }) 
             </tr>
           </thead>
           <tbody>
-            {leads.map((l) => (
+            {pagedLeads.map((l) => (
               <tr
                 key={l.id}
                 className={`clickable-row${selectedId === l.id ? ' row-selected' : ''}`}
@@ -730,6 +867,64 @@ export default function LeadsPage({ refreshSidebarCounts, sessionMode = null }) 
           </tbody>
         </table>
       </div>
+
+      {leads.length > 0 ? (
+        <div
+          className="card"
+          style={{
+            marginTop: 10,
+            padding: '0.6rem 0.85rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 10,
+          }}
+        >
+          <div className="stat-hint" style={{ margin: 0 }}>
+            Showing <strong>{(safePage - 1) * pageSize + 1}</strong>–
+            <strong>{Math.min(safePage * pageSize, leads.length)}</strong> of{' '}
+            <strong>{leads.length}</strong> leads
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+              Per page:
+              <select
+                className="select"
+                style={{ width: 76, padding: '0.25rem 0.4rem' }}
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>
+              Page {safePage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {selectedId ? (
         <LeadPanel leadId={selectedId} onClose={closeLead} onChanged={load} />

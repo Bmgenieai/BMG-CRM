@@ -123,7 +123,10 @@ export default function DashboardPage() {
   const [dateTo, setDateTo] = useState('');
   const [funnel, setFunnel] = useState(null);
   const [bdWork, setBdWork] = useState(null);
-  const [error, setError] = useState('');
+  const [funnelLoading, setFunnelLoading] = useState(true);
+  const [bdWorkLoading, setBdWorkLoading] = useState(true);
+  const [funnelError, setFunnelError] = useState('');
+  const [bdWorkError, setBdWorkError] = useState('');
   const [drilldown, setDrilldown] = useState(null);
   const [activeLeadId, setActiveLeadId] = useState(null);
   const [sdrRefreshTick, setSdrRefreshTick] = useState(0);
@@ -145,21 +148,32 @@ export default function DashboardPage() {
     return p.toString();
   }, [hasCustomDates, dateFrom, dateTo, period]);
 
+  const loadFunnel = () => {
+    if (isChatSupport) return;
+    setFunnelLoading(true);
+    setFunnelError('');
+    api(`/analytics/funnel?${filterQuery}`)
+      .then((d) => setFunnel(d))
+      .catch((e) => setFunnelError(e.message || 'Failed to load pipeline overview'))
+      .finally(() => setFunnelLoading(false));
+  };
+
+  const loadBdWork = () => {
+    if (isChatSupport) return;
+    setBdWorkLoading(true);
+    setBdWorkError('');
+    api(`/analytics/telesales-working?${filterQuery}`)
+      .then((d) => setBdWork(d))
+      .catch((e) => setBdWorkError(e.message || 'Failed to load BD working summary'))
+      .finally(() => setBdWorkLoading(false));
+  };
+
   useEffect(() => {
     if (isChatSupport) return undefined;
-    setError('');
-    setFunnel(null);
-    setBdWork(null);
-    Promise.all([
-      api(`/analytics/funnel?${filterQuery}`),
-      api(`/analytics/telesales-working?${filterQuery}`).catch(() => null),
-    ])
-      .then(([funnelData, working]) => {
-        setFunnel(funnelData);
-        setBdWork(working);
-      })
-      .catch((e) => setError(e.message));
+    loadFunnel();
+    loadBdWork();
     return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterQuery, isChatSupport]);
 
   const reps = useMemo(() => {
@@ -219,11 +233,34 @@ export default function DashboardPage() {
       : (totals.emails || 0) + (totals.emailFollowups || 0);
   const workingLinkQs = filterQuery;
 
-  if (error) return <div className="card">{error}</div>;
-  if (!funnel || !bdWork) return <div className="card">Loading dashboard…</div>;
+  if (funnelLoading && bdWorkLoading && !funnel && !bdWork) {
+    return <div className="card">Loading dashboard…</div>;
+  }
 
   return (
     <div className="ceo-dashboard">
+      {funnelError ? (
+        <div
+          className="login-error"
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10 }}
+        >
+          <span>Pipeline overview failed to load: {funnelError}</span>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={loadFunnel}>
+            Retry
+          </button>
+        </div>
+      ) : null}
+      {bdWorkError ? (
+        <div
+          className="login-error"
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10 }}
+        >
+          <span>BD working stats failed to load: {bdWorkError}</span>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={loadBdWork}>
+            Retry
+          </button>
+        </div>
+      ) : null}
       <div className="ceo-dashboard-header">
         <div>
           <h1 className="page-title" style={{ margin: 0 }}>
