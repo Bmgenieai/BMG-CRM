@@ -122,6 +122,8 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
   const [callStatusKey, setCallStatusKey] = useState('no_answer');
   const [callTalkNotes, setCallTalkNotes] = useState('');
   const [callCallbackAt, setCallCallbackAt] = useState('');
+  const [callEmailRequested, setCallEmailRequested] = useState(false);
+  const [callEmailRequestNotes, setCallEmailRequestNotes] = useState('');
   const [callAutoStatus, setCallAutoStatus] = useState(true);
   const [callLogSuccess, setCallLogSuccess] = useState('');
   const [callOutcome, setCallOutcome] = useState('');
@@ -460,6 +462,8 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
         summary: notes || cfg.label,
         next_follow_up_at: callCallbackAt ? new Date(callCallbackAt).toISOString() : undefined,
         status: callAutoStatus ? cfg.defaultStatus : undefined,
+        email_details_requested: callEmailRequested ? 1 : 0,
+        email_request_notes: callEmailRequested ? callEmailRequestNotes.trim() || notes || 'Requested details by email' : undefined,
       };
       await api(`/leads/${leadId}/activities`, {
         method: 'POST',
@@ -467,7 +471,9 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
       });
       setCallTalkNotes('');
       setCallCallbackAt('');
-      setCallLogSuccess(`Logged: ${cfg.label}`);
+      setCallEmailRequested(false);
+      setCallEmailRequestNotes('');
+      setCallLogSuccess(`Logged: ${cfg.label}${callEmailRequested ? ' · Email details requested' : ''}`);
       await load();
       notifyChanged();
       onUpdated?.();
@@ -1670,6 +1676,35 @@ export default function LeadPanel({ leadId, onClose, onChanged, onUpdated }) {
                           type="datetime-local"
                           value={callCallbackAt}
                           onChange={(e) => setCallCallbackAt(e.target.value)}
+                        />
+                      </div>
+                    ) : null}
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: '0.82rem',
+                        marginBottom: callEmailRequested ? '0.45rem' : '0.6rem',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={callEmailRequested}
+                        onChange={(e) => setCallEmailRequested(e.target.checked)}
+                      />
+                      <span>Prospect asked for details by email</span>
+                    </label>
+                    {callEmailRequested ? (
+                      <div className="field" style={{ marginBottom: '0.65rem' }}>
+                        <label className="label">What details did they request?</label>
+                        <input
+                          className="input"
+                          placeholder="e.g. Pricing sheet, sample gallery, case studies…"
+                          value={callEmailRequestNotes}
+                          onChange={(e) => setCallEmailRequestNotes(e.target.value)}
                         />
                       </div>
                     ) : null}

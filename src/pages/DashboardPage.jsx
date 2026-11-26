@@ -4,6 +4,7 @@ import { api, downloadApiFile } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import DrilldownModal from '../components/DrilldownModal.jsx';
 import LeadPanel from '../components/LeadPanel.jsx';
+import SdrDailyActivityCard from '../components/SdrDailyActivityCard.jsx';
 import ChatSupportDashboard from './ChatSupportDashboard.jsx';
 
 const DASHBOARD_PERIODS = [
@@ -125,6 +126,7 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [drilldown, setDrilldown] = useState(null);
   const [activeLeadId, setActiveLeadId] = useState(null);
+  const [sdrRefreshTick, setSdrRefreshTick] = useState(0);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportMsg, setReportMsg] = useState('');
 
@@ -727,6 +729,11 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <SdrDailyActivityCard
+        onOpenLead={(id) => setActiveLeadId(id)}
+        refreshTick={sdrRefreshTick}
+      />
+
       {drilldown ? (
         <DrilldownModal
           title={drilldown.title}
@@ -746,7 +753,11 @@ export default function DashboardPage() {
       ) : null}
 
       {activeLeadId ? (
-        <LeadPanel leadId={activeLeadId} onClose={() => setActiveLeadId(null)} onChanged={() => {}} />
+        <LeadPanel
+          leadId={activeLeadId}
+          onClose={() => setActiveLeadId(null)}
+          onChanged={() => setSdrRefreshTick((t) => t + 1)}
+        />
       ) : null}
     </div>
   );
