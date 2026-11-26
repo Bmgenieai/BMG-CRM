@@ -130,7 +130,7 @@ export default function SdrDailyActivityCard({ onOpenLead, refreshTick = 0 }) {
       key: 'interested',
       label: 'Interested Prospects',
       value: counts.interested ?? 0,
-      hint: 'Interested / demo / email req',
+      hint: 'Includes SDR handoff notes',
     },
     {
       key: 'pendingEmails',
@@ -307,8 +307,6 @@ export default function SdrDailyActivityCard({ onOpenLead, refreshTick = 0 }) {
 
           {loading ? (
             <p className="empty">Loading daily activity…</p>
-          ) : !rows.length ? (
-            <p className="empty">No records under this category for {data?.date || date}.</p>
           ) : (
             <div className="table-wrap">
               <table>
@@ -328,6 +326,15 @@ export default function SdrDailyActivityCard({ onOpenLead, refreshTick = 0 }) {
                   </tr>
                 </thead>
                 <tbody>
+                  {!rows.length ? (
+                    <tr>
+                      <td colSpan={7} className="empty" style={{ padding: '1rem' }}>
+                        {activeTab === 'interested'
+                          ? `No interested prospects for ${data?.date || date} yet. When the SDR marks a prospect as Interested, their handoff notes (what was explained about BMGenie, interest, and requested details) will appear in the "SDR Handoff Notes (for BD)" column above.`
+                          : `No records under this category for ${data?.date || date}.`}
+                      </td>
+                    </tr>
+                  ) : null}
                   {rows.map((row, idx) => (
                     <tr key={row.id || row.lead_id || idx}>
                       <td>
