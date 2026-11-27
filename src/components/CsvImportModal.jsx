@@ -15,7 +15,7 @@ const IMPORT_SOURCES = [
   { key: 'facebook', label: 'Facebook' },
 ];
 
-export default function CsvImportModal({ onClose, onImported }) {
+export default function CsvImportModal({ onClose, onImported, campaignName, campaignStatus }) {
   const { user } = useAuth();
   const [file, setFile] = useState(null);
   const [dateAdded, setDateAdded] = useState(() => todayLocal());
@@ -23,6 +23,8 @@ export default function CsvImportModal({ onClose, onImported }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const isCampaignMode = Boolean(campaignName);
 
   const sourceLabel = useMemo(
     () => IMPORT_SOURCES.find((s) => s.key === source)?.label || 'BD',
@@ -50,7 +52,9 @@ export default function CsvImportModal({ onClose, onImported }) {
       if (!res.ok) throw new Error(data.error || 'Import failed');
       setResult(data);
       setFile(null);
-      onImported?.(data);
+      if (onImported) {
+        await onImported(data);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -66,23 +70,58 @@ export default function CsvImportModal({ onClose, onImported }) {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="CSV import"
+        aria-label={isCampaignMode ? 'Upload leads to campaign' : 'CSV import'}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
           <div>
-            <h3 style={{ marginBottom: 4 }}>Import leads from CSV</h3>
+            <h3 style={{ marginBottom: 4 }}>
+              {isCampaignMode ? 'Upload leads to campaign' : 'Import leads from CSV'}
+            </h3>
             <p className="page-sub" style={{ margin: 0 }}>
-              Export Google Sheet as CSV, then upload. Leads are tagged as{' '}
-              <strong>
-                {sourceLabel} · {user?.name || 'your name'}
-              </strong>
-              .
+              {isCampaignMode ? (
+                <>
+                  Upload a CSV to add leads directly to <strong>{campaignName}</strong>. Leads are
+                  tagged as{' '}
+                  <strong>
+                    {sourceLabel} · {user?.name || 'your name'}
+                  </strong>
+                  .
+                </>
+              ) : (
+                <>
+                  Export Google Sheet as CSV, then upload. Leads are tagged as{' '}
+                  <strong>
+                    {sourceLabel} · {user?.name || 'your name'}
+                  </strong>
+                  .
+                </>
+              )}
             </p>
           </div>
           <button type="button" className="btn btn-ghost" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
+
+        {isCampaignMode ? (
+          <div
+            style={{
+              marginTop: '0.75rem',
+              padding: '0.65rem 0.85rem',
+              borderRadius: 8,
+              background: campaignStatus === 'active' ? '#eff6ff' : '#f0fdf4',
+              border: `1px solid ${campaignStatus === 'active' ? '#bfdbfe' : '#bbf7d0'}`,
+              color: campaignStatus === 'active' ? '#1e40af' : '#166534',
+              fontSize: '0.86rem',
+            }}
+          >
+            {campaignStatus === 'active'
+              ? 'This campaign is active — uploaded leads with emails will be scheduled automatically.'
+              : campaignStatus === 'paused'
+                ? 'This campaign is paused — uploaded leads will be added without sending until you resume the campaign.'
+                : 'This campaign is a draft — uploaded leads will be added without sending. Sending starts only when you launch the campaign.'}
+          </div>
+        ) : null}
 
         {error ? <div className="login-error" style={{ marginTop: '0.75rem' }}>{error}</div> : null}
 
@@ -136,7 +175,13 @@ export default function CsvImportModal({ onClose, onImported }) {
             </p>
           </div>
           <button className="btn btn-primary" type="submit" disabled={!file || busy}>
-            {busy ? 'Importing…' : 'Import leads'}
+            {busy
+              ? isCampaignMode
+                ? 'Uploading & adding…'
+                : 'Importing…'
+              : isCampaignMode
+                ? 'Upload & add to campaign'
+                : 'Import leads'}
           </button>
         </form>
 

@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { fmtInTz, fmtNowInTz } from '../components/Badges.jsx';
+import CsvImportModal from '../components/CsvImportModal.jsx';
 
 const EMAIL_FORMATS = [
   { key: 'plain_text', label: 'Plain text' },
@@ -121,6 +122,8 @@ function displayCampaignLeadName(lead) {
 
 export default function CampaignsPage() {
   const { can } = useAuth();
+  const canImportCsv = can('leads:import');
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [detail, setDetail] = useState(null);
@@ -781,6 +784,41 @@ export default function CampaignsPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleCampaignCsvImported = async (data) => {
+    if (!detail) return;
+    const allIds = [...new Set([...(data?.leadIds || []), ...(data?.matchedLeadIds || [])])];
+    if (!allIds.length) {
+      setMessage(
+        `CSV processed (${data?.rowCount || 0} rows), but no leads could be added to this campaign.`,
+      );
+      setShowCsvUpload(false);
+      await loadList();
+      return;
+    }
+    setError('');
+    const r = await api(`/email/campaigns/${detail.id}/leads`, {
+      method: 'POST',
+      body: { leadIds: allIds },
+    });
+    const parts = [`Uploaded CSV: added ${r.added} lead(s) to campaign`];
+    const detailBits = [];
+    if (data?.imported) detailBits.push(`${data.imported} new`);
+    if (data?.duplicates) detailBits.push(`${data.duplicates} existing in CRM`);
+    if (detailBits.length) parts.push(`(${detailBits.join(' · ')})`);
+    if (r.skippedSuppressed) parts.push(`· ${r.skippedSuppressed} suppressed`);
+    if (detail.status === 'draft') {
+      parts.push('— sending will start only when you launch the campaign.');
+    } else if (detail.status === 'paused') {
+      parts.push('— sending will start when you resume the campaign.');
+    } else if (detail.status === 'active' && r.scheduled) {
+      parts.push(`· ${r.scheduled} email(s) scheduled.`);
+    }
+    setMessage(parts.join(' '));
+    setShowCsvUpload(false);
+    await loadDetail(detail.id);
+    await loadList();
   };
 
   const launch = async () => {
@@ -2067,6 +2105,17 @@ export default function CampaignsPage() {
                     >
                       Add recipients
                     </button>
+                    {canImportCsv ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busy}
+                        onClick={() => setShowCsvUpload(true)}
+                        title="Upload a CSV file directly to this campaign without starting sending"
+                      >
+                        Upload Leads (CSV)
+                      </button>
+                    ) : null}
                   </>
                 )}
                 {detail.status === 'active' ? (
@@ -2088,6 +2137,17 @@ export default function CampaignsPage() {
                     >
                       Add recipients
                     </button>
+                    {canImportCsv ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busy}
+                        onClick={() => setShowCsvUpload(true)}
+                        title="Upload a CSV file to add leads to this campaign"
+                      >
+                        Upload Leads (CSV)
+                      </button>
+                    ) : null}
                     <button type="button" className="btn btn-secondary" disabled={busy} onClick={pause}>
                       Pause
                     </button>
@@ -2704,6 +2764,15 @@ export default function CampaignsPage() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {showCsvUpload && detail ? (
+        <CsvImportModal
+          campaignName={detail.name}
+          campaignStatus={detail.status}
+          onClose={() => setShowCsvUpload(false)}
+          onImported={handleCampaignCsvImported}
+        />
       ) : null}
     </div>
   );
