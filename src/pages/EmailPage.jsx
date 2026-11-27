@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Mail, RefreshCw, Send, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { FUNNEL_STATUSES, SourceBadge, fmtDate, fmtInTz, fmtPktDate } from '../components/Badges.jsx';
+import { FUNNEL_STATUSES, SourceBadge, fmtDate, fmtInTz, fmtPktDate, parseUtcDate } from '../components/Badges.jsx';
 
 const VALID_MERGE_TAGS = new Set([
   'name',
@@ -61,6 +61,31 @@ function fmtDay(iso) {
   } catch {
     return iso;
   }
+}
+
+function fmtTimeOnlyInTz(iso, timeZone = 'Asia/Karachi') {
+  const d = parseUtcDate(iso);
+  if (!d) return '';
+  try {
+    return d.toLocaleTimeString(undefined, {
+      timeZone: timeZone || 'Asia/Karachi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return '';
+  }
+}
+
+function fmtScheduleRange(startIso, endIso, timeZone) {
+  const tz = timeZone || 'Asia/Karachi';
+  const startLabel = fmtInTz(startIso, tz);
+  if (!endIso || endIso === startIso) return startLabel;
+  const startTime = fmtTimeOnlyInTz(startIso, tz);
+  const endTime = fmtTimeOnlyInTz(endIso, tz);
+  if (!endTime || endTime === startTime) return startLabel;
+  return `${startLabel} – ${endTime}`;
 }
 
 export default function EmailPage() {
@@ -852,18 +877,13 @@ export default function EmailPage() {
                 {scheduledBatches.map((b) => (
                   <tr key={b.id || b.batchId}>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {b.timezone
-                        ? fmtInTz(b.scheduledAt, b.timezone)
-                        : fmtPktDate(b.scheduledAt)}
-                      {b.timezone ? (
-                        <span className="stat-hint" style={{ display: 'block' }}>
-                          {b.timezone.replace(/_/g, ' ').split('/').pop()}
-                        </span>
-                      ) : (
-                        <span className="stat-hint" style={{ display: 'block' }}>
-                          PKT
-                        </span>
-                      )}
+                      {fmtScheduleRange(b.scheduledAt, b.scheduledEndAt, b.timezone)}
+                      <span className="stat-hint" style={{ display: 'block' }}>
+                        {b.timezone
+                          ? b.timezone.replace(/_/g, ' ').split('/').pop()
+                          : 'PKT'}
+                        {b.senderCount > 1 ? ` · ${b.senderCount} senders` : ''}
+                      </span>
                     </td>
                     <td>{b.campaignName || '— (cold email)'}</td>
                     <td>
@@ -930,7 +950,7 @@ export default function EmailPage() {
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: 'min(720px, 100%)',
+              width: 'min(820px, 100%)',
               maxHeight: '80vh',
               overflow: 'auto',
               margin: 0,
@@ -958,9 +978,10 @@ export default function EmailPage() {
                       ? ' · first email'
                       : ''}
                   {' · '}
-                  {recipientsModal.timezone
-                    ? `${fmtInTz(recipientsModal.scheduledAt, recipientsModal.timezone)} (${recipientsModal.timezone})`
-                    : `${fmtPktDate(recipientsModal.scheduledAt)} PKT`}
+                  {`${fmtScheduleRange(recipientsModal.scheduledAt, recipientsModal.scheduledEndAt, recipientsModal.timezone)} (${recipientsModal.timezone || 'PKT'})`}
+                  {recipientsModal.senderCount > 1
+                    ? ` · ${recipientsModal.senderCount} rotating senders`
+                    : ''}
                 </p>
                 <p style={{ margin: '6px 0 0', fontWeight: 600 }}>
                   {recipientsModal.subject || recipientsModal.templateId || '—'}
@@ -980,6 +1001,8 @@ export default function EmailPage() {
                   <tr>
                     <th>Lead</th>
                     <th>Email</th>
+                    <th>Scheduled</th>
+                    <th>Sender</th>
                     <th>Variant</th>
                     <th>Status</th>
                   </tr>
@@ -990,13 +1013,20 @@ export default function EmailPage() {
                       <tr key={r.id}>
                         <td>{r.leadName || '—'}</td>
                         <td>{r.leadEmail || '—'}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {r.scheduledAt
+                            ? fmtTimeOnlyInTz(r.scheduledAt, recipientsModal.timezone || 'Asia/Karachi') ||
+                              fmtInTz(r.scheduledAt, recipientsModal.timezone || 'Asia/Karachi')
+                            : '—'}
+                        </td>
+                        <td>{r.senderEmail || '—'}</td>
                         <td>{r.variantKey || '—'}</td>
                         <td>{r.status}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="empty">
+                      <td colSpan={6} className="empty">
                         No recipients loaded.
                       </td>
                     </tr>
